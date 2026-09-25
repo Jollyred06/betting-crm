@@ -1,11 +1,15 @@
 const axios = require('axios');
 require('dotenv').config();
 
+// NOTA: se la chiave viene dal sito ufficiale api-football.com (dashboard.api-football.com),
+// l'API si chiama direttamente su v3.football.api-sports.io con l'header x-apisports-key.
+// Se invece la chiave viene da RapidAPI, servono gli header x-rapidapi-host/x-rapidapi-key
+// e lo stesso host funziona comunque tramite il proxy RapidAPI.
+// Qui usiamo il formato diretto (api-sports.io), quello del sito ufficiale.
 const client = axios.create({
   baseURL: `https://${process.env.API_FOOTBALL_HOST}`,
   headers: {
-    'x-rapidapi-host': process.env.API_FOOTBALL_HOST,
-    'x-rapidapi-key': process.env.API_FOOTBALL_KEY
+    'x-apisports-key': process.env.API_FOOTBALL_KEY
   }
 });
 
@@ -64,15 +68,19 @@ async function getHistoricalFixtures(leagueId, season) {
 // Statistiche di una fixture (possesso, tiri totali, tiri in porta) per entrambe le squadre
 async function getFixtureStatistics(fixtureId) {
   const res = await safeGet('/fixtures/statistics', { fixture: fixtureId });
-  return res; // array con un elemento per squadra
+  return res;
 }
 
-// Info arbitro della partita (nome); le medie cartellini/rigori vanno derivate
-// incrociando le sue partite precedenti (endpoint /fixtures con referee come filtro
-// non è supportato nativamente: si calcola lato nostro dallo storico salvato in DB).
+// Info arbitro della partita
 async function getFixtureReferee(fixtureId) {
   const res = await safeGet('/fixtures', { id: fixtureId });
   return res?.[0]?.fixture?.referee || null;
+}
+
+// Ultime N partite di una squadra (per calcolare forma/media gol)
+async function getTeamRecentFixtures(teamId, last = 5) {
+  const res = await safeGet('/fixtures', { team: teamId, last });
+  return res;
 }
 
 module.exports = {
@@ -83,5 +91,6 @@ module.exports = {
   getHistoricalFixtures,
   getFixtureStatistics,
   getFixtureReferee,
+  getTeamRecentFixtures,
   getRequestCount
 };
