@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS value_bets (
   market TEXT NOT NULL,
   selection TEXT NOT NULL,
   bookmaker_odd NUMERIC(6,2) NOT NULL,
+  bookmaker_name TEXT, -- quale bookmaker offre la quota migliore usata per il calcolo
   estimated_probability NUMERIC(5,4) NOT NULL, -- 0-1
   implied_probability NUMERIC(5,4) NOT NULL,   -- 1/odd
   edge_pct NUMERIC(6,3) NOT NULL,               -- vantaggio stimato
@@ -43,6 +44,11 @@ CREATE TABLE IF NOT EXISTS value_bets (
   ai_commentary TEXT, -- spiegazione in linguaggio naturale generata via Claude API
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Se la tabella esiste già da prima (creata senza bookmaker_name), questa
+-- riga aggiunge la colonna senza toccare i dati esistenti. Sicura da
+-- rieseguire più volte.
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS bookmaker_name TEXT;
 
 CREATE TABLE IF NOT EXISTS referee_stats (
   id SERIAL PRIMARY KEY,

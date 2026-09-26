@@ -35,10 +35,14 @@ router.get('/bankroll', async (req, res) => {
   }
 });
 
-// Registra l'esito di una scommessa (won/lost/void) e aggiorna il bankroll
+// Registra l'esito di una scommessa (won/lost/void) e aggiorna il bankroll.
+// Se il body include "amount", quello vince sempre sul calcolo automatico:
+// utile quando l'importo vinto/perso reale differisce da stake*quota
+// (es. hai puntato un importo diverso da quello consigliato, o il
+// bookmaker arrotonda la vincita).
 router.post('/value-bets/:id/settle', async (req, res) => {
   const { id } = req.params;
-  const { outcome } = req.body; // 'won' | 'lost' | 'void'
+  const { outcome, amount: manualAmount } = req.body; // outcome: 'won' | 'lost' | 'void'
 
   try {
     const betRes = await pool.query('SELECT * FROM value_bets WHERE id = $1', [id]);
@@ -51,7 +55,15 @@ router.post('/value-bets/:id/settle', async (req, res) => {
     const currentBalance = bankrollRes.rows[0]?.balance_after ?? parseFloat(process.env.INITIAL_BANKROLL || '100');
 
     let amount = 0;
-    if (outcome === 'won') {
+    if (manualAmount !== undefined && manualAmount !== null && manualAmount !== '') {
+      // L'utente ha specificato l'importo reale: won → positivo, lost → negativo.
+      // Accettiamo il valore assoluto e applichiamo il segno in base all'esito,
+      // così l'utente può digitare sempre un numero positivo.
+      const abs = Math.abs(parseFloat(manualAmount));
+      if (outcome === 'won') amount = abs;
+      else if (outcome === 'lost') amount = -abs;
+      // void → resta 0 anche se è stato passato un importo per errore
+    } else if (outcome === 'won') {
       amount = bet.recommended_stake * (bet.bookmaker_odd - 1);
     } else if (outcome === 'lost') {
       amount = -bet.recommended_stake;
@@ -63,6 +75,35 @@ router.post('/value-bets/:id/settle', async (req, res) => {
     await pool.query(
       `INSERT INTO bankroll_log (bet_id, amount, balance_after, note) VALUES ($1, $2, $3, $4)`,
       [id, amount, newBalance, `Esito: ${outcome}`]
+    );
+
+    res.json({ success: true, newBalance });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Aggiunge o rimuove fondi dal bankroll manualmente (deposito/prelievo).
+// Le puntate future (Kelly) si adeguano automaticamente al nuovo saldo,
+// perché il calcolo dello stake legge sempre l'ultimo balance_after.
+router.post('/bankroll/adjust', async (req, res) => {
+  const { amount, note } = req.body;
+
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount === 0) {
+    return res.status(400).json({ error: 'Importo non valido' });
+  }
+
+  try {
+    const bankrollRes = await pool.query(
+      'SELECT balance_after FROM bankroll_log ORDER BY created_at DESC LIMIT 1'
+    );
+    const currentBalance = bankrollRes.rows[0]?.balance_after ?? parseFloat(process.env.INITIAL_BANKROLL || '100');
+    const newBalance = Number((currentBalance + parsedAmount).toFixed(2));
+
+    await pool.query(
+      `INSERT INTO bankroll_log (bet_id, amount, balance_after, note) VALUES (NULL, $1, $2, $3)`,
+      [parsedAmount, newBalance, note || (parsedAmount > 0 ? 'Deposito manuale' : 'Prelievo manuale')]
     );
 
     res.json({ success: true, newBalance });

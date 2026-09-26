@@ -60,6 +60,24 @@
     border-left: 2px solid var(--border);
     padding-left: 8px;
   }
+  .bet-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .btn-outcome {
+    flex: 1;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-won { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+  .btn-lost { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+  .btn-outcome:disabled { opacity: 0.5; cursor: default; }
+  .bookmaker-tag { font-size: 0.78rem; color: var(--accent); }
   .empty { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 20px 0; }
   .movement-row {
     display: flex;
@@ -82,6 +100,30 @@
     cursor: pointer;
   }
   .top-row { display: flex; justify-content: space-between; align-items: center; }
+  .bankroll-form {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .bankroll-form input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  .bankroll-form button {
+    background: var(--accent);
+    color: #0f1117;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
   .disclaimer {
     font-size: 0.75rem;
     color: var(--muted);
@@ -104,6 +146,10 @@
   <div class="card">
     <div class="bankroll-label">Bankroll attuale</div>
     <div class="bankroll-value" id="bankroll-value">—</div>
+    <div class="bankroll-form">
+      <input type="number" step="0.01" id="adjust-amount" placeholder="Importo (es. 50 o -20)">
+      <button onclick="adjustBankroll()">Applica</button>
+    </div>
   </div>
 
   <div class="card">
@@ -150,7 +196,7 @@
         return;
       }
       el.innerHTML = bets.map(b => `
-        <div class="bet-card">
+        <div class="bet-card" id="bet-${b.id}">
           <div class="bet-teams">${b.home_team_name || 'Squadra casa'} vs ${b.away_team_name || 'Squadra trasferta'}</div>
           <div class="bet-meta">
             <span>${fmtDate(b.date)}</span>
@@ -161,8 +207,13 @@
           <div class="bet-meta">
             <span class="badge badge-edge">Edge +${Number(b.edge_pct).toFixed(1)}%</span>
             <span class="badge badge-stake">Stake consigliato €${Number(b.recommended_stake).toFixed(2)}</span>
+            ${b.bookmaker_name ? `<span class="bookmaker-tag">su ${b.bookmaker_name}</span>` : ''}
           </div>
           ${b.ai_commentary ? `<div class="commentary">${b.ai_commentary}</div>` : ''}
+          <div class="bet-actions">
+            <button class="btn-outcome btn-won" onclick="settleBet(${b.id}, 'won')">✓ Vinta</button>
+            <button class="btn-outcome btn-lost" onclick="settleBet(${b.id}, 'lost')">✗ Persa</button>
+          </div>
         </div>
       `).join('');
     } catch (err) {
@@ -202,6 +253,68 @@
   function loadAll() {
     loadValueBets();
     loadBankroll();
+  }
+
+  async function settleBet(id, outcome) {
+    const label = outcome === 'won' ? 'Vinta' : 'Persa';
+    const promptText = outcome === 'won'
+      ? 'Quanto hai vinto (importo netto, solo il guadagno)? Lascia vuoto per farlo calcolare in automatico da stake e quota.'
+      : 'Quanto hai perso (l\'importo puntato)? Lascia vuoto per usare lo stake consigliato.';
+    const input = prompt(`${label} — ${promptText}`, '');
+
+    // L'utente ha annullato il prompt (Cancel): non facciamo nulla
+    if (input === null) return;
+
+    const card = document.getElementById('bet-' + id);
+    const buttons = card ? card.querySelectorAll('.btn-outcome') : [];
+    buttons.forEach(btn => btn.disabled = true);
+
+    try {
+      const body = { outcome };
+      if (input.trim() !== '') body.amount = input.trim();
+
+      const res = await fetch(`/api/value-bets/${id}/settle`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert('Errore: ' + (data.error || 'operazione non riuscita'));
+        buttons.forEach(btn => btn.disabled = false);
+        return;
+      }
+      loadAll();
+    } catch (err) {
+      alert('Errore di rete, riprova.');
+      buttons.forEach(btn => btn.disabled = false);
+    }
+  }
+
+  async function adjustBankroll() {
+    const input = document.getElementById('adjust-amount');
+    const value = input.value.trim();
+    if (value === '' || isNaN(parseFloat(value))) {
+      alert('Inserisci un importo valido (positivo per depositare, negativo per prelevare).');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/bankroll/adjust', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: value })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        alert('Errore: ' + (data.error || 'operazione non riuscita'));
+        return;
+      }
+      input.value = '';
+      loadAll();
+    } catch (err) {
+      alert('Errore di rete, riprova.');
+    }
   }
 
   loadAll();

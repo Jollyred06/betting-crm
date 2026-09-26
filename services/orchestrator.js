@@ -16,11 +16,11 @@ const MAX_FIXTURES_PER_DAY = 3;
  * giocate in quel contesto (più preciso della forma mista: molte squadre rendono
  * diversamente in casa e in trasferta).
  */
-async function computeTeamStats(teamId, venue = null) {
+async function computeTeamStats(teamId, venue = null, leagueAvgGoals = 1.3) {
   const recent = await footballData.getTeamRecentMatches(teamId, 5, venue);
   if (!recent || recent.length === 0) {
     // Fallback prudente se non ci sono dati sufficienti
-    return { avgGoalsFor: 1.2, avgGoalsAgainst: 1.2, formPoints: 5, leagueAvgGoals: 1.3, sampleMatches: 0 };
+    return { avgGoalsFor: 1.2, avgGoalsAgainst: 1.2, formPoints: 5, leagueAvgGoals, sampleMatches: 0 };
   }
 
   let goalsFor = 0, goalsAgainst = 0, formPoints = 0;
@@ -40,9 +40,26 @@ async function computeTeamStats(teamId, venue = null) {
     avgGoalsFor: goalsFor / recent.length,
     avgGoalsAgainst: goalsAgainst / recent.length,
     formPoints,
-    leagueAvgGoals: 1.3,
+    leagueAvgGoals,
     sampleMatches: recent.length
   };
+}
+
+/**
+ * Calcola la media gol per squadra a partita nella lega, dalla classifica
+ * attuale (somma dei gol fatti / somma delle partite giocate su tutte le
+ * squadre). Sostituisce il valore fisso 1.3, che era solo una stima
+ * generica valida per un campionato europeo medio.
+ */
+function computeLeagueAvgGoals(standingsTable) {
+  if (!standingsTable || standingsTable.length === 0) return 1.3;
+  let totalGoals = 0, totalPlayed = 0;
+  for (const row of standingsTable) {
+    totalGoals += row.goalsFor || 0;
+    totalPlayed += row.playedGames || 0;
+  }
+  if (totalPlayed === 0) return 1.3;
+  return totalGoals / totalPlayed;
 }
 
 /**
@@ -87,34 +104,57 @@ function findOddsEvent(oddsEvents, homeTeamName, awayTeamName) {
  * Converte l'evento di The Odds API nel formato atteso da valueEngine.
  * Il piano gratuito copre h2h (1X2) e totals (over/under, con vari punti).
  */
+/**
+ * Aggiorna odds/bookmakerBySelection tenendo, per ogni mercato/selezione,
+ * la quota più alta trovata tra tutti i bookmaker (la migliore per chi
+ * scommette: paga di più a parità di rischio).
+ */
+function updateBestOdd(odds, bookmakerBySelection, market, selection, price, bookmakerTitle) {
+  odds[market] = odds[market] || {};
+  bookmakerBySelection[market] = bookmakerBySelection[market] || {};
+  if (!odds[market][selection] || price > odds[market][selection]) {
+    odds[market][selection] = price;
+    bookmakerBySelection[market][selection] = bookmakerTitle;
+  }
+}
+
+/**
+ * Converte l'evento di The Odds API nel formato atteso da valueEngine,
+ * confrontando TUTTI i bookmaker disponibili e tenendo, per ogni mercato,
+ * la quota più conveniente. Il piano gratuito copre h2h (1X2) e totals
+ * (over/under, con vari punti).
+ */
 function parseOddsEvent(event) {
-  if (!event || !event.bookmakers?.length) return { odds: {}, bookmaker: null };
-
-  const bookmaker = event.bookmakers[0];
   const odds = {};
+  const bookmakerBySelection = {};
+  if (!event || !event.bookmakers?.length) return { odds, bookmakerBySelection };
 
-  for (const market of bookmaker.markets) {
-    if (market.key === 'h2h') {
-      odds['1X2'] = {};
-      for (const outcome of market.outcomes) {
-        if (teamsMatch(outcome.name, event.home_team)) odds['1X2'].home = outcome.price;
-        else if (teamsMatch(outcome.name, event.away_team)) odds['1X2'].away = outcome.price;
-        else if (outcome.name.toLowerCase() === 'draw') odds['1X2'].draw = outcome.price;
+  for (const bookmaker of event.bookmakers) {
+    for (const market of bookmaker.markets) {
+      if (market.key === 'h2h') {
+        for (const outcome of market.outcomes) {
+          let selection = null;
+          if (teamsMatch(outcome.name, event.home_team)) selection = 'home';
+          else if (teamsMatch(outcome.name, event.away_team)) selection = 'away';
+          else if (outcome.name.toLowerCase() === 'draw') selection = 'draw';
+          if (selection) updateBestOdd(odds, bookmakerBySelection, '1X2', selection, outcome.price, bookmaker.title);
+        }
       }
-    }
-    if (market.key === 'totals') {
-      for (const outcome of market.outcomes) {
-        const point = outcome.point;
-        const marketKey = point === 1.5 ? 'OU_1.5' : point === 2.5 ? 'OU_2.5' : null;
-        if (!marketKey) continue;
-        odds[marketKey] = odds[marketKey] || {};
-        if (outcome.name.toLowerCase() === 'over') odds[marketKey].over = outcome.price;
-        if (outcome.name.toLowerCase() === 'under') odds[marketKey].under = outcome.price;
+      if (market.key === 'totals') {
+        for (const outcome of market.outcomes) {
+          const point = outcome.point;
+          const marketKey = point === 1.5 ? 'OU_1.5' : point === 2.5 ? 'OU_2.5' : null;
+          if (!marketKey) continue;
+          const selection = outcome.name.toLowerCase() === 'over' ? 'over'
+            : outcome.name.toLowerCase() === 'under' ? 'under' : null;
+          if (!selection) continue;
+          updateBestOdd(odds, bookmakerBySelection, marketKey, selection, outcome.price, bookmaker.title);
+        }
       }
     }
   }
 
-  return { odds, bookmaker: bookmaker.title };
+  return { odds, bookmakerBySelection };
 }
 
 async function upsertTeamAndFixture(match, competitionCode) {
@@ -159,16 +199,18 @@ async function runDailyAnalysis() {
     }
   }
 
-  // Classifica per competizione (per il correttivo sul distacco in classifica)
+  // Classifica per competizione (per il correttivo sul distacco in classifica
+  // e per calibrare la media gol attesa sulla lega reale invece di un valore fisso)
   const standingsByCompetition = {};
   for (const code of COMPETITIONS) {
     try {
       const table = await footballData.getStandings(code);
-      const map = new Map(table.map(row => [row.team.id, row.position]));
-      standingsByCompetition[code] = map;
+      const positionMap = new Map(table.map(row => [row.team.id, row.position]));
+      const leagueAvgGoals = computeLeagueAvgGoals(table);
+      standingsByCompetition[code] = { positionMap, leagueAvgGoals };
     } catch (err) {
       log.push(`Classifica non disponibile per ${code}: ${err.message}`);
-      standingsByCompetition[code] = new Map();
+      standingsByCompetition[code] = { positionMap: new Map(), leagueAvgGoals: 1.3 };
     }
   }
 
@@ -186,12 +228,13 @@ async function runDailyAnalysis() {
 
     await upsertTeamAndFixture(match, competitionCode);
 
+    const { positionMap: standingsMap, leagueAvgGoals } = standingsByCompetition[competitionCode] || { positionMap: new Map(), leagueAvgGoals: 1.3 };
+
     const [homeStatsRaw, awayStatsRaw] = await Promise.all([
-      computeTeamStats(homeTeam.id, 'HOME'),
-      computeTeamStats(awayTeam.id, 'AWAY')
+      computeTeamStats(homeTeam.id, 'HOME', leagueAvgGoals),
+      computeTeamStats(awayTeam.id, 'AWAY', leagueAvgGoals)
     ]);
 
-    const standingsMap = standingsByCompetition[competitionCode] || new Map();
     const homePosition = standingsMap.get(homeTeam.id);
     const awayPosition = standingsMap.get(awayTeam.id);
     const homeStats = applyStandingsAdjustment(homeStatsRaw, homePosition, awayPosition);
@@ -205,7 +248,7 @@ async function runDailyAnalysis() {
       continue;
     }
 
-    const { odds, bookmaker } = parseOddsEvent(event);
+    const { odds, bookmakerBySelection } = parseOddsEvent(event);
     if (Object.keys(odds).length === 0) {
       log.push(`${homeTeam.name} vs ${awayTeam.name}: quote vuote, salto.`);
       continue;
@@ -213,9 +256,10 @@ async function runDailyAnalysis() {
 
     for (const market of Object.keys(odds)) {
       for (const selection of Object.keys(odds[market])) {
+        const bookmakerName = bookmakerBySelection[market]?.[selection] || null;
         await pool.query(
           `INSERT INTO odds (fixture_id, bookmaker, market, selection, odd_value) VALUES ($1,$2,$3,$4,$5)`,
-          [match.id, bookmaker, market, selection, odds[market][selection]]
+          [match.id, bookmakerName, market, selection, odds[market][selection]]
         );
       }
     }
@@ -235,9 +279,9 @@ async function runDailyAnalysis() {
       });
 
       await pool.query(
-        `INSERT INTO value_bets (fixture_id, market, selection, bookmaker_odd, estimated_probability, implied_probability, edge_pct, recommended_stake, ai_commentary)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [match.id, bet.market, bet.selection, bet.bookmakerOdd, bet.estimatedProbability, bet.impliedProbability, bet.edgePct, stake, commentary]
+        `INSERT INTO value_bets (fixture_id, market, selection, bookmaker_odd, bookmaker_name, estimated_probability, implied_probability, edge_pct, recommended_stake, ai_commentary)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+        [match.id, bet.market, bet.selection, bet.bookmakerOdd, bookmakerBySelection[bet.market]?.[bet.selection] || null, bet.estimatedProbability, bet.impliedProbability, bet.edgePct, stake, commentary]
       );
       totalValueBetsFound++;
     }
