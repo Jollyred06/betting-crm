@@ -4,6 +4,7 @@ const oddsApi = require('./oddsApi');
 const valueEngine = require('./valueEngine');
 const bankrollEngine = require('./bankrollEngine');
 const { generateBetCommentary } = require('./aiCommentary');
+const { sendTelegramNotification } = require('./notifier');
 require('dotenv').config();
 
 // Codici football-data.org: PL = Premier League, SA = Serie A
@@ -220,6 +221,7 @@ async function runDailyAnalysis() {
   const currentBankroll = bankrollRes.rows[0]?.balance_after ?? parseFloat(process.env.INITIAL_BANKROLL || '100');
 
   let totalValueBetsFound = 0;
+  const foundBetsSummary = [];
 
   for (const match of selected) {
     const competitionCode = match.competition?.code || COMPETITIONS[0];
@@ -284,7 +286,25 @@ async function runDailyAnalysis() {
         [match.id, bet.market, bet.selection, bet.bookmakerOdd, bookmakerBySelection[bet.market]?.[bet.selection] || null, bet.estimatedProbability, bet.impliedProbability, bet.edgePct, stake, commentary]
       );
       totalValueBetsFound++;
+      foundBetsSummary.push({
+        teams: `${homeTeam.name} vs ${awayTeam.name}`,
+        market: bet.market,
+        selection: bet.selection,
+        odd: bet.bookmakerOdd,
+        edge: bet.edgePct,
+        stake,
+        bookmaker: bookmakerBySelection[bet.market]?.[bet.selection] || 'n/d'
+      });
     }
+  }
+
+  if (foundBetsSummary.length > 0) {
+    const lines = foundBetsSummary.map(b =>
+      `⚽ <b>${b.teams}</b>\n${b.market} - ${b.selection} @ ${Number(b.odd).toFixed(2)} (${b.bookmaker})\nEdge +${Number(b.edge).toFixed(1)}% · Stake €${Number(b.stake).toFixed(2)}`
+    );
+    await sendTelegramNotification(
+      `🎯 <b>${foundBetsSummary.length} nuova/e value bet trovata/e</b>\n\n${lines.join('\n\n')}`
+    );
   }
 
   log.push(`Analisi completata. Totale value bet salvate: ${totalValueBetsFound}. Richieste football-data.org: ${footballData.getRequestCount()}, richieste Odds API: ${oddsApi.getRequestCount()}.`);

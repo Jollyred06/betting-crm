@@ -112,4 +112,48 @@ router.post('/bankroll/adjust', async (req, res) => {
   }
 });
 
+// Statistiche aggregate: win-rate, ROI, riepilogo per mercato.
+// Il profitto reale viene da bankroll_log (rispetta eventuali importi
+// manuali inseriti col settle); lo stake totale viene da value_bets
+// (recommended_stake), quindi il ROI è indicativo se l'utente ha puntato
+// importi diversi da quelli consigliati.
+router.get('/stats', async (req, res) => {
+  try {
+    const settledRes = await pool.query(
+      `SELECT status, market, recommended_stake FROM value_bets WHERE status IN ('won','lost')`
+    );
+    const profitRes = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) AS total_profit FROM bankroll_log WHERE bet_id IS NOT NULL`
+    );
+
+    const settled = settledRes.rows;
+    const won = settled.filter(r => r.status === 'won').length;
+    const lost = settled.filter(r => r.status === 'lost').length;
+    const totalSettled = won + lost;
+    const winRate = totalSettled > 0 ? (won / totalSettled) * 100 : null;
+    const totalStaked = settled.reduce((sum, r) => sum + Number(r.recommended_stake || 0), 0);
+    const totalProfit = Number(profitRes.rows[0].total_profit);
+    const roi = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : null;
+
+    const byMarket = {};
+    for (const r of settled) {
+      byMarket[r.market] = byMarket[r.market] || { won: 0, lost: 0 };
+      byMarket[r.market][r.status]++;
+    }
+
+    res.json({
+      totalSettled,
+      won,
+      lost,
+      winRatePct: winRate,
+      totalStaked: Number(totalStaked.toFixed(2)),
+      totalProfit: Number(totalProfit.toFixed(2)),
+      roiPct: roi,
+      byMarket
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
