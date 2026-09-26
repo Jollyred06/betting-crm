@@ -3,7 +3,8 @@ require('dotenv').config();
 
 const betsRouter = require('./routes/bets');
 const runRouter = require('./routes/run');
-const { getRequestCount } = require('./services/apiFootball');
+const footballData = require('./services/footballData');
+const oddsApi = require('./services/oddsApi');
 
 const app = express();
 app.use(express.json());
@@ -12,7 +13,8 @@ app.get('/', (req, res) => {
   res.json({
     status: 'ok',
     message: 'Betting CRM API attivo',
-    apiRequestsUsedOggi: getRequestCount()
+    footballDataRequestsUsed: footballData.getRequestCount(),
+    oddsApiRequestsUsed: oddsApi.getRequestCount()
   });
 });
 
