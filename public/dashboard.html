@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Betting CRM — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d29;
+    --border: #2a2e3d;
+    --text: #e8e9ed;
+    --muted: #8b8fa3;
+    --green: #4ade80;
+    --red: #f87171;
+    --accent: #60a5fa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 16px;
+  }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .bankroll-value { font-size: 2rem; font-weight: 700; }
+  .bankroll-label { color: var(--muted); font-size: 0.8rem; }
+  .section-title { font-size: 1rem; font-weight: 600; margin-bottom: 10px; }
+  .bet-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .bet-teams { font-weight: 600; margin-bottom: 4px; }
+  .bet-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-edge { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+  .badge-stake { background: rgba(96, 165, 250, 0.15); color: var(--accent); }
+  .commentary {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-top: 6px;
+    font-style: italic;
+    border-left: 2px solid var(--border);
+    padding-left: 8px;
+  }
+  .empty { color: var(--muted); font-size: 0.9rem; text-align: center; padding: 20px 0; }
+  .movement-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .movement-row:last-child { border-bottom: none; }
+  .amount-pos { color: var(--green); }
+  .amount-neg { color: var(--red); }
+  .refresh-btn {
+    background: var(--accent);
+    color: #0f1117;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .top-row { display: flex; justify-content: space-between; align-items: center; }
+  .disclaimer {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 20px;
+    line-height: 1.4;
+  }
+</style>
+</head>
+<body>
+
+  <div class="top-row">
+    <div>
+      <h1>Betting CRM</h1>
+      <div class="subtitle">Value betting sul calcio — dashboard di consultazione</div>
+    </div>
+    <button class="refresh-btn" onclick="loadAll()">Aggiorna</button>
+  </div>
+
+  <div class="card">
+    <div class="bankroll-label">Bankroll attuale</div>
+    <div class="bankroll-value" id="bankroll-value">—</div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Value bet in attesa</div>
+    <div id="value-bets-list"><div class="empty">Caricamento...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Movimenti recenti</div>
+    <div id="movements-list"><div class="empty">Caricamento...</div></div>
+  </div>
+
+  <div class="disclaimer">
+    Strumento di analisi statistica, non garanzia di vincita.<br>
+    L'edge indica un vantaggio stimato, non una probabilità di successo.
+  </div>
+
+<script>
+  function fmtDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }) + ' ' +
+           d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function marketLabel(market, selection) {
+    const map = {
+      '1X2': { home: '1 (Casa)', draw: 'X (Pareggio)', away: '2 (Trasferta)' },
+      'DOPPIA_CHANCE': { '1X': '1X', 'X2': 'X2', '12': '12' },
+      'OU_1.5': { over: 'Over 1.5', under: 'Under 1.5' },
+      'OU_2.5': { over: 'Over 2.5', under: 'Under 2.5' },
+      'BTTS': { yes: 'Gol (BTTS Sì)', no: 'No Gol (BTTS No)' }
+    };
+    return (map[market] && map[market][selection]) || (market + ' - ' + selection);
+  }
+
+  async function loadValueBets() {
+    const el = document.getElementById('value-bets-list');
+    try {
+      const res = await fetch('/api/value-bets');
+      const bets = await res.json();
+      if (!bets.length) {
+        el.innerHTML = '<div class="empty">Nessuna value bet al momento.</div>';
+        return;
+      }
+      el.innerHTML = bets.map(b => `
+        <div class="bet-card">
+          <div class="bet-teams">${b.home_team_name || 'Squadra casa'} vs ${b.away_team_name || 'Squadra trasferta'}</div>
+          <div class="bet-meta">
+            <span>${fmtDate(b.date)}</span>
+            <span>${marketLabel(b.market, b.selection)}</span>
+            <span>Quota ${Number(b.bookmaker_odd).toFixed(2)}</span>
+            <span>Prob. stimata ${(Number(b.estimated_probability) * 100).toFixed(1)}%</span>
+          </div>
+          <div class="bet-meta">
+            <span class="badge badge-edge">Edge +${Number(b.edge_pct).toFixed(1)}%</span>
+            <span class="badge badge-stake">Stake consigliato €${Number(b.recommended_stake).toFixed(2)}</span>
+          </div>
+          ${b.ai_commentary ? `<div class="commentary">${b.ai_commentary}</div>` : ''}
+        </div>
+      `).join('');
+    } catch (err) {
+      el.innerHTML = '<div class="empty">Errore nel caricamento.</div>';
+    }
+  }
+
+  async function loadBankroll() {
+    const valueEl = document.getElementById('bankroll-value');
+    const movEl = document.getElementById('movements-list');
+    try {
+      const res = await fetch('/api/bankroll');
+      const data = await res.json();
+      valueEl.textContent = '€' + Number(data.currentBalance).toFixed(2);
+
+      if (!data.recentMovements || !data.recentMovements.length) {
+        movEl.innerHTML = '<div class="empty">Nessun movimento registrato.</div>';
+        return;
+      }
+      movEl.innerHTML = data.recentMovements.slice(0, 15).map(m => {
+        const amt = Number(m.amount);
+        const cls = amt >= 0 ? 'amount-pos' : 'amount-neg';
+        const sign = amt >= 0 ? '+' : '';
+        return `
+          <div class="movement-row">
+            <span>${m.note || '—'} · ${fmtDate(m.created_at)}</span>
+            <span class="${cls}">${sign}€${amt.toFixed(2)}</span>
+          </div>
+        `;
+      }).join('');
+    } catch (err) {
+      valueEl.textContent = 'Errore';
+      movEl.innerHTML = '<div class="empty">Errore nel caricamento.</div>';
+    }
+  }
+
+  function loadAll() {
+    loadValueBets();
+    loadBankroll();
+  }
+
+  loadAll();
+</script>
+
+</body>
+</html>

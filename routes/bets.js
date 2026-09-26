@@ -7,9 +7,12 @@ const bankrollEngine = require('../services/bankrollEngine');
 router.get('/value-bets', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT vb.*, f.date, f.home_team_id, f.away_team_id, vb.ai_commentary
+      `SELECT vb.*, f.date, f.home_team_id, f.away_team_id,
+              th.name AS home_team_name, ta.name AS away_team_name
        FROM value_bets vb
        JOIN fixtures f ON f.id = vb.fixture_id
+       LEFT JOIN teams th ON th.id = f.home_team_id
+       LEFT JOIN teams ta ON ta.id = f.away_team_id
        WHERE vb.status = 'pending'
        ORDER BY vb.edge_pct DESC`
     );
