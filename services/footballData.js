@@ -51,17 +51,29 @@ async function getTodayFixtures(competitionCodes) {
 
 /**
  * Ultime N partite concluse di una squadra, per calcolare forma e media gol.
+ * venue (opzionale): 'HOME' o 'AWAY' per filtrare solo le partite in casa
+ * o in trasferta di quella squadra — segnale più preciso della forma mista.
  */
-async function getTeamRecentMatches(teamId, limit = 5) {
-  const data = await safeGet(`/teams/${teamId}/matches`, {
-    status: 'FINISHED',
-    limit
-  });
+async function getTeamRecentMatches(teamId, limit = 5, venue = null) {
+  const params = { status: 'FINISHED', limit };
+  if (venue) params.venue = venue;
+  const data = await safeGet(`/teams/${teamId}/matches`, params);
   return data.matches || [];
+}
+
+/**
+ * Classifica attuale di una competizione (per il distacco in classifica
+ * tra le due squadre di una partita).
+ */
+async function getStandings(competitionCode) {
+  const data = await safeGet(`/competitions/${competitionCode}/standings`);
+  const totalTable = data.standings?.find(s => s.type === 'TOTAL');
+  return totalTable?.table || [];
 }
 
 module.exports = {
   getTodayFixtures,
   getTeamRecentMatches,
+  getStandings,
   getRequestCount
 };

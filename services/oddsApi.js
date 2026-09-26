@@ -17,7 +17,8 @@ let requestCount = 0;
 // Mappa codice competizione football-data.org -> sport key di The Odds API
 const SPORT_KEY_MAP = {
   PL: 'soccer_epl',
-  SA: 'soccer_italy_serie_a'
+  SA: 'soccer_italy_serie_a',
+  BSA: 'soccer_brazil_campeonato'
 };
 
 async function getOddsForCompetition(competitionCode) {

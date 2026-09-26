@@ -12,10 +12,12 @@ const MAX_FIXTURES_PER_DAY = 3;
 
 /**
  * Calcola statistiche squadra (media gol fatti/subiti, forma) dalle ultime 5 partite,
- * usando football-data.org.
+ * usando football-data.org. Se venue è 'HOME' o 'AWAY', considera solo le partite
+ * giocate in quel contesto (più preciso della forma mista: molte squadre rendono
+ * diversamente in casa e in trasferta).
  */
-async function computeTeamStats(teamId) {
-  const recent = await footballData.getTeamRecentMatches(teamId, 5);
+async function computeTeamStats(teamId, venue = null) {
+  const recent = await footballData.getTeamRecentMatches(teamId, 5, venue);
   if (!recent || recent.length === 0) {
     // Fallback prudente se non ci sono dati sufficienti
     return { avgGoalsFor: 1.2, avgGoalsAgainst: 1.2, formPoints: 5, leagueAvgGoals: 1.3, sampleMatches: 0 };
@@ -41,6 +43,19 @@ async function computeTeamStats(teamId) {
     leagueAvgGoals: 1.3,
     sampleMatches: recent.length
   };
+}
+
+/**
+ * Applica un piccolo correttivo alla forma in base al distacco in classifica
+ * tra le due squadre (segnale aggiuntivo, non sostituisce la forma recente).
+ * standingsMap: Map teamId -> posizione. Il correttivo è volutamente limitato
+ * (max ±3 punti forma) per non dominare la stima rispetto ai dati reali di gioco.
+ */
+function applyStandingsAdjustment(stats, ownPosition, rivalPosition) {
+  if (!ownPosition || !rivalPosition) return stats;
+  const gap = rivalPosition - ownPosition; // positivo se il rivale è messo peggio
+  const adjustment = Math.max(-3, Math.min(3, gap * 0.3));
+  return { ...stats, formPoints: stats.formPoints + adjustment };
 }
 
 // Normalizza un nome squadra per il confronto (minuscolo, senza FC/CF/AC ecc.)
@@ -144,6 +159,19 @@ async function runDailyAnalysis() {
     }
   }
 
+  // Classifica per competizione (per il correttivo sul distacco in classifica)
+  const standingsByCompetition = {};
+  for (const code of COMPETITIONS) {
+    try {
+      const table = await footballData.getStandings(code);
+      const map = new Map(table.map(row => [row.team.id, row.position]));
+      standingsByCompetition[code] = map;
+    } catch (err) {
+      log.push(`Classifica non disponibile per ${code}: ${err.message}`);
+      standingsByCompetition[code] = new Map();
+    }
+  }
+
   const bankrollRes = await pool.query(
     'SELECT balance_after FROM bankroll_log ORDER BY created_at DESC LIMIT 1'
   );
@@ -158,10 +186,16 @@ async function runDailyAnalysis() {
 
     await upsertTeamAndFixture(match, competitionCode);
 
-    const [homeStats, awayStats] = await Promise.all([
-      computeTeamStats(homeTeam.id),
-      computeTeamStats(awayTeam.id)
+    const [homeStatsRaw, awayStatsRaw] = await Promise.all([
+      computeTeamStats(homeTeam.id, 'HOME'),
+      computeTeamStats(awayTeam.id, 'AWAY')
     ]);
+
+    const standingsMap = standingsByCompetition[competitionCode] || new Map();
+    const homePosition = standingsMap.get(homeTeam.id);
+    const awayPosition = standingsMap.get(awayTeam.id);
+    const homeStats = applyStandingsAdjustment(homeStatsRaw, homePosition, awayPosition);
+    const awayStats = applyStandingsAdjustment(awayStatsRaw, awayPosition, homePosition);
 
     const oddsEvents = oddsByCompetition[competitionCode] || [];
     const event = findOddsEvent(oddsEvents, homeTeam.name, awayTeam.name);
