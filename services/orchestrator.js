@@ -4,7 +4,7 @@ const oddsApi = require('./oddsApi');
 const valueEngine = require('./valueEngine');
 const bankrollEngine = require('./bankrollEngine');
 const { generateBetCommentary } = require('./aiCommentary');
-const { sendTelegramNotification } = require('./notifier');
+const { sendTelegramNotification, sendEmailNotification, sendWhatsAppNotification } = require('./notifier');
 require('dotenv').config();
 
 // Codici football-data.org: PL = Premier League, SA = Serie A
@@ -150,6 +150,22 @@ function parseOddsEvent(event) {
             : outcome.name.toLowerCase() === 'under' ? 'under' : null;
           if (!selection) continue;
           updateBestOdd(odds, bookmakerBySelection, marketKey, selection, outcome.price, bookmaker.title);
+        }
+      }
+      if (market.key === 'btts') {
+        for (const outcome of market.outcomes) {
+          const selection = outcome.name.toLowerCase() === 'yes' ? 'yes'
+            : outcome.name.toLowerCase() === 'no' ? 'no' : null;
+          if (!selection) continue;
+          updateBestOdd(odds, bookmakerBySelection, 'BTTS', selection, outcome.price, bookmaker.title);
+        }
+      }
+      if (market.key === 'draw_no_bet') {
+        for (const outcome of market.outcomes) {
+          let selection = null;
+          if (teamsMatch(outcome.name, event.home_team)) selection = 'home';
+          else if (teamsMatch(outcome.name, event.away_team)) selection = 'away';
+          if (selection) updateBestOdd(odds, bookmakerBySelection, 'DNB', selection, outcome.price, bookmaker.title);
         }
       }
     }
@@ -299,11 +315,22 @@ async function runDailyAnalysis() {
   }
 
   if (foundBetsSummary.length > 0) {
-    const lines = foundBetsSummary.map(b =>
+    const htmlLines = foundBetsSummary.map(b =>
       `⚽ <b>${b.teams}</b>\n${b.market} - ${b.selection} @ ${Number(b.odd).toFixed(2)} (${b.bookmaker})\nEdge +${Number(b.edge).toFixed(1)}% · Stake €${Number(b.stake).toFixed(2)}`
     );
+    const plainLines = foundBetsSummary.map(b =>
+      `${b.teams}\n${b.market} - ${b.selection} @ ${Number(b.odd).toFixed(2)} (${b.bookmaker})\nEdge +${Number(b.edge).toFixed(1)}% - Stake €${Number(b.stake).toFixed(2)}`
+    );
+
     await sendTelegramNotification(
-      `🎯 <b>${foundBetsSummary.length} nuova/e value bet trovata/e</b>\n\n${lines.join('\n\n')}`
+      `🎯 <b>${foundBetsSummary.length} nuova/e value bet trovata/e</b>\n\n${htmlLines.join('\n\n')}`
+    );
+    await sendEmailNotification(
+      `Betting CRM: ${foundBetsSummary.length} nuova/e value bet trovata/e`,
+      `${foundBetsSummary.length} value bet trovate oggi:\n\n${plainLines.join('\n\n')}\n\nConsulta la dashboard per i dettagli e per registrare l'esito.`
+    );
+    await sendWhatsAppNotification(
+      `🎯 ${foundBetsSummary.length} nuova/e value bet trovata/e:\n\n${plainLines.join('\n\n')}`
     );
   }
 

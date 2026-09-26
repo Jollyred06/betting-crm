@@ -94,6 +94,10 @@ function estimateAllMarkets(homeStats, awayStats) {
     'OU_1.5': { over: pOver15, under: 1 - pOver15 },
     'OU_2.5': { over: pOver25, under: 1 - pOver25 },
     'BTTS': { yes: pBttsYes, no: 1 - pBttsYes },
+    // Draw No Bet: come 1X2 ma senza il pareggio (pareggio = puntata rimborsata).
+    // Si normalizza la probabilità di casa/trasferta escludendo il pareggio,
+    // senza bisogno di un nuovo calcolo Poisson.
+    'DNB': { home: pHome / (pHome + pAway), away: pAway / (pHome + pAway) },
     expectedGoals: { homeXG, awayXG }
   };
 }
