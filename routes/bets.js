@@ -156,4 +156,27 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// Storico delle esecuzioni giornaliere (riuscite e fallite). Utile per
+// controllare cosa è successo in passato senza dover rifare l'analisi:
+// basta aprire questo indirizzo (o mostrarlo a Claude in una chat futura)
+// per avere subito il contesto di cosa ha fatto il sistema nei giorni scorsi.
+router.get('/logs', async (req, res) => {
+  // Default 90 (~3 mesi con un'esecuzione al giorno). Si può chiedere di più
+  // con ?limit=200, fino a un tetto di 365 per evitare risposte enormi.
+  const requestedLimit = parseInt(req.query.limit, 10);
+  const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+    ? Math.min(requestedLimit, 365)
+    : 90;
+
+  try {
+    const { rows } = await pool.query(
+      `SELECT * FROM run_logs ORDER BY run_at DESC LIMIT $1`,
+      [limit]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

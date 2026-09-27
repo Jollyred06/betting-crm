@@ -93,8 +93,21 @@ CREATE TABLE IF NOT EXISTS bankroll_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_fixtures_date ON fixtures(date);
+CREATE TABLE IF NOT EXISTS run_logs (
+  id SERIAL PRIMARY KEY,
+  run_at TIMESTAMP DEFAULT NOW(),
+  success BOOLEAN NOT NULL,
+  fixtures_found INTEGER,
+  value_bets_found INTEGER,
+  football_data_requests INTEGER,
+  odds_api_requests INTEGER,
+  log_text TEXT, -- il dettaglio riga per riga di cosa è successo in quella esecuzione
+  error_message TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_odds_fixture ON odds(fixture_id);
 CREATE INDEX IF NOT EXISTS idx_valuebets_status ON value_bets(status);
 CREATE INDEX IF NOT EXISTS idx_refstats_fixture ON referee_stats(fixture_id);
 CREATE INDEX IF NOT EXISTS idx_matchstats_fixture ON match_stats(fixture_id);
 CREATE INDEX IF NOT EXISTS idx_closingodds_fixture ON closing_odds(fixture_id);
+CREATE INDEX IF NOT EXISTS idx_runlogs_runat ON run_logs(run_at);

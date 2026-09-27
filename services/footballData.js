@@ -19,10 +19,19 @@ let requestCount = 0;
 // comunque un contatore per i log e per evitare loop accidentali.
 const SAFETY_LIMIT = 90;
 
+// Piccola pausa tra una richiesta e l'altra: il piano gratuito accetta
+// 10 richieste/minuto, quindi con più leghe e più partite da analizzare
+// conviene diluire le chiamate invece di sperare di restare per caso
+// sotto il limite. 700ms tra le richieste tiene un buon margine di sicurezza.
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function safeGet(path, params = {}) {
   if (requestCount >= SAFETY_LIMIT) {
     throw new Error(`Limite di sicurezza richieste football-data.org raggiunto (${SAFETY_LIMIT}).`);
   }
+  if (requestCount > 0) await sleep(700);
   requestCount++;
   const { data } = await client.get(path, { params });
   return data;

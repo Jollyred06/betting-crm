@@ -18,7 +18,8 @@ let requestCount = 0;
 const SPORT_KEY_MAP = {
   PL: 'soccer_epl',
   SA: 'soccer_italy_serie_a',
-  BSA: 'soccer_brazil_campeonato'
+  BSA: 'soccer_brazil_campeonato',
+  BL1: 'soccer_germany_bundesliga'
 };
 
 async function getOddsForCompetition(competitionCode) {
@@ -30,7 +31,7 @@ async function getOddsForCompetition(competitionCode) {
     params: {
       apiKey: process.env.ODDS_API_KEY,
       regions: 'eu',
-      markets: 'h2h,totals,btts,draw_no_bet',
+      markets: 'h2h,totals,btts',
       oddsFormat: 'decimal'
     }
   });

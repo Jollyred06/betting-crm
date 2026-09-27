@@ -162,7 +162,10 @@
       <h1>Betting CRM</h1>
       <div class="subtitle">Value betting sul calcio — dashboard di consultazione</div>
     </div>
-    <button class="refresh-btn" onclick="loadAll()">Aggiorna</button>
+    <div style="display:flex; gap:8px;">
+      <button class="refresh-btn" onclick="loadAll()">Aggiorna</button>
+      <button class="refresh-btn" onclick="downloadLogs()">Scarica log</button>
+    </div>
   </div>
 
   <div class="card">
@@ -415,6 +418,42 @@
     } catch (err) {
       alert('Errore di rete, riprova.');
       buttons.forEach(btn => btn.disabled = false);
+    }
+  }
+
+  async function downloadLogs() {
+    try {
+      const res = await fetch('/api/logs');
+      const logs = await res.json();
+
+      if (!logs.length) {
+        alert('Nessun log disponibile ancora.');
+        return;
+      }
+
+      // Testo leggibile, non JSON grezzo: pensato per essere caricato
+      // direttamente in una chat futura senza bisogno di spiegazioni extra.
+      const lines = logs.map(l => {
+        const date = new Date(l.run_at).toLocaleString('it-IT');
+        if (!l.success) {
+          return `[${date}] ERRORE\n${l.error_message || 'nessun dettaglio'}`;
+        }
+        return `[${date}] OK — partite analizzate: ${l.fixtures_found ?? '?'}, value bet trovate: ${l.value_bets_found ?? 0}, richieste football-data.org: ${l.football_data_requests ?? '?'}, richieste Odds API: ${l.odds_api_requests ?? '?'}\n${l.log_text || ''}`;
+      });
+
+      const content = `Betting CRM — log esecuzioni (esportato il ${new Date().toLocaleString('it-IT')})\n${'='.repeat(60)}\n\n${lines.join('\n\n' + '-'.repeat(60) + '\n\n')}`;
+
+      const blob = new Blob([content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `betting-crm-log-${new Date().toISOString().split('T')[0]}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Errore nello scaricare i log.');
     }
   }
 

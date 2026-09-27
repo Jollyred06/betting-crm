@@ -9,7 +9,11 @@ require('dotenv').config();
 
 // Codici football-data.org: PL = Premier League, SA = Serie A
 const COMPETITIONS = (process.env.COMPETITIONS || 'SA,PL').split(',').map(s => s.trim());
-const MAX_FIXTURES_PER_DAY = 3;
+// Il limite reale non è il budget mensile di The Odds API (le quote si
+// scaricano una volta per lega, non per partita), ma il tetto di 10
+// richieste/minuto di football-data.org (fixtures + statistiche squadre).
+// Con 8 partite/giorno restiamo ampiamente dentro quel limite.
+const MAX_FIXTURES_PER_DAY = 8;
 
 /**
  * Calcola statistiche squadra (media gol fatti/subiti, forma) dalle ultime 5 partite,
@@ -160,14 +164,6 @@ function parseOddsEvent(event) {
           updateBestOdd(odds, bookmakerBySelection, 'BTTS', selection, outcome.price, bookmaker.title);
         }
       }
-      if (market.key === 'draw_no_bet') {
-        for (const outcome of market.outcomes) {
-          let selection = null;
-          if (teamsMatch(outcome.name, event.home_team)) selection = 'home';
-          else if (teamsMatch(outcome.name, event.away_team)) selection = 'away';
-          if (selection) updateBestOdd(odds, bookmakerBySelection, 'DNB', selection, outcome.price, bookmaker.title);
-        }
-      }
     }
   }
 
@@ -199,7 +195,7 @@ async function upsertTeamAndFixture(match, competitionCode) {
  * The Odds API abbinandole per nome squadra, cerca value bet su tutti i
  * mercati disponibili, calcola lo stake (Kelly) e salva tutto nel database.
  */
-async function runDailyAnalysis() {
+async function runDailyAnalysisInner() {
   const log = [];
   const fixtures = await footballData.getTodayFixtures(COMPETITIONS);
   const selected = fixtures.slice(0, MAX_FIXTURES_PER_DAY);
@@ -279,6 +275,15 @@ async function runDailyAnalysis() {
           `INSERT INTO odds (fixture_id, bookmaker, market, selection, odd_value) VALUES ($1,$2,$3,$4,$5)`,
           [match.id, bookmakerName, market, selection, odds[market][selection]]
         );
+        // Salviamo la stessa quota anche come "quota di chiusura": non è la
+        // chiusura vera (quella si conoscerebbe solo al fischio d'inizio),
+        // ma è comunque uno snapshot reale delle quote del giorno, utile in
+        // futuro per confrontare il modello con com'era il mercato in quel
+        // momento — lo storico da cui ripartire per affinare i parametri.
+        await pool.query(
+          `INSERT INTO closing_odds (fixture_id, bookmaker, market, selection, odd_value) VALUES ($1,$2,$3,$4,$5)`,
+          [match.id, bookmakerName, market, selection, odds[market][selection]]
+        );
       }
     }
 
@@ -335,7 +340,32 @@ async function runDailyAnalysis() {
   }
 
   log.push(`Analisi completata. Totale value bet salvate: ${totalValueBetsFound}. Richieste football-data.org: ${footballData.getRequestCount()}, richieste Odds API: ${oddsApi.getRequestCount()}.`);
-  return { log, totalValueBetsFound, footballDataRequestsUsed: footballData.getRequestCount(), oddsApiRequestsUsed: oddsApi.getRequestCount() };
+  return { log, totalValueBetsFound, fixturesAnalyzed: selected.length, footballDataRequestsUsed: footballData.getRequestCount(), oddsApiRequestsUsed: oddsApi.getRequestCount() };
+}
+
+/**
+ * Wrapper attorno all'analisi vera e propria: garantisce che ogni esecuzione
+ * lasci una traccia in run_logs, riuscita o fallita. Serve sia per
+ * l'osservazione umana (dashboard, in futuro) sia come "memoria condivisa":
+ * mostrando il contenuto di questa tabella si può far vedere in un colpo
+ * solo cosa è successo, senza dover ricostruire tutto a mano.
+ */
+async function runDailyAnalysis() {
+  try {
+    const result = await runDailyAnalysisInner();
+    await pool.query(
+      `INSERT INTO run_logs (success, fixtures_found, value_bets_found, football_data_requests, odds_api_requests, log_text)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [true, result.fixturesAnalyzed, result.totalValueBetsFound, result.footballDataRequestsUsed, result.oddsApiRequestsUsed, result.log.join('\n')]
+    );
+    return result;
+  } catch (err) {
+    await pool.query(
+      `INSERT INTO run_logs (success, error_message) VALUES ($1, $2)`,
+      [false, err.message]
+    );
+    throw err; // la route /api/run-daily deve comunque poter segnalare l'errore a chi chiama
+  }
 }
 
 module.exports = { runDailyAnalysis, computeTeamStats, parseOddsEvent };
