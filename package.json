@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "import:historical": "node scripts/importHistorical.js"
+    "test": "node test/verifyModelV1.js && node test/unitTests.js && node test/xgDownloader.test.js"
   },
   "dependencies": {
     "express": "^4.19.2",

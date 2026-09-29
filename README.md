@@ -1,56 +1,24 @@
-# Betting CRM — Value Betting su Calcio
+# Betting CRM — tracker di segnali su calcio (modello V1)
 
-Sistema per identificare value bets (quote del bookmaker più favorevoli della probabilità reale stimata) e gestire il bankroll in modo controllato. **Non garantisce vincite**: è uno strumento di analisi, non una macchina infallibile.
+**Stato onesto:** il backtest su 4 stagioni di Serie A (vedi `backtest_serieA_report.md`) ha mostrato che il
+vecchio modello sbagliava le probabilita' e che quello corretto (V1) e' ben calibrato ma NON batte il mercato.
+I segnali servono a MISURARE (tracker), non come prova che convenga puntare soldi veri.
 
-## Setup (0€ per iniziare)
+## Cosa fa ogni giorno (cron-job.org -> POST /api/run-daily)
+1. Aggiorna lo storico partite dalla stagione in corso (football-data.co.uk).
+2. Calcola con V1 le probabilita' 1X2 e Over/Under 2.5 delle partite di oggi (solo leghe validate: Serie A).
+3. Le confronta con la quota migliore tra i bookmaker (The Odds API).
+4. Protezioni: vantaggio tra 3% e 15%, massimo 3 segnali al giorno, tetto di esposizione 10% del bankroll.
+5. Salva i segnali (con `model_version = v1`), scrive il log e notifica.
 
-1. **Database gratuito**: crea un progetto su [Supabase](https://supabase.com) (Postgres free tier). Copia la connection string.
-2. **API quote**: registrati su [RapidAPI - API.Football](https://rapidapi.com/api-sports/api/api-football), piano gratuito (100 richieste/giorno). Copia la chiave.
-3. Copia `.env.example` in `.env` e compila `DATABASE_URL` e `API_FOOTBALL_KEY`.
-4. Su Replit: crea un nuovo Repl Node.js, carica questi file, imposta le variabili in "Secrets".
-5. Esegui lo schema del database:
-   ```
-   psql $DATABASE_URL -f db/schema.sql
-   ```
-6. Installa le dipendenze e avvia:
-   ```
-   npm install
-   npm start
-   ```
+## Prima messa in funzione
+1. Supabase -> SQL Editor: esegui tutto `db/schema.sql` (aggiunge `historical_matches` e `model_version`).
+2. POST `/api/admin/import-history?key=LA_TUA_CHIAVE` (una tantum): carica i 4 CSV di `data/history`.
+3. GET `/api/admin/history-status?key=LA_TUA_CHIAVE`: controlla che SA abbia ~1520 partite.
 
-## Import storico (una tantum)
+## Test (senza database ne' rete)
+`npm test` — verifica che il modello JS coincida col backtest Python e che nomi squadra, quote e protezioni funzionino.
 
-```
-npm run import:historical
-```
-Va rilanciato più giorni di seguito se il limite giornaliero (100 richieste) viene raggiunto a metà — lo script si ferma da solo e riprende dove serve.
-
-## Endpoint disponibili
-
-- `GET /api/value-bets` — lista scommesse con edge positivo
-- `GET /api/bankroll` — saldo attuale e storico movimenti
-- `POST /api/value-bets/:id/settle` — registra esito (`won`/`lost`/`void`) e aggiorna bankroll
-
-## Mercati e dati coperti (aggiornato)
-
-**Mercati analizzati** (in `services/valueEngine.js`, modello a gol attesi/Poisson):
-1X2, Doppia Chance (1X/X2/12), Over/Under 1.5, Over/Under 2.5, BTTS.
-
-**Dati raccolti per partita** (~40 richieste/giorno su 3 partite, ben sotto il limite di 100):
-- Fixtures, quote (multi-bookmaker dalla stessa chiamata `/odds`), statistiche squadra, infortuni/squalifiche, classifica, H2H
-- Statistiche arbitro (`referee_stats`) — le medie cartellini/rigori si costruiscono nel tempo incrociando lo storico delle partite dello stesso arbitro salvate in DB, non da un endpoint diretto
-- Statistiche possesso/tiri (`match_stats`)
-- Quote di chiusura (`closing_odds`) — salvate per costruire uno storico utile al backtesting futuro
-
-**Nota sul volume dati**: il set è stato tenuto volutamente limitato a variabili con segnale reale (non tutte quelle disponibili), per evitare overfitting del modello.
-
-## Prossimi passi consigliati
-
-1. **Backtesting**: prima di puntare soldi veri, usa i dati storici importati per simulare la strategia sugli ultimi 12 mesi e vedere il ROI teorico.
-2. **Paper trading**: 2-3 settimane di tracking senza soldi reali, per validare che il win-rate osservato sia coerente con quanto stimato.
-3. **Fetch giornaliero automatico**: aggiungere un cron (node-cron è già nelle dipendenze) che recupera fixtures/quote ogni mattina.
-4. **Frontend/dashboard**: se serve una UI visuale invece del solo JSON.
-
-## Nota onesta
-
-Il modello di stima probabilità in `services/valueEngine.js` è volutamente semplice (forma + medie gol). Il valore reale di questo sistema dipende da quanto affini la stima nel tempo confrontandola con i risultati reali — è un lavoro continuo, non un interruttore "vinci sempre".
+## Cose ancora da fare
+- Confronto quota vista vs quota di chiusura (indicatore di vantaggio reale) — i dati di chiusura sono gia' in `historical_matches`.
+- Altre leghe solo dopo il loro backtest (stesse regole: parametri decisi sullo sviluppo, test finale una volta sola).

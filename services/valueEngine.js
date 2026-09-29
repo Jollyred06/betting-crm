@@ -1,4 +1,9 @@
 /**
+ * !! MODELLO SCARTATO — NON PIU' USATO !!
+ * Questo e' il vecchio modello (V0). Il backtest su 4 stagioni di Serie A ha mostrato probabilita'
+ * troppo sicure e a volte non normalizzate. Sostituito da modelV1.js. Tenuto solo come riferimento.
+ */
+/**
  * Motore di value betting — mercati coperti:
  * 1X2, Doppia Chance (1X/X2/12), Over/Under 1.5, Over/Under 2.5, BTTS.
  *

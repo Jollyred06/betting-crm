@@ -111,3 +111,42 @@ CREATE INDEX IF NOT EXISTS idx_refstats_fixture ON referee_stats(fixture_id);
 CREATE INDEX IF NOT EXISTS idx_matchstats_fixture ON match_stats(fixture_id);
 CREATE INDEX IF NOT EXISTS idx_closingodds_fixture ON closing_odds(fixture_id);
 CREATE INDEX IF NOT EXISTS idx_runlogs_runat ON run_logs(run_at);
+
+-- Storico partite (risultati + quote di chiusura medie) da football-data.co.uk, per il modello V1
+CREATE TABLE IF NOT EXISTS historical_matches (
+  id SERIAL PRIMARY KEY,
+  league_code TEXT NOT NULL,
+  match_date DATE NOT NULL,
+  home_team TEXT NOT NULL,
+  away_team TEXT NOT NULL,
+  home_goals INTEGER NOT NULL,
+  away_goals INTEGER NOT NULL,
+  close_avg_h NUMERIC(6,2),
+  close_avg_d NUMERIC(6,2),
+  close_avg_a NUMERIC(6,2),
+  close_avg_o25 NUMERIC(6,2),
+  close_avg_u25 NUMERIC(6,2),
+  UNIQUE (league_code, match_date, home_team, away_team)
+);
+CREATE INDEX IF NOT EXISTS idx_hist_league_date ON historical_matches(league_code, match_date);
+
+-- Quale modello ha generato ogni segnale (v1 = validato col backtest)
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS model_version TEXT;
+
+-- Download da TheStatsAPI: partite Serie A con xG e quote (per il backtest con xG)
+CREATE TABLE IF NOT EXISTS xg_seasons (season_id TEXT PRIMARY KEY);
+CREATE TABLE IF NOT EXISTS xg_matches (
+  match_id TEXT PRIMARY KEY,
+  season_id TEXT NOT NULL,
+  season_rank INTEGER NOT NULL DEFAULT 0,
+  utc_date TIMESTAMPTZ,
+  home_team TEXT, away_team TEXT,
+  home_goals INTEGER, away_goals INTEGER,
+  xg_home NUMERIC(6,3), xg_away NUMERIC(6,3), npxg_home NUMERIC(6,3), npxg_away NUMERIC(6,3),
+  b365_h NUMERIC(8,3), b365_d NUMERIC(8,3), b365_a NUMERIC(8,3), b365_o25 NUMERIC(8,3), b365_u25 NUMERIC(8,3),
+  pin_h NUMERIC(8,3), pin_d NUMERIC(8,3), pin_a NUMERIC(8,3), pin_o25 NUMERIC(8,3), pin_u25 NUMERIC(8,3),
+  stats_done BOOLEAN NOT NULL DEFAULT FALSE,
+  odds_done BOOLEAN NOT NULL DEFAULT FALSE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT
+);

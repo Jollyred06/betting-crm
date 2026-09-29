@@ -31,7 +31,7 @@ async function getOddsForCompetition(competitionCode) {
     params: {
       apiKey: process.env.ODDS_API_KEY,
       regions: 'eu',
-      markets: 'h2h,totals,btts',
+      markets: 'h2h,totals',
       oddsFormat: 'decimal'
     }
   });

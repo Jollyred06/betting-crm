@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const betsRouter = require('./routes/bets');
 const runRouter = require('./routes/run');
+const adminRouter = require('./routes/admin');
 const footballData = require('./services/footballData');
 const oddsApi = require('./services/oddsApi');
 
@@ -22,6 +23,7 @@ app.get('/', (req, res) => {
 
 app.use('/api', betsRouter);
 app.use('/api', runRouter);
+app.use('/api/admin', adminRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
