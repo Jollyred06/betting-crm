@@ -13,6 +13,7 @@ const client = axios.create({
 });
 
 let requestCount = 0;
+let credits = { used: null, remaining: null };
 
 // Mappa codice competizione football-data.org -> sport key di The Odds API
 const { LEAGUES } = require('./leagues');
@@ -24,7 +25,7 @@ async function getOddsForCompetition(competitionCode) {
   if (!sportKey) return [];
 
   requestCount++;
-  const { data } = await client.get(`/sports/${sportKey}/odds`, {
+  const resp = await client.get(`/sports/${sportKey}/odds`, {
     params: {
       apiKey: process.env.ODDS_API_KEY,
       regions: 'eu',
@@ -32,11 +33,25 @@ async function getOddsForCompetition(competitionCode) {
       oddsFormat: 'decimal'
     }
   });
-  return data; // array di eventi, ognuno con bookmakers -> markets -> outcomes
+  credits = { used: resp.headers['x-requests-used'] ?? null, remaining: resp.headers['x-requests-remaining'] ?? null };
+  return resp.data; // array di eventi, ognuno con bookmakers -> markets -> outcomes
+}
+
+/**
+ * Campionati attualmente in stagione su The Odds API (elenco gratuito, non consuma crediti).
+ * Serve a non sprecare crediti su chiavi sbagliate o campionati fermi.
+ */
+async function getActiveSportKeys() {
+  const { data } = await client.get('/sports', { params: { apiKey: process.env.ODDS_API_KEY } });
+  return new Set(data.filter(s => s.active).map(s => s.key));
+}
+
+function getCredits() {
+  return credits;
 }
 
 function getRequestCount() {
   return requestCount;
 }
 
-module.exports = { getOddsForCompetition, getRequestCount, SPORT_KEY_MAP };
+module.exports = { getOddsForCompetition, getActiveSportKeys, getCredits, getRequestCount, SPORT_KEY_MAP };

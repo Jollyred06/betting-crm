@@ -5,7 +5,11 @@
  * Regola: se non siamo SICURI dell'abbinamento, non abbiniamo (e il sistema lo scrive
  * nel log), invece di indovinare: un abbinamento sbagliato darebbe segnali falsi.
  */
-function stripAccents(s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+function stripAccents(s) {
+  // lettere che la normalizzazione non scompone (es. la "i" turca senza punto): senza questo "Kasimpasa" e "Kasımpaşa" non coincidono
+  const extra = { 'ı': 'i', 'İ': 'I', 'ł': 'l', 'Ł': 'L', 'ø': 'o', 'Ø': 'O', 'đ': 'd', 'Đ': 'D', 'ß': 'ss', 'æ': 'ae', 'Æ': 'AE', 'œ': 'oe', 'Œ': 'OE' };
+  return s.replace(/[ıİłŁøØđĐßæÆœŒ]/g, c => extra[c]).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 
 function tokens(name) {
   return stripAccents(String(name || '')).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
@@ -19,7 +23,20 @@ const FULL_NAME_ALIASES = {
   'fc internazionale milano': 'Inter',
   'ac milan': 'Milan',
   'hellas verona': 'Verona',
-  'hellas verona fc': 'Verona'
+  'hellas verona fc': 'Verona',
+  // Turchia
+  'istanbul basaksehir': 'Buyuksehyr', 'istanbul basaksehir fk': 'Buyuksehyr', 'basaksehir': 'Buyuksehyr', 'basaksehir fk': 'Buyuksehyr',
+  'goztepe': 'Goztep', 'goztepe sk': 'Goztep', 'bodrum fk': 'Bodrumspor', 'bodrum': 'Bodrumspor',
+  // Grecia
+  'olympiacos': 'Olympiakos', 'olympiacos piraeus': 'Olympiakos', 'olympiakos piraeus': 'Olympiakos', 'olympiacos fc': 'Olympiakos',
+  'larissa': 'Larisa', 'larissa fc': 'Larisa', 'levadiakos': 'Levadeiakos', 'volos': 'Volos NFC', 'volos nps': 'Volos NFC',
+  'asteras tripoli': 'Asteras Tripolis', 'aris thessaloniki': 'Aris', 'paok salonika': 'PAOK',
+  // Belgio
+  'sint truidense': 'St Truiden', 'sint truiden': 'St Truiden', 'stvv': 'St Truiden',
+  'union saint gilloise': 'St. Gilloise', 'royal union saint gilloise': 'St. Gilloise', 'union sg': 'St. Gilloise',
+  'beerschot': 'Beerschot VA', 'k beerschot va': 'Beerschot VA', 'oh leuven': 'Oud-Heverlee Leuven',
+  // Scozia
+  'heart of midlothian': 'Hearts', 'heart of midlothian fc': 'Hearts'
 };
 // Parole equivalenti tra fonti diverse.
 const TOKEN_SYNONYMS = { inter: ['internazionale'] };

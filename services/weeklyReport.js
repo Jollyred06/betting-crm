@@ -21,9 +21,10 @@ function summarize(bets) {
 
 const f = (v, d = 1, sign = false) => (v === null || v === undefined ? '—' : (sign && v >= 0 ? '+' : '') + Number(v).toFixed(d));
 
-function formatReport(week, total) {
+function formatReport(week, total, strong) {
   const line = (t, s) => `${t}: ${s.signals} segnali (${s.settled} chiusi, ${s.pending} in attesa) | vinte ${f(s.hitRatePct)}% | ROI a puntata fissa ${f(s.roiFlatPct, 1, true)}% | valore medio vs chiusura ${f(s.avgClvPct, 2, true)}% su ${s.nClv}`;
   let txt = `📊 Riepilogo settimanale (tracker, senza soldi veri)\n${line('Ultimi 7 giorni', week)}\n${line('Da inizio tracciamento', total)}`;
+  if (strong && strong.signals && strong.signals !== total.signals) txt += `\n${line('Solo vantaggio >= 3%', strong)}`;
   if (total.clvCi95) txt += `\nValore vs chiusura, intervallo 95%: da ${f(total.clvCi95[0], 2, true)}% a ${f(total.clvCi95[1], 2, true)}%`;
   txt += '\n\nLettura: un vantaggio vero si vede se il valore vs chiusura e\' positivo con intervallo sopra lo zero. ' +
     (total.nClv < 300 ? `Servono circa 300 segnali chiusi: ora ${total.nClv}. Prima non e' una prova.` : 'Il campione e\' sufficiente per una prima lettura.');
@@ -38,8 +39,10 @@ async function loadBets(pool, sinceDays) {
 }
 
 async function buildStats(pool) {
-  const week = summarize(await loadBets(pool, 7)), total = summarize(await loadBets(pool, null));
-  return { week, total, text: formatReport(week, total) };
+  const all = await loadBets(pool, null), recent = await loadBets(pool, 7);
+  const week = summarize(recent), total = summarize(all);
+  const strong = summarize(all.filter(b => Number(b.edge_pct) >= 3));      // i segnali "forti" (soglia originale 3%), per confronto se si abbassa la soglia
+  return { week, total, strong, text: formatReport(week, total, strong) };
 }
 
 module.exports = { summarize, formatReport, buildStats };

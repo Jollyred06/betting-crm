@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/verifyModelV1.js && node test/unitTests.js && node test/xgDownloader.test.js && node test/multiLeague.test.js && node test/tracker.test.js && node test/tmFeatures.test.js"
+    "test": "node test/verifyModelV1.js && node test/unitTests.js && node test/xgDownloader.test.js && node test/multiLeague.test.js && node test/tracker.test.js && node test/tmFeatures.test.js && node test/leagues.test.js"
   },
   "dependencies": {
     "express": "^4.19.2",

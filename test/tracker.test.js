@@ -50,6 +50,11 @@ assert.strictEqual(s.signals, 4); assert.strictEqual(s.settled, 3); assert.stric
 assert.ok(Math.abs(s.roiFlatPct - ((3 - 1 - 1) / 3) * 100) < 1e-9); assert.ok(Math.abs(s.avgClvPct - 1) < 1e-9); assert.strictEqual(s.nClv, 2); assert.strictEqual(s.clvCi95, null);   // < 20 dati: nessun intervallo
 assert.strictEqual(summarize([]).roiFlatPct, null);
 assert.ok(formatReport(s, s).includes('Servono circa 300 segnali'));
+const weak = [...bets, { odd: 3, status: 'lost', edge_pct: 2.2, clv_pct: 0.5 }];
+const strongOnly = summarize(weak.filter(b => Number(b.edge_pct) >= 3));
+assert.strictEqual(strongOnly.signals, 4); assert.strictEqual(summarize(weak).signals, 5);
+assert.ok(formatReport(summarize(weak), summarize(weak), strongOnly).includes('Solo vantaggio >= 3%'));      // riga in piu' solo se la soglia e' stata abbassata
+assert.ok(!formatReport(s, s, s).includes('Solo vantaggio >= 3%'));
 console.log('riepilogo: ok');
 
 (async () => {
@@ -72,28 +77,56 @@ console.log('riepilogo: ok');
   assert.strictEqual(upd[1][1][0], 'lost');                                                                                          // Roma-Verona 0-0: 'home' perde
   console.log('chiusura automatica (con finto database): ok');
 
-  // --- 5) flusso giornaliero completo con moduli finti
-  const inserted = [], logs = [];
+  // --- 5) flusso giornaliero completo con moduli finti (campionati da football-data.org + campionati "dalle quote")
+  const inserted = [], logs = [], fixturesIns = [];
   const fakePool = { query: async (sql, params) => {
     if (/INSERT INTO value_bets/.test(sql)) { inserted.push(params); return { rows: [] }; }
     if (/INSERT INTO run_logs/.test(sql)) { logs.push(params); return { rows: [] }; }
+    if (/INSERT INTO fixtures/.test(sql)) { fixturesIns.push(params); return { rows: [] }; }
     return { rows: [] }; } };
   const stub = (rel, exp) => { const f = require.resolve(rel); require.cache[f] = { id: f, filename: f, loaded: true, exports: exp }; };
   stub('../db/pool', fakePool);
   const future = new Date(Date.now() + 5 * 3600 * 1000).toISOString();
-  stub('../services/footballData', { getRequestCount: () => 1, getTodayFixtures: async codes => [
-    { id: 555, utcDate: future, status: 'TIMED', competition: { code: 'SA' }, homeTeam: { id: 1, name: 'FC Internazionale Milano' }, awayTeam: { id: 2, name: 'AC Milan' }, score: {} },
-    { id: 556, utcDate: future, status: 'TIMED', competition: { code: 'PL' }, homeTeam: { id: 3, name: 'Arsenal FC' }, awayTeam: { id: 4, name: 'Chelsea FC' }, score: {} } ] });
-  stub('../services/oddsApi', { getRequestCount: () => 1, getOddsForCompetition: async code => (code === 'SA' ? [{ ...ev, commence_time: future }] : (() => { throw new Error('HTTP 401'); })()) });
+  const far = new Date(Date.now() + 40 * 3600 * 1000).toISOString();          // fuori dalle prossime 24 ore
+  const evT1 = { id: 'abc123', home_team: 'Galatasaray SK', away_team: 'Fenerbahçe', commence_time: future, bookmakers: [
+    bk2('pinnacle', 2.00, 3.50, 3.80), bk2('williamhill', 1.95, 3.40, 3.70), bk2('betclic', 2.05, 3.45, 3.75), bk2('unibet_eu', 1.98, 3.45, 4.20, 'Unibet') ] };
+  function bk2(key, h, d, a, title) { return { key, title: title || key, markets: [{ key: 'h2h', outcomes: [{ name: 'Galatasaray SK', price: h }, { name: 'Draw', price: d }, { name: 'Fenerbahçe', price: a }] }] }; }
+  const evG1 = { ...evT1, id: 'g1x', home_team: 'Squadra Sconosciuta FC', away_team: 'Olympiacos Piraeus', bookmakers: evT1.bookmakers.map(b => ({ ...b, markets: [{ key: 'h2h', outcomes: [{ name: 'Squadra Sconosciuta FC', price: 2 }, { name: 'Draw', price: 3.5 }, { name: 'Olympiacos Piraeus', price: 4.2 }] }] })) };
+  const evB1 = { ...evT1, id: 'b1x', commence_time: far, home_team: 'Club Brugge KV', away_team: 'RSC Anderlecht', bookmakers: [] };
+  stub('../services/footballData', { getRequestCount: () => 1, getTodayFixtures: async codes => {
+    assert.ok(!codes.includes('T1') && !codes.includes('G1'), 'i campionati non coperti non vanno chiesti a football-data.org');
+    return [
+      { id: 555, utcDate: future, status: 'TIMED', competition: { code: 'SA' }, homeTeam: { id: 1, name: 'FC Internazionale Milano' }, awayTeam: { id: 2, name: 'AC Milan' }, score: {} },
+      { id: 556, utcDate: future, status: 'TIMED', competition: { code: 'PL' }, homeTeam: { id: 3, name: 'Arsenal FC' }, awayTeam: { id: 4, name: 'Chelsea FC' }, score: {} } ]; } });
+  const oddsCalls = [];
+  stub('../services/oddsApi', { getRequestCount: () => oddsCalls.length, getCredits: () => ({ used: '120', remaining: '380' }),
+    getActiveSportKeys: async () => new Set(['soccer_italy_serie_a', 'soccer_epl', 'soccer_turkey_super_league', 'soccer_greece_super_league', 'soccer_belgium_first_div']),   // SC0, PD, ecc. fuori stagione
+    getOddsForCompetition: async code => { oddsCalls.push(code);
+      if (code === 'SA') return [{ ...ev, commence_time: future }];
+      if (code === 'T1') return [evT1]; if (code === 'G1') return [evG1]; if (code === 'B1') return [evB1];
+      throw new Error('HTTP 401'); } });
   const history = require('../services/history');
   history.refreshCurrentSeason = async () => ({ ok: true, partite: 10 });
-  history.loadMatches = async (pl, code) => (code === 'SA' ? [{ home: 'Inter', away: 'Milan' }, { home: 'Roma', away: 'Verona' }] : [{ home: 'Arsenal', away: 'Chelsea' }]);
+  const NAMES = { SA: ['Inter', 'Milan', 'Roma', 'Verona'], PL: ['Arsenal', 'Chelsea'], T1: ['Galatasaray', 'Fenerbahce'], G1: ['Olympiakos', 'AEK'], B1: ['Club Brugge', 'Anderlecht'] };
+  history.loadMatches = async (pl, code) => { const n = NAMES[code] || ['X', 'Y']; return [{ home: n[0], away: n[1] }, ...(n[2] ? [{ home: n[2], away: n[3] }] : [])]; };
   const { runDailyAnalysis } = require('../services/orchestrator');
   const out = await runDailyAnalysis();
-  assert.strictEqual(inserted.length, 1);                                   // un solo segnale: Milan a 4.20
-  assert.strictEqual(inserted[0][1], 'away'); assert.strictEqual(inserted[0][2], 4.20); assert.strictEqual(inserted[0][3], 'Unibet'); assert.strictEqual(inserted[0][8], 'pinnacle'); assert.strictEqual(inserted[0][9], 'SA');
-  assert.ok(out.log.some(l => /PL: quote non disponibili \(HTTP 401\)/.test(l)));   // errore su un campionato: non blocca gli altri
+  assert.strictEqual(inserted.length, 2, JSON.stringify(inserted));                       // Milan a 4.20 (SA) + Fenerbahce a 4.20 (T1, partite dalle quote)
+  const sa = inserted.find(r => r[9] === 'SA'), t1 = inserted.find(r => r[9] === 'T1');
+  assert.strictEqual(sa[1], 'away'); assert.strictEqual(sa[2], 4.20); assert.strictEqual(sa[3], 'Unibet'); assert.strictEqual(sa[8], 'pinnacle');
+  assert.strictEqual(t1[1], 'away'); assert.strictEqual(t1[3], 'Unibet');
+  assert.ok(t1[0] >= 1000000000 && t1[0] < 2000000000);                                   // id stabile ricavato dall'evento
+  const { stableInt } = require('../services/orchestrator'); assert.strictEqual(t1[0], stableInt('ev:abc123'));   // lo stesso evento ha sempre lo stesso id: niente doppioni tra un giorno e l'altro
+  assert.ok(fixturesIns.some(f => f[0] === stableInt('ev:abc123')));
+  assert.ok(out.log.some(l => /PL: quote non disponibili \(HTTP 401\)/.test(l)));         // errore su un campionato: non blocca gli altri
+  assert.ok(out.log.some(l => /G1: .*NOMI|NOMI SQUADRA NON RICONOSCIUTI.*G1: Squadra Sconosciuta FC/.test(l)));   // nome non riconosciuto: segnale non salvato, nome nel log
+  assert.ok(!inserted.some(r => r[9] === 'G1'));
+  assert.ok(out.log.some(l => /B1: 1 partite con quote \(0 con Pinnacle\/exchange\), 0 nelle prossime 24 ore/.test(l)));   // partita tra 40 ore: rimandata a domani
+  assert.ok(out.log.some(l => /SC0: fuori stagione o chiave non valida/.test(l)) && !oddsCalls.includes('SC0'));   // campionato non attivo: nessun credito speso
+  assert.ok(out.log.some(l => /T1: 1 partite con quote \(1 con Pinnacle\/exchange\)/.test(l)));            // controllo a secco: Pinnacle presente
+  assert.ok(out.log.some(l => /NOMI SQUADRA NON RICONOSCIUTI.*B1: /.test(l)) === false);                       // B1: i nomi si riconoscono
+  assert.ok(out.log.some(l => /crediti usati nel mese: 120, rimasti: 380/.test(l)));
   assert.ok(logs.length === 1 && logs[0][0] === true);
-  console.log('flusso giornaliero completo (finti API e database): ok');
+  console.log('flusso giornaliero completo (finti API e database, quattro campionati dalle quote): ok');
   console.log('TUTTI I TEST tracker OK');
 })().catch(e => { console.error(e); process.exit(1); });
