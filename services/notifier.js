@@ -16,10 +16,10 @@ require('dotenv').config();
  *    https://api.telegram.org/bot<IL_TUO_TOKEN>/getUpdates
  *    e cerca "chat":{"id": ...} nella risposta: quello è il TELEGRAM_CHAT_ID.
  */
-async function sendTelegramNotification(text) {
+async function sendTelegramDetailed(text) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
-  if (!token || !chatId) return; // notifiche non configurate, salta silenziosamente
+  if (!token || !chatId) return { configured: false, sent: false, missing: [!token && 'TELEGRAM_BOT_TOKEN', !chatId && 'TELEGRAM_CHAT_ID'].filter(Boolean) };
 
   try {
     await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -27,9 +27,37 @@ async function sendTelegramNotification(text) {
       text,
       parse_mode: 'HTML'
     });
+    return { configured: true, sent: true };
   } catch (err) {
-    console.error('Errore invio notifica Telegram:', err.message);
+    const detail = err.response && err.response.data && err.response.data.description ? err.response.data.description : err.message;
+    console.error('Errore invio notifica Telegram:', detail);
     // Non blocchiamo l'analisi giornaliera se la notifica fallisce
+    return { configured: true, sent: false, error: detail };
+  }
+}
+
+async function sendTelegramNotification(text) {
+  await sendTelegramDetailed(text);
+}
+
+/**
+ * Cerca nei messaggi ricevuti dal bot chi gli ha scritto, cosi' non serve aprire indirizzi a mano per trovare il chat id.
+ * Richiede solo TELEGRAM_BOT_TOKEN e che tu abbia mandato almeno un messaggio al bot.
+ */
+async function findTelegramChats() {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return { configured: false, chats: [] };
+  try {
+    const { data } = await axios.get(`https://api.telegram.org/bot${token}/getUpdates`, { timeout: 15000 });
+    const seen = new Map();
+    for (const u of data.result || []) {
+      const c = (u.message || u.my_chat_member || u.channel_post || {}).chat;
+      if (c && c.id && !seen.has(c.id)) seen.set(c.id, { id: String(c.id), name: [c.first_name, c.last_name].filter(Boolean).join(' ') || c.title || c.username || '' });
+    }
+    return { configured: true, chats: [...seen.values()] };
+  } catch (err) {
+    const detail = err.response && err.response.data && err.response.data.description ? err.response.data.description : err.message;
+    return { configured: true, chats: [], error: detail };
   }
 }
 
@@ -105,4 +133,4 @@ async function sendWhatsAppNotification(text) {
   }
 }
 
-module.exports = { sendTelegramNotification, sendEmailNotification, sendWhatsAppNotification };
+module.exports = { sendTelegramNotification, sendTelegramDetailed, findTelegramChats, sendEmailNotification, sendWhatsAppNotification };

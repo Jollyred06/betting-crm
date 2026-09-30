@@ -7,6 +7,8 @@ const { LEAGUES, DEFAULT_COMPETITIONS } = require('./leagues');
 const { sameTeam, resolveHistoryTeam } = require('./teamNames');
 const { analyzeEvent, sharpReference } = require('./sharpSignals');
 const { settlePending } = require('./settler');
+const { sendTelegramNotification } = require('./notifier');
+const { formatSignalsMessage, esc } = require('./signalMessage');
 require('dotenv').config();
 
 /**
@@ -107,7 +109,7 @@ async function runDailyAnalysisInner() {
     const a = analyzeEvent(ev, { minEdge: MIN_EDGE, maxEdge: MAX_EDGE });
     if (!a.ok) { log.push(`${label}: ${a.reason}.`); return; }
     stats.withSharp++;
-    for (const c of a.candidates) candidates.push({ ...c, code, fixtureId, label, source: a.source });
+    for (const c of a.candidates) candidates.push({ ...c, code, fixtureId, label, source: a.source, home: ev.home_team, away: ev.away_team, kickoff: ev.commence_time });
   }
 
   // 2a) campionati coperti da football-data.org: le partite di oggi arrivano da li'
@@ -177,6 +179,7 @@ async function runDailyAnalysisInner() {
 
   // 3) salvataggio (senza doppioni), dal vantaggio piu' piccolo: nei test i vantaggi grandi erano piu' spesso errori
   candidates.sort((x, y) => x.edge - y.edge);
+  const saved = [];
   for (const c of candidates.slice(0, MAX_DAILY_SIGNALS)) {
     const dup = await pool.query(`SELECT 1 FROM value_bets WHERE fixture_id=$1 AND market='1X2' AND selection=$2 AND strategy='A_sharp'`, [c.fixtureId, c.selection]);
     if (dup.rows.length) continue;
@@ -186,7 +189,12 @@ async function runDailyAnalysisInner() {
        VALUES ($1,'1X2',$2,$3,$4,$5,$6,$7,$8,'sharp-v1','A_sharp',$9,$10)`,
       [c.fixtureId, c.selection, c.odd, c.bookmaker, c.fair, 1 / c.odd, c.edge * 100, TRACK_STAKE, c.source, c.code]);
     log.push(`SEGNALE ${c.label}: ${c.selection} a ${c.odd.toFixed(2)} (${c.bookmaker}), probabilita' Pinnacle ${(c.fair * 100).toFixed(1)}%, vantaggio +${(c.edge * 100).toFixed(1)}%.`);
-    signalsSaved++;
+    signalsSaved++; saved.push(c);
+  }
+  if (saved.length) {
+    // un solo messaggio Telegram per giro, con i segnali NUOVI (quelli gia' salvati nei giri precedenti non si ripetono)
+    saved.sort((x, y) => new Date(x.kickoff) - new Date(y.kickoff));
+    await sendTelegramNotification(formatSignalsMessage(saved));
   }
   if (candidates.length > MAX_DAILY_SIGNALS) log.push(`Candidati oltre il limite giornaliero (${MAX_DAILY_SIGNALS}): ${candidates.length - MAX_DAILY_SIGNALS} non salvati.`);
 
@@ -207,6 +215,7 @@ async function runDailyAnalysis() {
     return result;
   } catch (err) {
     await pool.query(`INSERT INTO run_logs (success, error_message) VALUES ($1, $2)`, [false, err.message]);
+    await sendTelegramNotification(`⚠️ <b>Il giro giornaliero e' fallito</b>\n${esc(err.message)}\nApri l'app: la Home dice cosa fare.`);
     throw err;
   }
 }

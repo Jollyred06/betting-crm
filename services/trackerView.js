@@ -70,13 +70,13 @@ async function getOverview(pool) {
 }
 
 
-const hoursLabel = h => (h < 1 ? "meno di un'ora" : h < 48 ? `${Math.round(h)} ore` : `${Math.round(h / 24)} giorni`);
+const hoursLabel = h => (h < 1 ? "meno di un'ora" : h < 1.5 ? "circa un'ora" : h < 48 ? `${Math.round(h)} ore` : `${Math.round(h / 24)} giorni`);
 
 /**
  * Controlli di salute in italiano semplice + "cosa fare adesso": se tutto e' a posto dice di non fare niente.
  * Ogni controllo: level ok | warn | bad.
  */
-async function getHealth(pool, now = new Date()) {
+async function getHealth(pool, now = new Date(), env = process.env) {
   const items = [];
   const push = (level, title, text) => items.push({ level, title, text });
   let runRow = null;
@@ -105,7 +105,9 @@ async function getHealth(pool, now = new Date()) {
   } catch (e) { /* tabella non ancora pronta */ }
   try { await pool.query(`SELECT 1 FROM league_schedule LIMIT 1`); }
   catch (e) { push('warn', 'Risparmio crediti non attivo', 'Manca la tabella league_schedule: riesegui tutto db/schema.sql su Supabase (SQL Editor).'); }
-  if (!items.some(i => i.level !== 'ok')) push('ok', 'Tutto il resto', 'Nessun problema rilevato.');
+  const tg = !!(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
+  push('info', 'Avvisi sul telefono', tg ? 'Telegram collegato: ricevi un messaggio quando compare un nuovo segnale.' : 'Telegram non collegato: i segnali si vedono solo aprendo l\'app. Come collegarlo: scheda Info.');
+  if (!items.some(i => i.level === 'bad' || i.level === 'warn')) push('ok', 'Tutto il resto', 'Nessun problema rilevato.');
 
   const bad = items.find(i => i.level === 'bad'), warn = items.find(i => i.level === 'warn');
   const todo = bad ? { level: 'bad', title: bad.title, text: bad.text }

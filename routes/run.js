@@ -24,7 +24,7 @@ router.post('/run-daily', async (req, res) => {
 const pool = require('../db/pool');
 const { buildStats } = require('../services/weeklyReport');
 const { settlePending } = require('../services/settler');
-const { sendTelegramNotification, sendEmailNotification, sendWhatsAppNotification } = require('../services/notifier');
+const { sendTelegramNotification, sendTelegramDetailed, findTelegramChats, sendEmailNotification, sendWhatsAppNotification } = require('../services/notifier');
 
 // Riepilogo settimanale: da mettere su cron-job.org una volta a settimana (POST). Invia anche la notifica.
 router.post('/weekly-report', async (req, res) => {
@@ -40,6 +40,20 @@ router.post('/weekly-report', async (req, res) => {
 router.post('/settle-pending', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
   try { res.json({ success: true, ...(await settlePending(pool)) }); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Messaggio di prova su Telegram (per controllare che il collegamento funzioni, senza aspettare un segnale).
+router.post('/notify-test', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json({ success: true, ...(await sendTelegramDetailed('✅ <b>Prova riuscita</b>\nDa ora riceverai qui i nuovi segnali del tracker (senza soldi veri).')) }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Trova il chat id di chi ha scritto al bot (evita di aprire indirizzi a mano).
+router.post('/notify-chat-id', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json({ success: true, ...(await findTelegramChats()) }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

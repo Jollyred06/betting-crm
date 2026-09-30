@@ -19,6 +19,9 @@ Riepilogo: segnali, ROI a puntata fissa, valore medio vs chiusura con intervallo
 `/` porta a `/app.html`: Home (cosa fare adesso, verdetto, numeri, controlli di salute, prossime partite), Segnali, Azioni (pulsanti: analisi, chiusura risultati, riepilogo, storico; si sbloccano con la chiave, salvata solo nel browser e inviata nell'intestazione, mai nell'indirizzo), Log, Info.
 Il vecchio stato JSON e' su `/api/status`.
 
+## Avvisi Telegram
+Un solo messaggio per giro quando compaiono NUOVI segnali (mai ripetuti), piu' un avviso se il giro fallisce. Variabili su Render: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Nell'app (Azioni): "Trova il mio chat Telegram" e "Invia un messaggio di prova"; i passi sono nella scheda Info.
+
 ## Pagina Tracker
 `/tracker.html` (link "Tracker" nella dashboard): verdetto in parole semplici, riepilogo, segnali (tutti / in attesa / chiusi), prossime partite per campionato, crediti rimasti e log dell'ultimo giro. Sola lettura: nessuna chiave, nessuna azione che consumi crediti.
 

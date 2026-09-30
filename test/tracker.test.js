@@ -3,6 +3,7 @@ const assert = require('assert'), path = require('path'), Module = require('modu
 const origLoad = Module._load;
 Module._load = function (request) {                       // moduli esterni non installati qui: finti
   if (request === 'dotenv') return { config() {} };
+  if (request === 'nodemailer') return { createTransport: () => ({ sendMail: async () => {} }) };
   if (request === 'axios') return { create: () => ({ get() { throw new Error('rete non disponibile nel test'); } }), get() { throw new Error('rete'); } };
   if (request === 'pg') return { Pool: function () { return { query: async () => ({ rows: [] }) }; } };
   return origLoad.apply(this, arguments);

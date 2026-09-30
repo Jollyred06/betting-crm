@@ -67,6 +67,8 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
       const base = url.split('?')[0];
       if (base === '/api/tracker/auth-check') return { ok: opts.headers['x-run-key'] === 'segreta123', status: opts.headers['x-run-key'] === 'segreta123' ? 200 : 401, json: async () => ({}) };
       if (base === '/api/run-daily') return status401 ? { ok: false, status: 401, json: async () => ({ error: 'Chiave non valida' }) } : { ok: true, status: 200, json: async () => ({ success: true, log: ['SEGNALE X vs Y: home a 3.00', 'T1: prossima partita il 2026-10-09: quote non richieste, nessun credito speso.'] }) };
+      if (base === '/api/notify-test') return { ok: true, status: 200, json: async () => ({ success: true, configured: false, sent: false, missing: ['TELEGRAM_CHAT_ID'] }) };
+      if (base === '/api/notify-chat-id') return { ok: true, status: 200, json: async () => ({ success: true, configured: true, chats: [{ id: '123456789', name: 'Christian' }] }) };
       if (base === '/api/settle-pending') return { ok: true, status: 200, json: async () => ({ success: true, settled: 2, stillPending: 1 }) };
       if (base === '/api/weekly-report') return { ok: true, status: 200, json: async () => ({ success: true, text: 'Riepilogo\nriga due' }) };
       if (data[base]) return { ok: true, status: 200, json: async () => data[base] };
@@ -75,12 +77,12 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
   vm.createContext(ctx); vm.runInContext(script, ctx);
   const tick = () => new Promise(r => setTimeout(r, 30));
   await tick();
-  assert.ok(/Tutto in ordine/.test(els.todo.innerHTML) && /big ok/.test(els.todo.className), els.todo.innerHTML);
+  assert.ok(/Tutto in ordine/.test(els.todo.innerHTML) && /todo ok/.test(els.todo.className), els.todo.innerHTML);
   assert.ok(/Troppo presto/.test(els.verdict.innerHTML)); assert.ok(/1 su 300/.test(els.barText.textContent));
   assert.ok(/Giro automatico/.test(els.checks.innerHTML) && /Super Lig/.test(els.schedule.innerHTML));
   console.log('Home: ok');
   vm.runInContext("show('signals')", ctx); await tick();
-  assert.ok(/Punta su <b>Fenerbahçe<\/b> a <b>4.20<\/b>/.test(els.signals.innerHTML));
+  assert.ok(/Punta su <b>Fenerbahçe<\/b>/.test(els.signals.innerHTML) && />4,20</.test(els.signals.innerHTML));   // quota con la virgola, all'italiana
   vm.runInContext("show('logs')", ctx); await tick(); assert.ok(/Giri|segnali/.test(els.runs.innerHTML) && /class="saving"/.test(els.runs.innerHTML));
   vm.runInContext("show('info')", ctx); await tick(); assert.ok(/Super Lig/.test(els.config.innerHTML) && /Non collegato/.test(els.config.innerHTML));
   console.log('Segnali, Log, Info: ok');
@@ -98,6 +100,8 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
   assert.ok(/class="signal"/.test(els.result.innerHTML) && /class="saving"/.test(els.result.innerHTML));
   await vm.runInContext("act('settle')", ctx); assert.ok(/registrati: 2/.test(els.result.innerHTML));
   await vm.runInContext("act('weekly')", ctx); assert.ok(/Riepilogo<br>riga due/.test(els.result.innerHTML));
+  await vm.runInContext("act('tgtest')", ctx); assert.ok(/Mancano su Render: TELEGRAM_CHAT_ID/.test(els.result.innerHTML));
+  await vm.runInContext("act('tgid')", ctx); assert.ok(/chat id e' <b>123456789<\/b> \(Christian\)/.test(els.result.innerHTML));
   // chiave scaduta/cambiata sul server: si richiede di nuovo
   status401 = true; confirmAnswer = true; await vm.runInContext("act('run')", ctx); assert.ok(!store.crmKey); assert.ok(/inseriscila di nuovo/.test(els.lockMsg.textContent));
   console.log('Azioni (chiave, conferma, risultati, chiave scaduta): ok');
