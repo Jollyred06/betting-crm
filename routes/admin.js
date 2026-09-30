@@ -3,6 +3,9 @@ const router = express.Router();
 const pool = require('../db/pool');
 const history = require('../services/history');
 const xg = require('../services/xgDownloader');
+const multi = require('../services/multiLeague');
+
+let multiJob = null;
 
 let downloader = null;
 function getDownloader() {
@@ -71,6 +74,27 @@ router.get('/xg/export.csv', async (req, res) => {
     res.setHeader('Content-Disposition', 'attachment; filename="serieA_xg_quote.csv"');
     res.send(xg.toCsv(await xg.pgStore(pool).exportRows()));
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- Test su molti campionati: scarica ~190 file da football-data.co.uk in un unico CSV ---
+router.post('/multi/start', (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  if (!multiJob) multiJob = multi.createJob({ http: multi.makeHttp() });
+  const st = multiJob.status();
+  if (!st.running) multiJob.run().catch(e => console.error('multi:', e.message));
+  res.json({ success: true, avviato: !st.running, stato: multiJob.status() });
+});
+router.get('/multi/status', (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  res.json(multiJob ? multiJob.status() : { running: false, finished: false, nota: 'Non ancora avviato: usa POST /multi/start' });
+});
+router.get('/multi/export.csv', (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  const csv = multiJob && multiJob.csv();
+  if (!csv) return res.status(409).json({ error: 'Il file non e pronto: controlla /multi/status (finished deve essere true)' });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="campionati_quote.csv"');
+  res.send(csv);
 });
 
 module.exports = router;
