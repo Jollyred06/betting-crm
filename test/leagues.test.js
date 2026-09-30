@@ -19,6 +19,29 @@ const api = {
 csv.T1 = [...csv.T1, 'Amedspor', 'Erzurumspor']; // ipotesi sul nome nel file (le neopromosse): il ripiego per prefisso li deve trovare
 api.T1.push(['Amed SK', 'Amedspor'], ['Erzurum BB', 'Erzurumspor']);
 api.G1.push(['Volos FC', 'Volos NFC']); api.B1.push(['Leuven', 'Oud-Heverlee Leuven']);
+// serie minori viste nel log dal vivo (nomi dei file reali)
+csv.E2 = ['AFC Wimbledon', 'Bristol Rvs', 'Sheffield Weds', 'Wigan']; csv.E3 = ['Bristol Rvs', 'Bristol City', 'Port Vale']; csv.SP2 = ['Sp Gijon', 'Celta B', 'Sociedad B', 'Almeria']; csv.F2 = ['St Etienne', 'Paris FC', 'Reims'];
+api.E2 = [['Wimbledon', 'AFC Wimbledon'], ['Sheffield Wednesday', 'Sheffield Weds'], ['Bristol Rovers', 'Bristol Rvs']];
+api.E3 = [['Bristol Rovers', 'Bristol Rvs']]; api.SP2 = [['Sporting Gijón', 'Sp Gijon'], ['Celta Fortuna', 'Celta B']]; api.F2 = [['Saint Etienne', 'St Etienne'], ['AS Saint-Étienne', 'St Etienne']];
+// campionati coperti da football-data.org: nomi come li scrive football-data.org contro i nomi dei file (25/26)
+csv.PL = ['Man City', 'Man United', "Nott'm Forest", 'Wolves', 'Tottenham', 'Newcastle', 'Brighton', 'West Ham', 'Leeds', 'Bournemouth', 'Crystal Palace'];
+api.PL = [['Manchester City FC', 'Man City'], ['Manchester United FC', 'Man United'], ['Nottingham Forest FC', "Nott'm Forest"], ['Wolverhampton Wanderers FC', 'Wolves'], ['Tottenham Hotspur FC', 'Tottenham'],
+  ['Newcastle United FC', 'Newcastle'], ['Brighton & Hove Albion FC', 'Brighton'], ['West Ham United FC', 'West Ham'], ['Leeds United FC', 'Leeds'], ['AFC Bournemouth', 'Bournemouth'], ['Crystal Palace FC', 'Crystal Palace']];
+csv.PD = ['Ath Bilbao', 'Ath Madrid', 'Betis', 'Celta', 'Espanol', 'Sociedad', 'Vallecano', 'Alaves', 'Osasuna', 'Real Madrid', 'Barcelona'];
+api.PD = [['Athletic Club', 'Ath Bilbao'], ['Club Atlético de Madrid', 'Ath Madrid'], ['Real Betis Balompié', 'Betis'], ['RC Celta de Vigo', 'Celta'], ['RCD Espanyol de Barcelona', 'Espanol'],
+  ['Real Sociedad de Fútbol', 'Sociedad'], ['Rayo Vallecano de Madrid', 'Vallecano'], ['Deportivo Alavés', 'Alaves'], ['CA Osasuna', 'Osasuna'], ['Real Madrid CF', 'Real Madrid'], ['FC Barcelona', 'Barcelona']];
+csv.FL1 = ['Paris SG', 'Lyon', 'Rennes', 'Brest', 'St Etienne', 'Marseille', 'Le Havre', 'Lille'];
+api.FL1 = [['Paris Saint-Germain FC', 'Paris SG'], ['Olympique Lyonnais', 'Lyon'], ['Stade Rennais FC 1901', 'Rennes'], ['Stade Brestois 29', 'Brest'], ['AS Saint-Étienne', 'St Etienne'], ['Olympique de Marseille', 'Marseille'], ['Le Havre AC', 'Le Havre'], ['LOSC Lille', 'Lille']];
+csv.BL1 = ['Bayern Munich', 'Dortmund', 'Ein Frankfurt', "M'gladbach", 'Hamburg', 'FC Koln', 'St Pauli', 'Leverkusen', 'Union Berlin', 'Mainz'];
+api.BL1 = [['FC Bayern München', 'Bayern Munich'], ['Borussia Dortmund', 'Dortmund'], ['Eintracht Frankfurt', 'Ein Frankfurt'], ['Borussia Mönchengladbach', "M'gladbach"], ['Hamburger SV', 'Hamburg'],
+  ['1. FC Köln', 'FC Koln'], ['FC St. Pauli 1910', 'St Pauli'], ['Bayer 04 Leverkusen', 'Leverkusen'], ['1. FC Union Berlin', 'Union Berlin'], ['1. FSV Mainz 05', 'Mainz']];
+csv.DED = ['PSV Eindhoven', 'AZ Alkmaar', 'Nijmegen', 'For Sittard', 'Ajax', 'Feyenoord', 'Twente', 'Heracles'];
+api.DED = [['PSV', 'PSV Eindhoven'], ['AZ', 'AZ Alkmaar'], ['NEC', 'Nijmegen'], ['Fortuna Sittard', 'For Sittard'], ['AFC Ajax', 'Ajax'], ['Feyenoord Rotterdam', 'Feyenoord'], ["FC Twente '65", 'Twente'], ['Heracles Almelo', 'Heracles']];
+csv.PPL = ['Sp Lisbon', 'Sp Braga', 'Guimaraes', 'Benfica', 'Porto', 'Estrela', 'Famalicao'];
+api.PPL = [['Sporting Clube de Portugal', 'Sp Lisbon'], ['SC Braga', 'Sp Braga'], ['Vitória SC', 'Guimaraes'], ['SL Benfica', 'Benfica'], ['FC Porto', 'Porto'], ['Estrela da Amadora', 'Estrela'], ['FC Famalicão', 'Famalicao']];
+csv.ELC = ['QPR', 'Sheffield Weds', 'Sheffield United', 'West Brom', 'Bristol City', 'Preston', 'Hull', 'Oxford'];
+api.ELC = [['Queens Park Rangers FC', 'QPR'], ['Sheffield Wednesday FC', 'Sheffield Weds'], ['Sheffield United FC', 'Sheffield United'], ['West Bromwich Albion FC', 'West Brom'], ['Bristol City FC', 'Bristol City'],
+  ['Preston North End FC', 'Preston'], ['Hull City AFC', 'Hull'], ['Oxford United FC', 'Oxford']];
 let n = 0;
 for (const [lg, list] of Object.entries(api)) for (const [name, expected] of list) {
   const r = resolveHistoryTeam(name, csv[lg]); n++;
@@ -29,6 +52,7 @@ assert.strictEqual(resolveHistoryTeam('Squadra Inventata', csv.T1), null);      
 assert.deepStrictEqual(tokens('Kasımpaşa'), ['kasimpasa']);
 // il ripiego per prefisso non deve inventare abbinamenti
 assert.strictEqual(resolveHistoryTeam('Bristol City', ['Bristol Rvs', 'Leicester City']), null);
-assert.strictEqual(resolveHistoryTeam('Manchester City', ['Man City', 'Man United']), null);   // 'man' e' troppo corto: nel dubbio non riconosciuto
+assert.strictEqual(resolveHistoryTeam('Manchester City', ['Man City', 'Man United']), 'Man City');   // abbreviazione 'Man' = Manchester (sinonimo esplicito)
+assert.strictEqual(resolveHistoryTeam('Manchester City', ['Leicester City', 'Bristol City']), null);   // solo 'City' in comune: mai abbinato
 assert.strictEqual(resolveHistoryTeam('Amed SK', ['Amedspor', 'Amedspor Genclik']), null);     // due candidati: ambiguo
 console.log(`nomi dei 4 campionati nuovi: ${n} casi ok`);

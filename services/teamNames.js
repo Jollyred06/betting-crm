@@ -37,16 +37,30 @@ const FULL_NAME_ALIASES = {
   'beerschot': 'Beerschot VA', 'k beerschot va': 'Beerschot VA', 'oh leuven': 'Oud-Heverlee Leuven',
   // Scozia
   'heart of midlothian': 'Hearts', 'heart of midlothian fc': 'Hearts',
-  'volos fc': 'Volos NFC', 'leuven': 'Oud-Heverlee Leuven'
+  'volos fc': 'Volos NFC', 'leuven': 'Oud-Heverlee Leuven',
+  // serie minori inglesi e spagnole (visti nel log dal vivo)
+  'wimbledon': 'AFC Wimbledon', 'celta fortuna': ['Celta B', 'Celta Fortuna', 'Celta Vigo B'],
+  // nomi di football-data.org diversi da quelli dei file di football-data.co.uk
+  'nottingham forest': "Nott'm Forest", 'wolverhampton wanderers': 'Wolves', 'queens park rangers': 'QPR',
+  'athletic club': 'Ath Bilbao', 'club atletico de madrid': 'Ath Madrid', 'atletico madrid': 'Ath Madrid',
+  'rcd espanyol de barcelona': 'Espanol', 'espanyol': 'Espanol',
+  'paris saint germain': 'Paris SG', 'olympique lyonnais': 'Lyon', 'stade rennais': 'Rennes',
+  'fc bayern munchen': 'Bayern Munich', 'bayern munchen': 'Bayern Munich', 'eintracht frankfurt': 'Ein Frankfurt', 'borussia monchengladbach': "M'gladbach",
+  'psv': 'PSV Eindhoven', 'az': 'AZ Alkmaar', 'nec': 'Nijmegen', 'fortuna sittard': 'For Sittard',
+  'sporting cp': 'Sp Lisbon', 'sporting clube de portugal': 'Sp Lisbon', 'sc braga': 'Sp Braga', 'vitoria sc': 'Guimaraes', 'vitoria guimaraes': 'Guimaraes'
 };
 // Parole equivalenti tra fonti diverse.
-const TOKEN_SYNONYMS = { inter: ['internazionale'] };
+const TOKEN_SYNONYMS = {
+  inter: ['internazionale'], st: ['saint', 'sint'], rvs: ['rovers'], weds: ['wednesday'], sp: ['sporting'], utd: ['united'], man: ['manchester']
+};
 
 /** Restituisce il nome usato nei file storici per questa squadra, o null se non certo. */
 function resolveHistoryTeam(apiName, csvNames) {
   const key = tokens(apiName).join(' ');
-  const alias = FULL_NAME_ALIASES[key];
-  if (alias && csvNames.includes(alias)) return alias;
+  // anche senza sigle generiche e numeri d'anno ("Wolverhampton Wanderers FC", "Stade Rennais FC 1901")
+  const bare = tokens(apiName).filter(w => !['fc', 'afc', 'cf'].includes(w) && !/^\d+$/.test(w)).join(' ');
+  const alias = [key, bare].flatMap(k => [].concat(FULL_NAME_ALIASES[k] || [])).find(a => csvNames.includes(a));
+  if (alias) return alias;
   const exact = csvNames.find(n => tokens(n).join(' ') === key);
   if (exact) return exact;
 
