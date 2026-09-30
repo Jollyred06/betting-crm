@@ -27,6 +27,26 @@ const MAX_DAILY_SIGNALS = parseInt(process.env.MAX_DAILY_SIGNALS || '40', 10);
 const TRACK_STAKE = parseFloat(process.env.TRACK_STAKE || '2');   // puntata fissa "di carta", per confrontare i segnali tra loro
 const WINDOW_HOURS = 24;
 
+/** Memoria della "prossima partita" di ogni campionato, per non spendere crediti quando non si gioca. Se la tabella manca, si procede senza. */
+async function scheduleSkip(code) {
+  try {
+    const { rows } = await pool.query(`SELECT next_start, checked_at FROM league_schedule WHERE league_code = $1`, [code]);
+    if (!rows.length) return null;
+    const next = rows[0].next_start ? new Date(rows[0].next_start).getTime() : null, checked = new Date(rows[0].checked_at).getTime();
+    if (next && next > Date.now() + (WINDOW_HOURS + 1) * 3600 * 1000)
+      return `prossima partita il ${new Date(next).toISOString().slice(0, 16).replace('T', ' ')} UTC (oltre ${WINDOW_HOURS} ore): quote non richieste, nessun credito speso.`;
+    if (!next && Date.now() - checked < 3 * 24 * 3600 * 1000) return 'nessuna partita in programma all\'ultimo controllo: quote non richieste, nessun credito speso.';
+  } catch (err) { /* tabella non ancora creata: nessun risparmio, ma tutto funziona */ }
+  return null;
+}
+async function saveSchedule(code, events) {
+  try {
+    const future = events.map(e => Date.parse(e.commence_time)).filter(t => t > Date.now()).sort((a, b) => a - b);
+    await pool.query(`INSERT INTO league_schedule (league_code, next_start, checked_at) VALUES ($1,$2,NOW())
+                      ON CONFLICT (league_code) DO UPDATE SET next_start = EXCLUDED.next_start, checked_at = NOW()`, [code, future.length ? new Date(future[0]).toISOString() : null]);
+  } catch (err) { /* vedi sopra */ }
+}
+
 const stableInt = s => 1000000000 + (parseInt(crypto.createHash('sha1').update(String(s)).digest('hex').slice(0, 8), 16) % 1000000000);
 
 async function upsertTeamAndFixture(match, competitionCode) {
@@ -126,11 +146,15 @@ async function runDailyAnalysisInner() {
   // 2b) campionati non coperti da football-data.org: partite e quote da The Odds API (prossime 24 ore)
   for (const code of evCodes) {
     if (!isActive(code)) { log.push(`${code}: fuori stagione o chiave non valida su The Odds API (${LEAGUES[code].oddsKey}), saltato.`); continue; }
+    // risparmio crediti: se l'ultima volta la prossima partita era lontana (es. sosta per le nazionali), non si richiedono le quote
+    const skip = await scheduleSkip(code);
+    if (skip) { log.push(`${code}: ${skip}`); continue; }
     const names = await leagueNames(code);
     if (!names.length) { log.push(`${code}: nessuno storico per abbinare i nomi delle squadre, campionato saltato.`); continue; }
     let events = [];
     try { events = await oddsApi.getOddsForCompetition(code); }
     catch (err) { log.push(`${code}: quote non disponibili (${err.message}).`); continue; }
+    await saveSchedule(code, events);
     // controllo "a secco" su TUTTE le partite ricevute (anche quelle dei prossimi giorni, stessa chiamata: nessun credito in piu'):
     // dice ora se Pinnacle c'e' e se i nomi si riconoscono, senza aspettare che riprenda il campionato
     const refs = events.map(e => sharpReference(e)).filter(Boolean);

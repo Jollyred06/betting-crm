@@ -181,3 +181,10 @@ ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS result_score TEXT;
 ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS closing_fair_prob NUMERIC(6,4);
 ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS clv_pct NUMERIC(7,3);
 ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS settled_at TIMESTAMP;
+
+-- Prossima partita di ogni campionato seguito tramite The Odds API: serve a non spendere crediti quando non si gioca
+CREATE TABLE IF NOT EXISTS league_schedule (
+  league_code TEXT PRIMARY KEY,
+  next_start TIMESTAMPTZ,
+  checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

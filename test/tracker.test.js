@@ -78,11 +78,13 @@ console.log('riepilogo: ok');
   console.log('chiusura automatica (con finto database): ok');
 
   // --- 5) flusso giornaliero completo con moduli finti (campionati da football-data.org + campionati "dalle quote")
-  const inserted = [], logs = [], fixturesIns = [];
+  const inserted = [], logs = [], fixturesIns = [], schedIns = [];
   const fakePool = { query: async (sql, params) => {
     if (/INSERT INTO value_bets/.test(sql)) { inserted.push(params); return { rows: [] }; }
     if (/INSERT INTO run_logs/.test(sql)) { logs.push(params); return { rows: [] }; }
     if (/INSERT INTO fixtures/.test(sql)) { fixturesIns.push(params); return { rows: [] }; }
+    if (/FROM league_schedule/.test(sql)) return params[0] === 'B1' ? { rows: [{ next_start: new Date(Date.now() + 72 * 3600 * 1000).toISOString(), checked_at: new Date().toISOString() }] } : { rows: [] };   // B1: sosta, prossima partita tra 3 giorni
+    if (/INSERT INTO league_schedule/.test(sql)) { schedIns.push(params); return { rows: [] }; }
     return { rows: [] }; } };
   const stub = (rel, exp) => { const f = require.resolve(rel); require.cache[f] = { id: f, filename: f, loaded: true, exports: exp }; };
   stub('../db/pool', fakePool);
@@ -121,7 +123,8 @@ console.log('riepilogo: ok');
   assert.ok(out.log.some(l => /PL: quote non disponibili \(HTTP 401\)/.test(l)));         // errore su un campionato: non blocca gli altri
   assert.ok(out.log.some(l => /G1: .*NOMI|NOMI SQUADRA NON RICONOSCIUTI.*G1: Squadra Sconosciuta FC/.test(l)));   // nome non riconosciuto: segnale non salvato, nome nel log
   assert.ok(!inserted.some(r => r[9] === 'G1'));
-  assert.ok(out.log.some(l => /B1: 1 partite con quote \(0 con riferimento: 0 Pinnacle, 0 solo exchange\), 0 nelle prossime 24 ore/.test(l)));   // partita tra 40 ore: rimandata a domani
+  assert.ok(out.log.some(l => /B1: prossima partita il .* quote non richieste, nessun credito speso/.test(l)) && !oddsCalls.includes('B1'));   // sosta: nessuna chiamata, nessun credito
+  const t1s = schedIns.find(p => p[0] === 'T1'); assert.ok(t1s && t1s[1] === new Date(evT1.commence_time).toISOString());       // T1: salvata la prossima partita per i giorni dopo
   assert.ok(out.log.some(l => /SC0: fuori stagione o chiave non valida/.test(l)) && !oddsCalls.includes('SC0'));   // campionato non attivo: nessun credito speso
   assert.ok(out.log.some(l => /T1: 1 partite con quote \(1 con riferimento: 1 Pinnacle, 0 solo exchange\)/.test(l)));            // controllo a secco: Pinnacle presente
   assert.ok(out.log.some(l => /NOMI SQUADRA NON RICONOSCIUTI.*B1: /.test(l)) === false);                       // B1: i nomi si riconoscono
