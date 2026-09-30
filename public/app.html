@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<title>Betting CRM — Centro di controllo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#0f1117; --card:#1a1d29; --border:#2a2e3d; --text:#e8e9ed; --muted:#8b8fa3; --green:#4ade80; --red:#f87171; --amber:#fbbf24; --accent:#60a5fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); padding:14px 14px 92px; max-width:720px; margin:0 auto; }
+  a { color:var(--accent); }
+  h1 { font-size:1.25rem; margin:0; } .sub { color:var(--muted); font-size:.82rem; margin:2px 0 14px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .title { font-size:1rem; font-weight:600; margin-bottom:8px; }
+  .muted { color:var(--muted); font-size:.82rem; line-height:1.4; }
+  .big { border-left:5px solid var(--muted); } .big.ok { border-left-color:var(--green); } .big.warn { border-left-color:var(--amber); } .big.bad { border-left-color:var(--red); }
+  .big .bt { font-size:1.1rem; font-weight:700; margin-bottom:4px; } .big .bx { color:var(--muted); font-size:.9rem; line-height:1.4; }
+  .verdict { border-left:4px solid var(--accent); } .verdict.good { border-left-color:var(--green); } .verdict.bad { border-left-color:var(--red); } .verdict.neutral { border-left-color:var(--amber); }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+  .stat { background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:10px; }
+  .stat .n { font-size:1.3rem; font-weight:700; } .stat .l { color:var(--muted); font-size:.74rem; margin-top:2px; }
+  .pos { color:var(--green); } .neg { color:var(--red); }
+  .bar { height:10px; background:var(--bg); border:1px solid var(--border); border-radius:6px; overflow:hidden; margin:8px 0 4px; } .bar > div { height:100%; background:var(--accent); }
+  .row { display:flex; gap:10px; padding:8px 0; border-bottom:1px solid var(--border); font-size:.9rem; } .row:last-child { border-bottom:0; }
+  .dot { width:10px; height:10px; border-radius:50%; margin-top:5px; flex:none; background:var(--muted); } .dot.ok { background:var(--green); } .dot.warn { background:var(--amber); } .dot.bad { background:var(--red); }
+  .sched { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--border); font-size:.88rem; } .sched:last-child { border-bottom:0; }
+  .tabs { display:flex; gap:6px; margin-bottom:10px; } .tab { flex:1; text-align:center; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--muted); font-size:.85rem; cursor:pointer; } .tab.on { color:var(--text); border-color:var(--accent); }
+  .sig { border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:8px; } .sig .t { font-weight:600; } .sig .m { font-size:.8rem; color:var(--muted); display:flex; flex-wrap:wrap; gap:4px 10px; margin-top:2px; }
+  .pill { display:inline-block; padding:1px 8px; border-radius:6px; font-size:.72rem; font-weight:600; } .pill.pending { background:#3b3f52; color:var(--muted); } .pill.won { background:#14532d; color:var(--green); } .pill.lost { background:#4c1d1d; color:var(--red); }
+  .abtn { display:block; width:100%; text-align:left; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:8px; font-size:.95rem; cursor:pointer; }
+  .abtn b { display:block; margin-bottom:2px; } .abtn span { color:var(--muted); font-size:.78rem; } .abtn:disabled { opacity:.5; }
+  input[type=password], input[type=text] { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:1rem; margin:8px 0; }
+  .go { background:var(--accent); color:#0b1020; border:0; border-radius:8px; padding:10px 14px; font-weight:700; font-size:.95rem; cursor:pointer; }
+  .link { background:none; border:0; color:var(--accent); font-size:.85rem; cursor:pointer; padding:4px 0; }
+  .log { font-family:ui-monospace,Menlo,monospace; font-size:.73rem; line-height:1.45; white-space:pre-wrap; word-break:break-word; }
+  .log .signal { color:var(--green); } .log .warn { color:var(--amber); } .log .saving { color:var(--accent); } .log .info { color:var(--muted); }
+  details { border-bottom:1px solid var(--border); padding:8px 0; } details:last-child { border-bottom:0; } summary { cursor:pointer; font-size:.9rem; }
+  .empty { color:var(--muted); font-size:.9rem; padding:8px 0; }
+  .nav-bar { position:fixed; bottom:0; left:0; right:0; background:var(--card); border-top:1px solid var(--border); display:flex; padding:6px 4px calc(6px + env(safe-area-inset-bottom)); max-width:720px; margin:0 auto; }
+  .nav { flex:1; text-align:center; padding:6px 2px; color:var(--muted); font-size:.72rem; cursor:pointer; background:none; border:0; } .nav .ic { font-size:1.25rem; display:block; } .nav.on { color:var(--accent); font-weight:700; }
+</style>
+</head>
+<body>
+  <h1>Betting CRM</h1>
+  <div class="sub">Tracker della strategia A — senza soldi veri</div>
+
+  <!-- HOME -->
+  <div id="pane-home">
+    <div id="todo" class="card big"><div class="bt">Caricamento…</div></div>
+    <div id="verdict" class="card verdict"></div>
+    <div class="card">
+      <div class="title">Numeri</div>
+      <div id="stats" class="grid"></div>
+      <div class="bar"><div id="bar" style="width:0%"></div></div>
+      <div id="barText" class="muted"></div>
+      <div id="strongLine" class="muted" style="margin-top:6px;"></div>
+    </div>
+    <div class="card"><div class="title">Controlli</div><div id="checks"></div></div>
+    <div class="card"><div class="title">Prossime partite</div><div class="muted" style="margin-bottom:6px;">Campionati seguiti tramite quote.</div><div id="schedule"></div></div>
+  </div>
+
+  <!-- SEGNALI -->
+  <div id="pane-signals" style="display:none;">
+    <div class="card">
+      <div class="title">Segnali</div>
+      <div class="tabs">
+        <div class="tab on" data-s="" onclick="setTab(this)">Tutti</div>
+        <div class="tab" data-s="pending" onclick="setTab(this)">In attesa</div>
+        <div class="tab" data-s="settled" onclick="setTab(this)">Chiusi</div>
+      </div>
+      <div id="signals"></div>
+    </div>
+  </div>
+
+  <!-- AZIONI -->
+  <div id="pane-actions" style="display:none;">
+    <div id="lockBox" class="card">
+      <div class="title">Sblocca le azioni</div>
+      <div class="muted">Scrivi la chiave una volta sola (quella che c'era negli indirizzi dopo "key="). Resta salvata solo su questo telefono.</div>
+      <input type="password" id="keyInput" placeholder="Chiave segreta" autocomplete="off">
+      <button class="go" onclick="unlock()">Sblocca</button>
+      <div id="lockMsg" class="muted" style="margin-top:8px;"></div>
+    </div>
+    <div id="actionsBox" style="display:none;">
+      <div class="card">
+        <div class="title">Azioni</div>
+        <button class="abtn" id="a-run" onclick="act('run')"><b>Esegui analisi ora</b><span>Cerca i segnali di oggi. Consuma fino a circa 10 crediti delle quote. Lo fa gia' da solo ogni giorno alle 11:00.</span></button>
+        <button class="abtn" id="a-settle" onclick="act('settle')"><b>Chiudi i risultati ora</b><span>Registra vinta/persa per le partite finite. Nessun credito.</span></button>
+        <button class="abtn" id="a-weekly" onclick="act('weekly')"><b>Mostra e invia il riepilogo settimanale</b><span>Lo invia anche come messaggio, se collegato (vedi Info).</span></button>
+        <button class="abtn" id="a-refresh" onclick="act('refresh')"><b>Aggiorna lo storico partite</b><span>Scarica i risultati recenti. Nessun credito.</span></button>
+        <button class="abtn" id="a-hist" onclick="act('hist')"><b>Controlla lo storico</b><span>Quante partite ci sono per ogni campionato.</span></button>
+        <button class="link" onclick="lock()">Cambia o rimuovi la chiave</button>
+      </div>
+      <div class="card" id="resultCard" style="display:none;"><div class="title" id="resultTitle">Risultato</div><div id="result" class="log"></div></div>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <div id="pane-logs" style="display:none;">
+    <div class="card">
+      <div class="title">Ultimi giri</div>
+      <button class="link" onclick="downloadLog()">Scarica tutto in un file</button>
+      <div id="runs"></div>
+    </div>
+  </div>
+
+  <!-- INFO -->
+  <div id="pane-info" style="display:none;">
+    <div class="card"><div class="title">Impostazioni attuali</div><div id="config"></div></div>
+    <div class="card">
+      <div class="title">Come funziona</div>
+      <div class="muted">
+        Ogni giorno alle 11:00 il tracker confronta la migliore quota tra i bookmaker con la probabilita' "onesta" di Pinnacle e salva i segnali. Quando le partite finiscono, registra da solo vinta o persa e confronta la tua quota con quella di chiusura.<br><br>
+        Se in media le quote prese battono la chiusura, c'e' un vantaggio vero. Serve un campione grande: circa 300 segnali chiusi. Prima e' solo rumore.<br><br>
+        <b>Non usare soldi veri</b> finche' il verdetto in Home non dice che c'e' un vantaggio confermato. I test fatti finora non ne hanno trovato.
+      </div>
+    </div>
+    <div class="card"><div class="title">Altre pagine</div><div class="muted"><a href="/tracker.html">Tracker (vista singola)</a> · <a href="/dashboard.html">Vecchia dashboard</a></div></div>
+  </div>
+
+  <div class="nav-bar">
+    <button class="nav on" id="nav-home" onclick="show('home')"><span class="ic">🏠</span>Home</button>
+    <button class="nav" id="nav-signals" onclick="show('signals')"><span class="ic">🎯</span>Segnali</button>
+    <button class="nav" id="nav-actions" onclick="show('actions')"><span class="ic">⚡</span>Azioni</button>
+    <button class="nav" id="nav-logs" onclick="show('logs')"><span class="ic">📋</span>Log</button>
+    <button class="nav" id="nav-info" onclick="show('info')"><span class="ic">ℹ️</span>Info</button>
+  </div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const KEY_STORE = 'crmKey';
+  let key = '';
+  try { key = localStorage.getItem(KEY_STORE) || ''; } catch (e) { /* memoria del browser non disponibile */ }
+  let sigTab = '', lastRuns = [];
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+  const fmtDate = d => d ? new Date(d).toLocaleString('it-IT', { weekday:'short', day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '—';
+  const pct = (v, d = 1) => v === null || v === undefined ? '—' : (v >= 0 ? '+' : '') + Number(v).toFixed(d) + '%';
+  const cls = v => v === null || v === undefined ? '' : (v >= 0 ? 'pos' : 'neg');
+  const kindOf = l => /^SEGNALE/.test(l) ? 'signal' : /NOMI SQUADRA NON RICONOSCIUTI/.test(l) ? 'warn' : /nessun credito speso/.test(l) ? 'saving' : /non disponibili|non riuscit|errore/i.test(l) ? 'warn' : 'info';
+  const logHtml = lines => lines.map(l => `<div class="${kindOf(l)}">${esc(l)}</div>`).join('');
+
+  const PANES = ['home', 'signals', 'actions', 'logs', 'info'];
+  function show(name) {
+    PANES.forEach(n => { $('pane-' + n).style.display = n === name ? 'block' : 'none'; $('nav-' + n).className = 'nav' + (n === name ? ' on' : ''); });
+    if (name === 'signals') loadSignals(); if (name === 'logs') loadRuns(); if (name === 'info') loadInfo(); if (name === 'actions') renderLock();
+    if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, 0);
+  }
+
+  async function getJson(url) { const r = await fetch(url); const d = await r.json(); if (d && d.error && !Array.isArray(d)) throw new Error(d.error); return d; }
+
+  // ------------------------------------------------------------------ HOME
+  async function loadHome() {
+    try {
+      const [o, h] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health')]);
+      $('todo').className = 'card big ' + h.todo.level;
+      $('todo').innerHTML = `<div class="bt">${esc(h.todo.title)}</div><div class="bx">${esc(h.todo.text)}</div>`;
+      $('verdict').className = 'card verdict ' + o.verdict.level;
+      $('verdict').innerHTML = `<div class="bt" style="font-weight:700;margin-bottom:4px;">${esc(o.verdict.title)}</div><div class="muted">${esc(o.verdict.text)}</div>`;
+      const t = o.total;
+      $('stats').innerHTML = `
+        <div class="stat"><div class="n">${t.signals}</div><div class="l">Segnali totali</div></div>
+        <div class="stat"><div class="n">${t.settled}</div><div class="l">Chiusi (${t.pending} in attesa)</div></div>
+        <div class="stat"><div class="n ${cls(t.avgClvPct)}">${pct(t.avgClvPct, 2)}</div><div class="l">Valore vs chiusura${t.clvCi95 ? ` (${pct(t.clvCi95[0], 1)} / ${pct(t.clvCi95[1], 1)})` : ''}</div></div>
+        <div class="stat"><div class="n ${cls(t.roiFlatPct)}">${pct(t.roiFlatPct, 1)}</div><div class="l">ROI a puntata fissa</div></div>
+        <div class="stat"><div class="n">${t.hitRatePct === null ? '—' : t.hitRatePct.toFixed(0) + '%'}</div><div class="l">Vinte sui chiusi</div></div>
+        <div class="stat"><div class="n">${o.week.signals}</div><div class="l">Segnali ultimi 7 giorni</div></div>`;
+      $('bar').style.width = o.progress.pct + '%';
+      $('barText').textContent = `${o.progress.settled} su ${o.progress.target} segnali chiusi per una lettura solida (${o.progress.pct}%)`;
+      $('strongLine').textContent = o.strong && o.strong.signals && o.strong.signals !== t.signals
+        ? `Solo vantaggio >= 3%: ${o.strong.signals} segnali, valore vs chiusura ${pct(o.strong.avgClvPct, 2)}` : '';
+      $('checks').innerHTML = h.items.map(i => `<div class="row"><div class="dot ${i.level}"></div><div><b>${esc(i.title)}</b><div class="muted">${esc(i.text)}</div></div></div>`).join('');
+      const soon = o.schedule.filter(s => s.nextStart && new Date(s.nextStart) > new Date()).slice(0, 8);
+      $('schedule').innerHTML = soon.length ? soon.map(s => `<div class="sched"><span>${esc(s.name)}</span><span class="muted">${fmtDate(s.nextStart)}</span></div>`).join('') : '<div class="empty">Nessuna partita in programma trovata (compare dopo il primo giro).</div>';
+    } catch (e) {
+      $('todo').className = 'card big bad';
+      $('todo').innerHTML = `<div class="bt">Non riesco a caricare i dati</div><div class="bx">${esc(e.message)} — se il server era fermo, riprova tra un minuto.</div>`;
+    }
+  }
+
+  // ------------------------------------------------------------------ SEGNALI
+  function setTab(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('on')); el.classList.add('on'); sigTab = el.dataset.s; loadSignals(); }
+  async function loadSignals() {
+    const el = $('signals');
+    try {
+      const rows = await getJson('/api/tracker/signals' + (sigTab ? '?status=' + sigTab : ''));
+      if (!rows.length) { el.innerHTML = '<div class="empty">Nessun segnale in questa lista.</div>'; return; }
+      el.innerHTML = rows.map(r => `
+        <div class="sig"><div class="t">${esc(r.home)} – ${esc(r.away)}</div>
+          <div class="m"><span>${esc(r.leagueName)}</span><span>${fmtDate(r.kickoff)}</span></div>
+          <div style="margin:6px 0;">Punta su <b>${esc(r.pick)}</b> a <b>${r.odd.toFixed(2)}</b> <span class="muted">(${esc(r.bookmaker || 'n/d')})</span></div>
+          <div class="m"><span class="pill ${r.status}">${r.status === 'pending' ? 'in attesa' : (r.status === 'won' ? 'vinta ' : 'persa ') + esc(r.score || '')}</span>
+            <span>vantaggio stimato ${pct(r.edgePct)}</span>${r.clvPct !== null ? `<span class="${cls(r.clvPct)}">vs chiusura ${pct(r.clvPct, 1)}</span>` : ''}</div></div>`).join('');
+    } catch (e) { el.innerHTML = '<div class="empty">Non riesco a caricare i segnali: ' + esc(e.message) + '</div>'; }
+  }
+
+  // ------------------------------------------------------------------ AZIONI
+  function renderLock() {
+    $('lockBox').style.display = key ? 'none' : 'block';
+    $('actionsBox').style.display = key ? 'block' : 'none';
+  }
+  async function unlock() {
+    const v = $('keyInput').value.trim();
+    if (!v) { $('lockMsg').textContent = 'Scrivi la chiave.'; return; }
+    try {
+      const r = await fetch('/api/tracker/auth-check', { method: 'POST', headers: { 'x-run-key': v } });
+      if (!r.ok) { $('lockMsg').textContent = 'Chiave non valida: controlla di averla copiata tutta, senza spazi.'; return; }
+      key = v; try { localStorage.setItem(KEY_STORE, v); } catch (e) { /* solo per questa visita */ }
+      $('keyInput').value = ''; $('lockMsg').textContent = ''; renderLock();
+    } catch (e) { $('lockMsg').textContent = 'Errore di connessione: ' + e.message; }
+  }
+  function lock() { key = ''; try { localStorage.removeItem(KEY_STORE); } catch (e) {} renderLock(); }
+
+  const ACTIONS = {
+    run:     { path: '/api/run-daily',            method: 'POST', title: 'Analisi', confirm: 'Consuma fino a circa 10 crediti delle quote (su 500 al mese). Continuare?' },
+    settle:  { path: '/api/settle-pending',       method: 'POST', title: 'Chiusura risultati' },
+    weekly:  { path: '/api/weekly-report',        method: 'POST', title: 'Riepilogo settimanale' },
+    refresh: { path: '/api/admin/refresh-history', method: 'POST', title: 'Aggiornamento storico' },
+    hist:    { path: '/api/admin/history-status', method: 'GET',  title: 'Stato dello storico' }
+  };
+  function describe(kind, d) {
+    if (kind === 'run') return logHtml(d.log || []);
+    if (kind === 'settle') return `<div class="info">Risultati registrati: ${d.settled}. Ancora in attesa: ${d.stillPending}.</div>`;
+    if (kind === 'weekly') return `<div class="info">${esc(d.text).replace(/\n/g, '<br>')}</div>`;
+    if (kind === 'refresh') return (d.risultati || []).map(r => `<div class="${r.ok ? 'info' : 'warn'}">${esc(r.lega)}: ${r.ok ? r.partite + ' partite lette' : 'non riuscito (' + esc(r.error) + ')'}</div>`).join('');
+    if (kind === 'hist') return (Array.isArray(d) ? d : []).map(r => `<div class="info">${esc(r.lega)}: ${r.partite} partite, dal ${esc(r.dal)} al ${esc(r.al)}</div>`).join('') || '<div class="warn">Storico vuoto.</div>';
+    return '';
+  }
+  async function act(kind) {
+    const a = ACTIONS[kind];
+    if (!key) { renderLock(); return; }
+    if (a.confirm && !confirm(a.confirm)) return;
+    document.querySelectorAll('.abtn').forEach(b => { b.disabled = true; });
+    $('resultCard').style.display = 'block'; $('resultTitle').textContent = a.title; $('result').innerHTML = '<div class="info">Un momento…</div>';
+    try {
+      const r = await fetch(a.path, { method: a.method, headers: { 'x-run-key': key } });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 401) { lock(); $('lockMsg').textContent = 'La chiave non e\' piu\' valida: inseriscila di nuovo.'; return; }
+      if (!r.ok) { $('result').innerHTML = `<div class="warn">Errore: ${esc(d.error || r.status)}</div>`; return; }
+      $('result').innerHTML = describe(kind, d);
+    } catch (e) { $('result').innerHTML = `<div class="warn">Errore di connessione: ${esc(e.message)}</div>`; }
+    finally { document.querySelectorAll('.abtn').forEach(b => { b.disabled = false; }); loadHome(); }
+  }
+
+  // ------------------------------------------------------------------ LOG
+  async function loadRuns() {
+    const el = $('runs');
+    try {
+      lastRuns = await getJson('/api/tracker/runs?limit=14');
+      el.innerHTML = lastRuns.length ? lastRuns.map(r => `<details><summary>${fmtDate(r.at)} — ${r.success ? (r.signals || 0) + ' segnali' : '<span class="neg">errore</span>'}${r.credits ? ` · crediti rimasti ${r.credits.remaining}` : ''}</summary>
+        <div class="log" style="margin-top:6px;">${r.success ? logHtml(r.lines.map(l => l.text)) : esc(r.error)}</div></details>`).join('') : '<div class="empty">Nessun giro registrato.</div>';
+    } catch (e) { el.innerHTML = '<div class="empty">Non riesco a caricare i log: ' + esc(e.message) + '</div>'; }
+  }
+  function downloadLog() {
+    const text = lastRuns.map(r => `=== ${r.at} (${r.success ? 'ok' : 'errore'}) ===\n${r.success ? r.lines.map(l => l.text).join('\n') : r.error}`).join('\n\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' })); a.download = 'log_tracker.txt'; a.click();
+  }
+
+  // ------------------------------------------------------------------ INFO
+  async function loadInfo() {
+    try {
+      const c = await getJson('/api/tracker/config');
+      $('config').innerHTML = `
+        <div class="row"><div><b>Campionati seguiti (${c.competitions.length})</b><div class="muted">${c.competitions.map(x => esc(x.name)).join(', ')}</div></div></div>
+        <div class="row"><div><b>Vantaggio minimo</b><div class="muted">${c.minEdgePct.toFixed(1)}% (massimo ${c.maxEdgePct}%: sopra, di solito e' una quota sbagliata)</div></div></div>
+        <div class="row"><div><b>Puntata di carta</b><div class="muted">${c.stake}€ fissi per ogni segnale (non sono soldi veri)</div></div></div>
+        <div class="row"><div><b>Massimo segnali al giorno</b><div class="muted">${c.maxDailySignals}</div></div></div>
+        <div class="row"><div class="dot ${c.notify.telegram || c.notify.email || c.notify.whatsapp ? 'ok' : 'warn'}"></div><div><b>Riepilogo come messaggio</b><div class="muted">${[c.notify.telegram && 'Telegram', c.notify.email && 'email', c.notify.whatsapp && 'WhatsApp'].filter(Boolean).join(', ') || 'Non collegato: il riepilogo si legge qui in Home e in Azioni.'}</div></div></div>`;
+    } catch (e) { $('config').innerHTML = '<div class="empty">Non riesco a caricare le impostazioni: ' + esc(e.message) + '</div>'; }
+  }
+
+  loadHome();
+</script>
+</body>
+</html>

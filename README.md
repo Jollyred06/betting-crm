@@ -15,6 +15,13 @@ non a giustificare puntate con soldi veri. Report: `backtest_serieA_report.md`, 
 ## Una volta a settimana (cron-job.org -> POST /api/weekly-report?key=...)
 Riepilogo: segnali, ROI a puntata fissa, valore medio vs chiusura con intervallo. Prova solo dopo circa 300 segnali chiusi.
 
+## Centro di controllo (l'unico indirizzo da ricordare)
+`/` porta a `/app.html`: Home (cosa fare adesso, verdetto, numeri, controlli di salute, prossime partite), Segnali, Azioni (pulsanti: analisi, chiusura risultati, riepilogo, storico; si sbloccano con la chiave, salvata solo nel browser e inviata nell'intestazione, mai nell'indirizzo), Log, Info.
+Il vecchio stato JSON e' su `/api/status`.
+
+## Pagina Tracker
+`/tracker.html` (link "Tracker" nella dashboard): verdetto in parole semplici, riepilogo, segnali (tutti / in attesa / chiusi), prossime partite per campionato, crediti rimasti e log dell'ultimo giro. Sola lettura: nessuna chiave, nessuna azione che consumi crediti.
+
 ## Test (senza database ne' rete)
 `npm test`
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { runDailyAnalysis } = require('../services/orchestrator');
+const { authorized } = require('../services/auth');
 
 /**
  * Avvia l'analisi giornaliera (fixtures -> quote -> value bet -> salvataggio).
@@ -9,10 +10,7 @@ const { runDailyAnalysis } = require('../services/orchestrator');
  * Pensata per essere chiamata manualmente o da un cron esterno (es. cron-job.org).
  */
 router.post('/run-daily', async (req, res) => {
-  const providedKey = req.query.key;
-  if (!process.env.RUN_SECRET_KEY || providedKey !== process.env.RUN_SECRET_KEY) {
-    return res.status(401).json({ error: 'Chiave non valida o mancante' });
-  }
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
 
   try {
     const result = await runDailyAnalysis();
@@ -27,7 +25,6 @@ const pool = require('../db/pool');
 const { buildStats } = require('../services/weeklyReport');
 const { settlePending } = require('../services/settler');
 const { sendTelegramNotification, sendEmailNotification, sendWhatsAppNotification } = require('../services/notifier');
-const authorized = req => process.env.RUN_SECRET_KEY && req.query.key === process.env.RUN_SECRET_KEY;
 
 // Riepilogo settimanale: da mettere su cron-job.org una volta a settimana (POST). Invia anche la notifica.
 router.post('/weekly-report', async (req, res) => {

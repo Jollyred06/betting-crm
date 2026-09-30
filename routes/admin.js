@@ -15,9 +15,7 @@ function getDownloader() {
   return downloader;
 }
 
-function authorized(req) {
-  return process.env.RUN_SECRET_KEY && req.query.key === process.env.RUN_SECRET_KEY;
-}
+const { authorized } = require('../services/auth');
 
 // Import iniziale (una tantum): carica i CSV della cartella data/history nel database.
 router.post('/import-history', async (req, res) => {
