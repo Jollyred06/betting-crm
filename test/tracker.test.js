@@ -121,9 +121,9 @@ console.log('riepilogo: ok');
   assert.ok(out.log.some(l => /PL: quote non disponibili \(HTTP 401\)/.test(l)));         // errore su un campionato: non blocca gli altri
   assert.ok(out.log.some(l => /G1: .*NOMI|NOMI SQUADRA NON RICONOSCIUTI.*G1: Squadra Sconosciuta FC/.test(l)));   // nome non riconosciuto: segnale non salvato, nome nel log
   assert.ok(!inserted.some(r => r[9] === 'G1'));
-  assert.ok(out.log.some(l => /B1: 1 partite con quote \(0 con Pinnacle\/exchange\), 0 nelle prossime 24 ore/.test(l)));   // partita tra 40 ore: rimandata a domani
+  assert.ok(out.log.some(l => /B1: 1 partite con quote \(0 con riferimento: 0 Pinnacle, 0 solo exchange\), 0 nelle prossime 24 ore/.test(l)));   // partita tra 40 ore: rimandata a domani
   assert.ok(out.log.some(l => /SC0: fuori stagione o chiave non valida/.test(l)) && !oddsCalls.includes('SC0'));   // campionato non attivo: nessun credito speso
-  assert.ok(out.log.some(l => /T1: 1 partite con quote \(1 con Pinnacle\/exchange\)/.test(l)));            // controllo a secco: Pinnacle presente
+  assert.ok(out.log.some(l => /T1: 1 partite con quote \(1 con riferimento: 1 Pinnacle, 0 solo exchange\)/.test(l)));            // controllo a secco: Pinnacle presente
   assert.ok(out.log.some(l => /NOMI SQUADRA NON RICONOSCIUTI.*B1: /.test(l)) === false);                       // B1: i nomi si riconoscono
   assert.ok(out.log.some(l => /crediti usati nel mese: 120, rimasti: 380/.test(l)));
   assert.ok(logs.length === 1 && logs[0][0] === true);

@@ -36,7 +36,8 @@ const FULL_NAME_ALIASES = {
   'union saint gilloise': 'St. Gilloise', 'royal union saint gilloise': 'St. Gilloise', 'union sg': 'St. Gilloise',
   'beerschot': 'Beerschot VA', 'k beerschot va': 'Beerschot VA', 'oh leuven': 'Oud-Heverlee Leuven',
   // Scozia
-  'heart of midlothian': 'Hearts', 'heart of midlothian fc': 'Hearts'
+  'heart of midlothian': 'Hearts', 'heart of midlothian fc': 'Hearts',
+  'volos fc': 'Volos NFC', 'leuven': 'Oud-Heverlee Leuven'
 };
 // Parole equivalenti tra fonti diverse.
 const TOKEN_SYNONYMS = { inter: ['internazionale'] };
@@ -60,7 +61,17 @@ function resolveHistoryTeam(apiName, csvNames) {
     const best = cands.filter(n => tokens(n).length === maxLen);
     return best.length === 1 ? best[0] : null;
   }
-  return null;
+  return prefixFallback(apiTokens, csvNames);
+}
+
+/**
+ * Ultimo ripiego, molto prudente: una parola del nome e' l'inizio di una parola di UN SOLO nome nello storico
+ * (es. "Erzurum BB" -> "Erzurumspor", "Amed SK" -> "Amedspor"). Almeno 4 lettere, e solo se il candidato e' unico:
+ * nel dubbio restituisce null e il nome finisce nel log.
+ */
+function prefixFallback(apiTokens, csvNames) {
+  const hit = csvNames.filter(n => tokens(n).some(c => [...apiTokens].some(t => t !== c && Math.min(t.length, c.length) >= 4 && (c.startsWith(t) || t.startsWith(c)))));
+  return hit.length === 1 ? hit[0] : null;
 }
 
 /** Due nomi (di fonti diverse) indicano la stessa squadra? Prudente: nel dubbio, no. */

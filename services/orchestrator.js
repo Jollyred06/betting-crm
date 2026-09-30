@@ -133,7 +133,8 @@ async function runDailyAnalysisInner() {
     catch (err) { log.push(`${code}: quote non disponibili (${err.message}).`); continue; }
     // controllo "a secco" su TUTTE le partite ricevute (anche quelle dei prossimi giorni, stessa chiamata: nessun credito in piu'):
     // dice ora se Pinnacle c'e' e se i nomi si riconoscono, senza aspettare che riprenda il campionato
-    const sharpAll = events.filter(e => sharpReference(e)).length;
+    const refs = events.map(e => sharpReference(e)).filter(Boolean);
+    const sharpAll = refs.length, pinAll = refs.filter(r => r.source === 'pinnacle').length;
     noteUnresolved(code, ...events.flatMap(e => [e.home_team, e.away_team]).filter(n => !resolveHistoryTeam(n, names)));
     const now = Date.now();
     const upcoming = events.filter(e => { const t = Date.parse(e.commence_time); return t > now && t < now + WINDOW_HOURS * 3600 * 1000; });
@@ -147,7 +148,7 @@ async function runDailyAnalysisInner() {
       analyzed++; fixturesAnalyzed++;
       analyze(ev, code, fid, label, stats);
     }
-    log.push(`${code}: ${events.length} partite con quote (${sharpAll} con Pinnacle/exchange), ${upcoming.length} nelle prossime ${WINDOW_HOURS} ore, ${analyzed} riconosciute, ${stats.withSharp} con riferimento nelle prossime ore.`);
+    log.push(`${code}: ${events.length} partite con quote (${sharpAll} con riferimento: ${pinAll} Pinnacle, ${sharpAll - pinAll} solo exchange), ${upcoming.length} nelle prossime ${WINDOW_HOURS} ore, ${analyzed} riconosciute, ${stats.withSharp} con riferimento nelle prossime ore.`);
   }
 
   // 3) salvataggio (senza doppioni), dal vantaggio piu' piccolo: nei test i vantaggi grandi erano piu' spesso errori

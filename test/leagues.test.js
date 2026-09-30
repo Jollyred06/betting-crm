@@ -15,6 +15,10 @@ const api = {
   B1: [['Club Brugge KV', 'Club Brugge'], ['RSC Anderlecht', 'Anderlecht'], ['Sint-Truidense', 'St Truiden'], ['Union Saint-Gilloise', 'St. Gilloise'], ['Royal Antwerp FC', 'Antwerp'], ['Beerschot', 'Beerschot VA'], ['KRC Genk', 'Genk'], ['Standard Liège', 'Standard'], ['Oud-Heverlee Leuven', 'Oud-Heverlee Leuven'], ['KVC Westerlo', 'Westerlo']],
   SC0: [['Heart of Midlothian', 'Hearts'], ['Dundee FC', 'Dundee'], ['Dundee United', 'Dundee United'], ['St Mirren', 'St Mirren'], ['Celtic', 'Celtic'], ['Rangers', 'Rangers']]
 };
+// nomi visti nel primo giro dal vivo: non riconosciuti prima di questa correzione
+csv.T1 = [...csv.T1, 'Amedspor', 'Erzurumspor']; // ipotesi sul nome nel file (le neopromosse): il ripiego per prefisso li deve trovare
+api.T1.push(['Amed SK', 'Amedspor'], ['Erzurum BB', 'Erzurumspor']);
+api.G1.push(['Volos FC', 'Volos NFC']); api.B1.push(['Leuven', 'Oud-Heverlee Leuven']);
 let n = 0;
 for (const [lg, list] of Object.entries(api)) for (const [name, expected] of list) {
   const r = resolveHistoryTeam(name, csv[lg]); n++;
@@ -23,4 +27,8 @@ for (const [lg, list] of Object.entries(api)) for (const [name, expected] of lis
 assert.strictEqual(resolveHistoryTeam('Dundee United', csv.SC0), 'Dundee United');   // non confondere con Dundee
 assert.strictEqual(resolveHistoryTeam('Squadra Inventata', csv.T1), null);           // nel dubbio: non riconosciuto, non indovinato
 assert.deepStrictEqual(tokens('Kasımpaşa'), ['kasimpasa']);
+// il ripiego per prefisso non deve inventare abbinamenti
+assert.strictEqual(resolveHistoryTeam('Bristol City', ['Bristol Rvs', 'Leicester City']), null);
+assert.strictEqual(resolveHistoryTeam('Manchester City', ['Man City', 'Man United']), null);   // 'man' e' troppo corto: nel dubbio non riconosciuto
+assert.strictEqual(resolveHistoryTeam('Amed SK', ['Amedspor', 'Amedspor Genclik']), null);     // due candidati: ambiguo
 console.log(`nomi dei 4 campionati nuovi: ${n} casi ok`);
