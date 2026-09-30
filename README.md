@@ -1,24 +1,21 @@
-# Betting CRM — tracker di segnali su calcio (modello V1)
+# Betting CRM — tracker (senza soldi veri)
 
-**Stato onesto:** il backtest su 4 stagioni di Serie A (vedi `backtest_serieA_report.md`) ha mostrato che il
-vecchio modello sbagliava le probabilita' e che quello corretto (V1) e' ben calibrato ma NON batte il mercato.
-I segnali servono a MISURARE (tracker), non come prova che convenga puntare soldi veri.
+**Stato onesto:** i test (Serie A, Brasile, xG, 19 campionati con 68.000 partite) non hanno trovato nessuna strategia con un
+vantaggio dimostrato. Il CRM serve a MISURARE dal vivo la strategia A ("migliore quota contro la probabilita' onesta di Pinnacle"),
+non a giustificare puntate con soldi veri. Report: `backtest_serieA_report.md`, `test_19_campionati_report.md`.
 
 ## Cosa fa ogni giorno (cron-job.org -> POST /api/run-daily)
-1. Aggiorna lo storico partite dalla stagione in corso (football-data.co.uk).
-2. Calcola con V1 le probabilita' 1X2 e Over/Under 2.5 delle partite di oggi (solo leghe validate: Serie A).
-3. Le confronta con la quota migliore tra i bookmaker (The Odds API).
-4. Protezioni: vantaggio tra 3% e 15%, massimo 3 segnali al giorno, tetto di esposizione 10% del bankroll.
-5. Salva i segnali (con `model_version = v1`), scrive il log e notifica.
+1. Chiude in automatico i segnali con risultato disponibile e calcola il valore rispetto alla chiusura (CLV).
+2. Per i campionati con partite oggi (SA, PL, BL1, PD, FL1, DED, PPL, ELC) confronta la quota migliore con la probabilita' di Pinnacle.
+3. Salva i segnali con vantaggio tra 3% e 15% (puntata "di carta" fissa). Nessuna notifica giornaliera.
 
-## Prima messa in funzione
-1. Supabase -> SQL Editor: esegui tutto `db/schema.sql` (aggiunge `historical_matches` e `model_version`).
-2. POST `/api/admin/import-history?key=LA_TUA_CHIAVE` (una tantum): carica i 4 CSV di `data/history`.
-3. GET `/api/admin/history-status?key=LA_TUA_CHIAVE`: controlla che SA abbia ~1520 partite.
+## Una volta a settimana (cron-job.org -> POST /api/weekly-report?key=...)
+Riepilogo: segnali, ROI a puntata fissa, valore medio vs chiusura con intervallo. Prova solo dopo circa 300 segnali chiusi.
 
 ## Test (senza database ne' rete)
-`npm test` — verifica che il modello JS coincida col backtest Python e che nomi squadra, quote e protezioni funzionino.
+`npm test`
 
-## Cose ancora da fare
-- Confronto quota vista vs quota di chiusura (indicatore di vantaggio reale) — i dati di chiusura sono gia' in `historical_matches`.
-- Altre leghe solo dopo il loro backtest (stesse regole: parametri decisi sullo sviluppo, test finale una volta sola).
+## Limiti noti
+- Nel backtest la strategia usava le quote di Bet365; dal vivo Bet365 non c'e': si usa la migliore quota tra i bookmaker europei di The Odds API (variante).
+- La chiusura e' la media delle quote di chiusura (football-data.co.uk), perche' Pinnacle da gennaio 2026 non e' piu' nei file.
+- Crediti The Odds API: 1 per campionato con partite in giornata (piano gratuito: 500 al mese).

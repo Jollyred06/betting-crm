@@ -349,8 +349,21 @@
       const res = await fetch('/api/stats');
       const s = await res.json();
 
+      let trackerHtml = '';
+      try {
+        const t = await (await fetch('/api/tracker-stats')).json();
+        if (t.total && t.total.signals > 0) {
+          const c = t.total.avgClvPct;
+          const clvTxt = c === null ? '—' : (c >= 0 ? '+' : '') + c.toFixed(2) + '%';
+          trackerHtml = `<div class="stats-grid" style="margin-bottom:12px;">
+            <div class="stat-box"><div class="stat-number">${t.total.signals}</div><div class="stat-label">Segnali tracciati</div></div>
+            <div class="stat-box"><div class="stat-number ${c !== null && c >= 0 ? 'amount-pos' : 'amount-neg'}">${clvTxt}</div><div class="stat-label">Valore vs chiusura (${t.total.nClv})</div></div>
+          </div>`;
+        }
+      } catch (e) { /* il tracker e' opzionale */ }
+
       if (s.totalSettled === 0) {
-        el.innerHTML = '<div class="empty">Nessuna scommessa ancora registrata come vinta/persa.</div>';
+        el.innerHTML = trackerHtml + '<div class="empty">Nessuna scommessa ancora chiusa come vinta/persa.</div>';
         return;
       }
 
@@ -365,7 +378,7 @@
         </div>
       `).join('');
 
-      el.innerHTML = `
+      el.innerHTML = trackerHtml + `
         <div class="stats-grid">
           <div class="stat-box"><div class="stat-number">${s.totalSettled}</div><div class="stat-label">Scommesse</div></div>
           <div class="stat-box"><div class="stat-number">${winRate}</div><div class="stat-label">Win rate</div></div>

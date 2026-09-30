@@ -156,6 +156,12 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// Numeri del tracker (strategia A): segnali, ROI a puntata fissa e valore medio rispetto alla chiusura.
+router.get('/tracker-stats', async (req, res) => {
+  try { res.json(await require('../services/weeklyReport').buildStats(pool)); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Storico delle esecuzioni giornaliere (riuscite e fallite). Utile per
 // controllare cosa è successo in passato senza dover rifare l'analisi:
 // basta aprire questo indirizzo (o mostrarlo a Claude in una chat futura)

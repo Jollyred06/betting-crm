@@ -4,6 +4,8 @@ const pool = require('../db/pool');
 const history = require('../services/history');
 const xg = require('../services/xgDownloader');
 const multi = require('../services/multiLeague');
+const tm = require('../services/tmFeatures');
+let tmJob = null;
 
 let multiJob = null;
 
@@ -94,6 +96,27 @@ router.get('/multi/export.csv', (req, res) => {
   if (!csv) return res.status(409).json({ error: 'Il file non e pronto: controlla /multi/status (finished deve essere true)' });
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="campionati_quote.csv"');
+  res.send(csv);
+});
+
+// --- Valore delle rose (Transfermarkt) per il test "il valore dei giocatori aggiunge informazione?" ---
+router.post('/tm/start', (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  if (!tmJob) tmJob = tm.createJob();
+  const st = tmJob.status();
+  if (!st.running) tmJob.run().catch(e => console.error('tm:', e.message));
+  res.json({ success: true, avviato: !st.running, stato: tmJob.status() });
+});
+router.get('/tm/status', (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  res.json(tmJob ? tmJob.status() : { running: false, finished: false, nota: 'Non ancora avviato: usa POST /tm/start' });
+});
+router.get('/tm/export.csv', (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  const csv = tmJob && tmJob.csv();
+  if (!csv) return res.status(409).json({ error: 'Il file non e pronto: controlla /tm/status (finished deve essere true)' });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="tm_valori_rose.csv"');
   res.send(csv);
 });
 

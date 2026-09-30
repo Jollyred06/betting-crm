@@ -8,7 +8,8 @@ const fs = require('fs');
 const path = require('path');
 
 // Codice del file su football-data.co.uk per ogni lega (per ora solo Serie A è validata).
-const LEAGUE_CSV = { SA: 'I1', PL: 'E0', BL1: 'D1' };
+const { LEAGUES } = require('./leagues');
+const LEAGUE_CSV = Object.fromEntries(Object.entries(LEAGUES).map(([c, l]) => [c, l.csv]));
 
 function parseCsv(text) {
   const rows = [];

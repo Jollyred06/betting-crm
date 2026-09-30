@@ -15,12 +15,9 @@ const client = axios.create({
 let requestCount = 0;
 
 // Mappa codice competizione football-data.org -> sport key di The Odds API
-const SPORT_KEY_MAP = {
-  PL: 'soccer_epl',
-  SA: 'soccer_italy_serie_a',
-  BSA: 'soccer_brazil_campeonato',
-  BL1: 'soccer_germany_bundesliga'
-};
+const { LEAGUES } = require('./leagues');
+const SPORT_KEY_MAP = { BSA: 'soccer_brazil_campeonato' };
+for (const [code, l] of Object.entries(LEAGUES)) SPORT_KEY_MAP[code] = l.oddsKey;
 
 async function getOddsForCompetition(competitionCode) {
   const sportKey = SPORT_KEY_MAP[competitionCode];
@@ -31,7 +28,7 @@ async function getOddsForCompetition(competitionCode) {
     params: {
       apiKey: process.env.ODDS_API_KEY,
       regions: 'eu',
-      markets: 'h2h,totals',
+      markets: 'h2h',   // solo 1X2: 1 credito per campionato e per chiamata
       oddsFormat: 'decimal'
     }
   });

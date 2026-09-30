@@ -172,3 +172,12 @@ ALTER TABLE xg_seasons ADD COLUMN IF NOT EXISTS league_key TEXT NOT NULL DEFAULT
 ALTER TABLE xg_seasons ADD COLUMN IF NOT EXISTS season_order INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE xg_seasons ADD COLUMN IF NOT EXISTS label TEXT;
 ALTER TABLE xg_seasons ADD COLUMN IF NOT EXISTS done BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Tracker strategia A: quale strategia ha generato il segnale, riferimento usato, esito automatico e valore vs chiusura
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS strategy TEXT;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS sharp_source TEXT;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS league_code TEXT;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS result_score TEXT;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS closing_fair_prob NUMERIC(6,4);
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS clv_pct NUMERIC(7,3);
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS settled_at TIMESTAMP;
