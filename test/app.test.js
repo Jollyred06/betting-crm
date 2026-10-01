@@ -3,6 +3,7 @@ const assert = require('assert'), fs = require('fs'), path = require('path'), vm
 const Module = require('module'), origLoad = Module._load;
 Module._load = function (request) { if (request === 'pg') return { Pool: function () { return { query: async () => ({ rows: [] }) }; } }; if (request === 'dotenv') return { config() {} }; return origLoad.apply(this, arguments); };
 const view = require('../services/trackerView');
+const ms = require('../services/milestones');
 const { authorized } = require('../services/auth');
 
 // --- chiave: nell'indirizzo O nell'intestazione, mai indovinabile per lunghezza
@@ -33,6 +34,15 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
   assert.strictEqual(h.todo.level, 'ok'); assert.ok(/Non devi fare niente/.test(h.todo.text));
   h = await view.getHealth(mkPool({ run: { ...okRun, run_at: '2026-10-03T09:00:00Z' } }), NOW);                       // ultimo giro 49 ore fa
   assert.strictEqual(h.todo.level, 'bad'); assert.ok(/cron-job\.org/.test(h.todo.text));
+  // dopo le 11:20 ora italiana il giro di oggi deve esserci: se manca l'app lo dice subito, senza aspettare 26 ore
+  h = await view.getHealth(mkPool({ run: { ...okRun, run_at: '2026-10-04T09:00:00Z' } }), NOW);                      // ultimo giro ieri, ora sono le 12:00 italiane
+  assert.strictEqual(h.todo.level, 'bad'); assert.ok(/Il giro di oggi non è partito/.test(h.todo.title) && /sveglia/.test(h.todo.text));
+  h = await view.getHealth(mkPool({ run: { ...okRun, run_at: '2026-10-04T09:00:00Z' } }), new Date('2026-10-05T08:00:00Z'));   // le 10:00 italiane: e' presto, nessun allarme
+  assert.strictEqual(h.todo.level, 'ok');
+  h = await view.getHealth(mkPool({ run: { ...okRun, run_at: '2026-10-05T07:30:00Z' } }), NOW);                      // giro manuale alle 9:30, ma niente giro delle 11:00
+  assert.strictEqual(h.todo.level, 'bad');
+  h = await view.getHealth(mkPool({ run: { ...okRun, run_at: '2026-10-05T08:55:00Z' } }), NOW);                      // giro delle 10:55 italiane circa: va bene
+  assert.strictEqual(h.todo.level, 'ok');
   h = await view.getHealth(mkPool({ run: { ...okRun, success: false, error_message: 'HTTP 401' } }), NOW);
   assert.strictEqual(h.todo.level, 'bad'); assert.ok(/401/.test(h.todo.text));
   h = await view.getHealth(mkPool({ run: { ...okRun, log_text: 'x (crediti usati nel mese: 470, rimasti: 30).' } }), NOW);
@@ -53,13 +63,15 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
     if (/COUNT\(\*\)::int AS n FROM value_bets/.test(sql)) return { rows: [{ n: 0 }] };
     if (/FROM value_bets/.test(sql)) return { rows: [{ odd: '4.20', status: 'won', edge_pct: '5.4', clv_pct: '3.1' }] };
     return { rows: [] }; } };
-  const data = { '/api/tracker/overview': await view.getOverview(pool), '/api/tracker/health': await view.getHealth(pool), '/api/tracker/signals': await view.getSignals(pool, {}),
-    '/api/tracker/runs': await view.getRuns(pool, 14), '/api/tracker/config': view.getConfig({ COMPETITIONS: 'SA,T1' }) };
+  const data = { '/api/tracker/overview': await view.getOverview(pool), '/api/tracker/health': await view.getHealth(pool, NOW), '/api/tracker/signals': await view.getSignals(pool, {}),
+    '/api/tracker/runs': await view.getRuns(pool, 14), '/api/tracker/milestones': { settledNow: 34, rule: ms.RULE, targets: [100, 200, 300].map(x => ({ target: x, reached: false, progress: 34 })) }, '/api/tracker/config': view.getConfig({ COMPETITIONS: 'SA,T1' }) };
   const script = /<script>([\s\S]*)<\/script>/.exec(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.html'), 'utf8'))[1];
   const els = {}, calls = [], store = {};
+  let downloads = 0;
   const el = id => els[id] || (els[id] = { id, innerHTML: '', textContent: '', className: '', style: {}, dataset: {}, value: '', disabled: false, classList: { remove() {}, add() {} } });
   let confirmAnswer = true, status401 = false;
-  const ctx = { console, document: { getElementById: el, querySelectorAll: () => [{ disabled: false }], createElement: () => ({ click() {} }) },
+  const ctx = { console, document: { getElementById: el, querySelectorAll: () => [{ disabled: false }], createElement: () => ({ click() { downloads++; } }) },
+    URL: { createObjectURL: () => 'blob:x' },
     localStorage: { getItem: k => store[k] || null, setItem: (k, v) => { store[k] = v; }, removeItem: k => { delete store[k]; } },
     confirm: () => confirmAnswer,
     fetch: async (url, opts = {}) => {
@@ -69,7 +81,8 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
       if (base === '/api/run-daily') return status401 ? { ok: false, status: 401, json: async () => ({ error: 'Chiave non valida' }) } : { ok: true, status: 200, json: async () => ({ success: true, log: ['SEGNALE X vs Y: home a 3.00', 'T1: prossima partita il 2026-10-09: quote non richieste, nessun credito speso.'] }) };
       if (base === '/api/notify-test') return { ok: true, status: 200, json: async () => ({ success: true, configured: false, sent: false, missing: ['TELEGRAM_CHAT_ID'] }) };
       if (base === '/api/notify-chat-id') return { ok: true, status: 200, json: async () => ({ success: true, configured: true, chats: [{ id: '123456789', name: 'Christian' }] }) };
-      if (base === '/api/settle-pending') return { ok: true, status: 200, json: async () => ({ success: true, settled: 2, stillPending: 1 }) };
+      if (base === '/api/tracker/export.csv') return { ok: true, status: 200, blob: async () => ({}), json: async () => { throw new Error('non e json'); } };
+      if (base === '/api/settle-pending') return { ok: true, status: 200, json: async () => ({ success: true, settled: 2, stillPending: 1, tappe: [100] }) };
       if (base === '/api/weekly-report') return { ok: true, status: 200, json: async () => ({ success: true, text: 'Riepilogo\nriga due' }) };
       if (data[base]) return { ok: true, status: 200, json: async () => data[base] };
       return { ok: false, status: 404, json: async () => ({ error: 'non trovato' }) };
@@ -80,6 +93,15 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
   assert.ok(/Tutto in ordine/.test(els.todo.innerHTML) && /todo ok/.test(els.todo.className), els.todo.innerHTML);
   assert.ok(/Troppo presto/.test(els.verdict.innerHTML)); assert.ok(/1 su 300/.test(els.barText.textContent));
   assert.ok(/Giro automatico/.test(els.checks.innerHTML) && /Super Lig/.test(els.schedule.innerHTML));
+  assert.ok(/Tappa 100/.test(els.milestones.innerHTML) && /34 su 100 segnali chiusi/.test(els.milestones.innerHTML) && /La regola della decisione/.test(els.milestones.innerHTML) && /prima di vedere i dati/.test(els.milestones.innerHTML));
+  // tappe raggiunte: fotografia e decisione, tutto ripulito (nessun codice dai dati)
+  const snap = ms.buildSnapshot(Array.from({ length: 300 }, (_, i) => ({ id: i, odd: 4 + (i % 3), status: i % 5 ? 'lost' : 'won', edge_pct: 2 + (i % 8), clv_pct: ((i % 11) - 4) * 1.1, est_prob: 0.2, league_code: i % 2 ? 'SA' : 'SP2', selection: 'home', sharp_source: 'pinnacle' })), { pendingNow: 3 });
+  vm.runInContext('renderMilestones(' + JSON.stringify({ rule: ms.RULE, targets: [{ target: 100, reached: true, reachedAt: '2026-11-12T10:00:00Z', hash: 'abcdef1234', snapshot: snap, decision: null }, { target: 200, reached: false, progress: 150 },
+    { target: 300, reached: true, reachedAt: '2026-12-20T10:00:00Z', hash: '<b>x</b>', snapshot: snap, decision: { level: 'none', title: 'Nessun vantaggio dimostrato', text: 'La fascia include lo zero.' } }] }) + ')', ctx);
+  assert.ok(/Tappa 100<\/b> raggiunta il/.test(els.milestones.innerHTML) && /Impronta abcdef1234/.test(els.milestones.innerHTML) && /Vinte contro attese/.test(els.milestones.innerHTML));
+  assert.ok(/callout none/.test(els.milestones.innerHTML) && /Nessun vantaggio dimostrato/.test(els.milestones.innerHTML) && /150 su 200/.test(els.milestones.innerHTML));
+  assert.ok(!/<b>x<\/b>/.test(els.milestones.innerHTML));
+  vm.runInContext('renderMilestones(null)', ctx); assert.ok(/schema\.sql/.test(els.milestones.innerHTML));
   console.log('Home: ok');
   vm.runInContext("show('signals')", ctx); await tick();
   assert.ok(/Punta su <b>Fenerbahçe<\/b>/.test(els.signals.innerHTML) && />4,20</.test(els.signals.innerHTML));   // quota con la virgola, all'italiana
@@ -88,20 +110,23 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
   console.log('Segnali, Log, Info: ok');
   // azioni: senza chiave non parte nulla
   vm.runInContext("show('actions')", ctx); assert.strictEqual(els.lockBox.style.display, 'block');
-  const before = calls.length; await vm.runInContext("act('run')", ctx); assert.strictEqual(calls.filter(c => c.url === '/api/run-daily').length, 0); assert.ok(calls.length >= before);
+  const before = calls.length; await vm.runInContext("act('run')", ctx); assert.strictEqual(calls.filter(c => c.url.split('?')[0] === '/api/run-daily').length, 0); assert.ok(calls.length >= before);
   // chiave sbagliata e giusta
   el('keyInput'); el('lockMsg');
   els.keyInput.value = 'sbagliata'; await vm.runInContext("unlock()", ctx); assert.ok(/non valida/.test(els.lockMsg.textContent)); assert.ok(!store.crmKey);
   els.keyInput.value = 'segreta123'; await vm.runInContext("unlock()", ctx); assert.strictEqual(store.crmKey, 'segreta123'); assert.strictEqual(els.actionsBox.style.display, 'block');
   // azioni con chiave nell'intestazione (mai nell'indirizzo)
-  confirmAnswer = false; await vm.runInContext("act('run')", ctx); assert.strictEqual(calls.filter(c => c.url === '/api/run-daily').length, 0);   // conferma rifiutata: non parte
+  confirmAnswer = false; await vm.runInContext("act('run')", ctx); assert.strictEqual(calls.filter(c => c.url.split('?')[0] === '/api/run-daily').length, 0);   // conferma rifiutata: non parte
   confirmAnswer = true; await vm.runInContext("act('run')", ctx);
-  const run = calls.find(c => c.url === '/api/run-daily'); assert.ok(run && run.method === 'POST' && run.key === 'segreta123' && !run.url.includes('key='));
+  const run = calls.find(c => c.url.split('?')[0] === '/api/run-daily'); assert.ok(run && run.method === 'POST' && run.key === 'segreta123' && !run.url.includes('key=') && /detail=1/.test(run.url));
   assert.ok(/class="signal"/.test(els.result.innerHTML) && /class="saving"/.test(els.result.innerHTML));
-  await vm.runInContext("act('settle')", ctx); assert.ok(/registrati: 2/.test(els.result.innerHTML));
+  await vm.runInContext("act('settle')", ctx); assert.ok(/registrati: 2/.test(els.result.innerHTML) && /Tappa raggiunta: 100/.test(els.result.innerHTML));
+  const dl0 = downloads; await vm.runInContext("act('csv')", ctx);
+  const csvCall = calls.find(c => c.url === '/api/tracker/export.csv'); assert.ok(csvCall && csvCall.key === 'segreta123' && !csvCall.url.includes('key='));
+  assert.strictEqual(downloads, dl0 + 1); assert.ok(/File scaricato/.test(els.result.innerHTML));
   await vm.runInContext("act('weekly')", ctx); assert.ok(/Riepilogo<br>riga due/.test(els.result.innerHTML));
   await vm.runInContext("act('tgtest')", ctx); assert.ok(/Mancano su Render: TELEGRAM_CHAT_ID/.test(els.result.innerHTML));
-  await vm.runInContext("act('tgid')", ctx); assert.ok(/chat id e' <b>123456789<\/b> \(Christian\)/.test(els.result.innerHTML));
+  await vm.runInContext("act('tgid')", ctx); assert.ok(/chat id è <b>123456789<\/b> \(Christian\)/.test(els.result.innerHTML));
   // chiave scaduta/cambiata sul server: si richiede di nuovo
   status401 = true; confirmAnswer = true; await vm.runInContext("act('run')", ctx); assert.ok(!store.crmKey); assert.ok(/inseriscila di nuovo/.test(els.lockMsg.textContent));
   console.log('Azioni (chiave, conferma, risultati, chiave scaduta): ok');

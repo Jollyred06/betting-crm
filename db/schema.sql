@@ -188,3 +188,13 @@ CREATE TABLE IF NOT EXISTS league_schedule (
   next_start TIMESTAMPTZ,
   checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Tappe a 100, 200 e 300 segnali chiusi: fotografie dei numeri, salvate una volta sola (con impronta per verificare che non siano state toccate)
+CREATE TABLE IF NOT EXISTS milestone_snapshots (
+  target INTEGER PRIMARY KEY,
+  reached_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_signal_id INTEGER,
+  snapshot JSONB NOT NULL,
+  decision JSONB,
+  hash TEXT NOT NULL
+);

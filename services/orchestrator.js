@@ -8,23 +8,24 @@ const { sameTeam, resolveHistoryTeam } = require('./teamNames');
 const { analyzeEvent, sharpReference } = require('./sharpSignals');
 const { settlePending } = require('./settler');
 const { sendTelegramNotification } = require('./notifier');
+const { checkMilestones } = require('./milestones');
 const { formatSignalsMessage, esc } = require('./signalMessage');
 require('dotenv').config();
 
 /**
  * TRACKER (senza soldi veri). Ogni giorno:
- * 1. chiude in automatico i segnali di cui c'e' il risultato (e calcola il valore rispetto alla chiusura);
- * 2. per ogni campionato confronta la migliore quota tra i bookmaker con la probabilita' "onesta" di Pinnacle
+ * 1. chiude in automatico i segnali di cui c'è il risultato (e calcola il valore rispetto alla chiusura);
+ * 2. per ogni campionato confronta la migliore quota tra i bookmaker con la probabilità "onesta" di Pinnacle
  *    (strategia A del test su 19 campionati). Due modalita':
  *      - campionati coperti da football-data.org: le partite di oggi arrivano da li' e si abbinano alle quote per nome;
  *      - gli altri (Turchia, Grecia, Belgio, Scozia...): le partite arrivano direttamente da The Odds API (prossime 24 ore);
- * 3. salva i segnali con quota, bookmaker e probabilita' di riferimento. Nessuna notifica giornaliera:
+ * 3. salva i segnali con quota, bookmaker e probabilità di riferimento. Nessuna notifica giornaliera:
  *    il riepilogo arriva una volta a settimana (POST /api/weekly-report).
- * Un segnale si salva solo se entrambe le squadre si riconoscono nello storico: cosi' si puo' sempre chiudere in automatico.
+ * Un segnale si salva solo se entrambe le squadre si riconoscono nello storico: così si può sempre chiudere in automatico.
  * Nei test questa strategia NON ha mostrato un vantaggio dimostrato: qui serve a misurarla dal vivo.
  */
 const COMPETITIONS = (process.env.COMPETITIONS || DEFAULT_COMPETITIONS).split(',').map(s => s.trim()).filter(c => LEAGUES[c]);
-const MIN_EDGE = parseFloat(process.env.MIN_EDGE || '0.03'), MAX_EDGE = 0.15;   // MIN_EDGE modificabile da Render (es. 0.02 = piu' segnali, piu' deboli)
+const MIN_EDGE = parseFloat(process.env.MIN_EDGE || '0.03'), MAX_EDGE = 0.15;   // MIN_EDGE modificabile da Render (es. 0.02 = più segnali, più deboli)
 const MAX_DAILY_SIGNALS = parseInt(process.env.MAX_DAILY_SIGNALS || '40', 10);
 const TRACK_STAKE = parseFloat(process.env.TRACK_STAKE || '2');   // puntata fissa "di carta", per confrontare i segnali tra loro
 const WINDOW_HOURS = 24;
@@ -87,6 +88,13 @@ async function runDailyAnalysisInner() {
     const s = await settlePending(pool);
     log.push(`Esiti registrati in automatico: ${s.settled}; ancora in attesa del risultato: ${s.stillPending}.`);
   } catch (err) { log.push(`Chiusura automatica non riuscita: ${err.message}`); }
+  try {
+    const newly = await checkMilestones(pool);
+    for (const t of newly) {
+      log.push(`TAPPA raggiunta: ${t} segnali chiusi. Fotografia dei numeri salvata.`);
+      await sendTelegramNotification(`📍 <b>Tappa raggiunta: ${t} segnali chiusi</b>\nLa fotografia dei numeri è salvata. Ora scarica il CSV dall'app (Azioni) e mandalo in chat: lo analizziamo con la regola fissata all'inizio.`);
+    }
+  } catch (err) { log.push(`Controllo delle tappe non riuscito: ${err.message}`); }
 
   // 2) campionati in stagione su The Odds API (elenco gratuito)
   let activeKeys = null;
@@ -131,7 +139,7 @@ async function runDailyAnalysisInner() {
     for (const match of matches) {
       const label = `${match.homeTeam.name} vs ${match.awayTeam.name}`;
       await upsertTeamAndFixture(match, code);
-      if (new Date(match.utcDate) <= new Date()) { log.push(`${label}: gia' iniziata, salto.`); continue; }
+      if (new Date(match.utcDate) <= new Date()) { log.push(`${label}: già iniziata, salto.`); continue; }
       if (!resolveHistoryTeam(match.homeTeam.name, names) || !resolveHistoryTeam(match.awayTeam.name, names)) {
         noteUnresolved(code, ...[match.homeTeam.name, match.awayTeam.name].filter(n => !resolveHistoryTeam(n, names)));
         log.push(`${label}: nome squadra non riconosciuto nello storico, salto.`); continue;
@@ -157,8 +165,8 @@ async function runDailyAnalysisInner() {
     try { events = await oddsApi.getOddsForCompetition(code); }
     catch (err) { log.push(`${code}: quote non disponibili (${err.message}).`); continue; }
     await saveSchedule(code, events);
-    // controllo "a secco" su TUTTE le partite ricevute (anche quelle dei prossimi giorni, stessa chiamata: nessun credito in piu'):
-    // dice ora se Pinnacle c'e' e se i nomi si riconoscono, senza aspettare che riprenda il campionato
+    // controllo "a secco" su TUTTE le partite ricevute (anche quelle dei prossimi giorni, stessa chiamata: nessun credito in più):
+    // dice ora se Pinnacle c'è e se i nomi si riconoscono, senza aspettare che riprenda il campionato
     const refs = events.map(e => sharpReference(e)).filter(Boolean);
     const sharpAll = refs.length, pinAll = refs.filter(r => r.source === 'pinnacle').length;
     noteUnresolved(code, ...events.flatMap(e => [e.home_team, e.away_team]).filter(n => !resolveHistoryTeam(n, names)));
@@ -177,7 +185,7 @@ async function runDailyAnalysisInner() {
     log.push(`${code}: ${events.length} partite con quote (${sharpAll} con riferimento: ${pinAll} Pinnacle, ${sharpAll - pinAll} solo exchange), ${upcoming.length} nelle prossime ${WINDOW_HOURS} ore, ${analyzed} riconosciute, ${stats.withSharp} con riferimento nelle prossime ore.`);
   }
 
-  // 3) salvataggio (senza doppioni), dal vantaggio piu' piccolo: nei test i vantaggi grandi erano piu' spesso errori
+  // 3) salvataggio (senza doppioni), dal vantaggio più piccolo: nei test i vantaggi grandi erano più spesso errori
   candidates.sort((x, y) => x.edge - y.edge);
   const saved = [];
   for (const c of candidates.slice(0, MAX_DAILY_SIGNALS)) {
@@ -188,11 +196,11 @@ async function runDailyAnalysisInner() {
                                edge_pct, recommended_stake, model_version, strategy, sharp_source, league_code)
        VALUES ($1,'1X2',$2,$3,$4,$5,$6,$7,$8,'sharp-v1','A_sharp',$9,$10)`,
       [c.fixtureId, c.selection, c.odd, c.bookmaker, c.fair, 1 / c.odd, c.edge * 100, TRACK_STAKE, c.source, c.code]);
-    log.push(`SEGNALE ${c.label}: ${c.selection} a ${c.odd.toFixed(2)} (${c.bookmaker}), probabilita' Pinnacle ${(c.fair * 100).toFixed(1)}%, vantaggio +${(c.edge * 100).toFixed(1)}%.`);
+    log.push(`SEGNALE ${c.label}: ${c.selection} a ${c.odd.toFixed(2)} (${c.bookmaker}), probabilità Pinnacle ${(c.fair * 100).toFixed(1)}%, vantaggio +${(c.edge * 100).toFixed(1)}%.`);
     signalsSaved++; saved.push(c);
   }
   if (saved.length) {
-    // un solo messaggio Telegram per giro, con i segnali NUOVI (quelli gia' salvati nei giri precedenti non si ripetono)
+    // un solo messaggio Telegram per giro, con i segnali NUOVI (quelli già salvati nei giri precedenti non si ripetono)
     saved.sort((x, y) => new Date(x.kickoff) - new Date(y.kickoff));
     await sendTelegramNotification(formatSignalsMessage(saved));
   }
@@ -215,7 +223,7 @@ async function runDailyAnalysis() {
     return result;
   } catch (err) {
     await pool.query(`INSERT INTO run_logs (success, error_message) VALUES ($1, $2)`, [false, err.message]);
-    await sendTelegramNotification(`⚠️ <b>Il giro giornaliero e' fallito</b>\n${esc(err.message)}\nApri l'app: la Home dice cosa fare.`);
+    await sendTelegramNotification(`⚠️ <b>Il giro giornaliero è fallito</b>\n${esc(err.message)}\nApri l'app: la Home dice cosa fare.`);
     throw err;
   }
 }

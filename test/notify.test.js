@@ -62,11 +62,11 @@ const notifier = require('../services/notifier');
   await runDailyAnalysis();
   assert.strictEqual(inserted.length, 1); assert.strictEqual(sent.length, 1);
   assert.ok(/1 nuovo segnale/.test(sent[0].body.text) && /Fenerbahçe/.test(sent[0].body.text) && /4\.20/.test(sent[0].body.text));
-  sent.length = 0; dupAll = true; inserted.length = 0; await runDailyAnalysis();                    // stesso segnale gia' salvato: nessun secondo messaggio
+  sent.length = 0; dupAll = true; inserted.length = 0; await runDailyAnalysis();                    // stesso segnale già salvato: nessun secondo messaggio
   assert.strictEqual(inserted.length, 0); assert.strictEqual(sent.length, 0);
   failRun = true; dupAll = false;                                                                      // giro fallito a meta': avviso
   await runDailyAnalysis().then(() => assert.fail('doveva lanciare'), () => {});
-  assert.strictEqual(sent.length, 1); assert.ok(/Il giro giornaliero e' fallito/.test(sent[0].body.text) && /connessione persa/.test(sent[0].body.text));
+  assert.strictEqual(sent.length, 1); assert.ok(/Il giro giornaliero è fallito/.test(sent[0].body.text) && /connessione persa/.test(sent[0].body.text));
   console.log('avvisi dopo il giro (nuovi segnali, nessun doppione, errore): ok');
   console.log('TUTTI I TEST notify OK');
 })().catch(e => { console.error(e); process.exit(1); });

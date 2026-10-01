@@ -19,6 +19,9 @@ Riepilogo: segnali, ROI a puntata fissa, valore medio vs chiusura con intervallo
 `/` porta a `/app.html`: Home (cosa fare adesso, verdetto, numeri, controlli di salute, prossime partite), Segnali, Azioni (pulsanti: analisi, chiusura risultati, riepilogo, storico; si sbloccano con la chiave, salvata solo nel browser e inviata nell'intestazione, mai nell'indirizzo), Log, Info.
 Il vecchio stato JSON e' su `/api/status`.
 
+## Tappe (100, 200, 300 segnali chiusi)
+Alla soglia il server salva UNA fotografia dei numeri (sui primi N segnali chiusi, con impronta sha256), mai modificabile dall'app. La regola della decisione e' fissata in `services/milestones.js` (1 ottobre 2026): 100 e 200 sono solo controlli, si decide a 300. Azioni, "Scarica i segnali (CSV)" per mandare i dati in chat all'analisi.
+
 ## Avvisi Telegram
 Un solo messaggio per giro quando compaiono NUOVI segnali (mai ripetuti), piu' un avviso se il giro fallisce. Variabili su Render: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Nell'app (Azioni): "Trova il mio chat Telegram" e "Invia un messaggio di prova"; i passi sono nella scheda Info.
 

@@ -41,7 +41,7 @@ const rows = [{ date: '2026-10-04', home: 'Inter', away: 'Milan', hg: 2, ag: 1 }
 assert.strictEqual(settler.findResult(rows, 'FC Internazionale Milano', 'AC Milan', '2026-10-04', names).hg, 2);
 assert.strictEqual(settler.findResult(rows, 'FC Internazionale Milano', 'AC Milan', '2026-10-05', names).hg, 2);   // data entro 1 giorno (fuso orario)
 assert.strictEqual(settler.findResult(rows, 'FC Internazionale Milano', 'AC Milan', '2026-10-08', names), null);  // troppo distante
-assert.strictEqual(settler.findResult(rows, 'AC Milan', 'FC Internazionale Milano', '2026-10-04', names), null);  // casa/trasferta invertiti: non e' la stessa partita
+assert.strictEqual(settler.findResult(rows, 'AC Milan', 'FC Internazionale Milano', '2026-10-04', names), null);  // casa/trasferta invertiti: non è la stessa partita
 console.log('chiusura automatica (logica): ok');
 
 // --- 3) riepilogo
@@ -54,7 +54,7 @@ assert.ok(formatReport(s, s).includes('Servono circa 300 segnali'));
 const weak = [...bets, { odd: 3, status: 'lost', edge_pct: 2.2, clv_pct: 0.5 }];
 const strongOnly = summarize(weak.filter(b => Number(b.edge_pct) >= 3));
 assert.strictEqual(strongOnly.signals, 4); assert.strictEqual(summarize(weak).signals, 5);
-assert.ok(formatReport(summarize(weak), summarize(weak), strongOnly).includes('Solo vantaggio >= 3%'));      // riga in piu' solo se la soglia e' stata abbassata
+assert.ok(formatReport(summarize(weak), summarize(weak), strongOnly).includes('Solo vantaggio >= 3%'));      // riga in più solo se la soglia è stata abbassata
 assert.ok(!formatReport(s, s, s).includes('Solo vantaggio >= 3%'));
 console.log('riepilogo: ok');
 
@@ -72,7 +72,7 @@ console.log('riepilogo: ok');
     return { rows: [] };
   } };
   const r = await settler.settlePending(pool);
-  assert.deepStrictEqual(r, { settled: 2, stillPending: 1 });            // la 3a partita non e' ancora nel file
+  assert.deepStrictEqual(r, { settled: 2, stillPending: 1 });            // la 3a partita non è ancora nel file
   const upd = q.filter(x => /UPDATE value_bets/.test(x[0]));
   assert.strictEqual(upd[0][1][0], 'lost'); assert.strictEqual(upd[0][1][1], '2-1'); assert.ok(Math.abs(upd[0][1][3] - 5.4) < 0.2);   // Milan a 4.20 perde 2-1, CLV +5.4%
   assert.strictEqual(upd[1][1][0], 'lost');                                                                                          // Roma-Verona 0-0: 'home' perde

@@ -26,8 +26,8 @@ function formatReport(week, total, strong) {
   let txt = `📊 Riepilogo settimanale (tracker, senza soldi veri)\n${line('Ultimi 7 giorni', week)}\n${line('Da inizio tracciamento', total)}`;
   if (strong && strong.signals && strong.signals !== total.signals) txt += `\n${line('Solo vantaggio >= 3%', strong)}`;
   if (total.clvCi95) txt += `\nValore vs chiusura, intervallo 95%: da ${f(total.clvCi95[0], 2, true)}% a ${f(total.clvCi95[1], 2, true)}%`;
-  txt += '\n\nLettura: un vantaggio vero si vede se il valore vs chiusura e\' positivo con intervallo sopra lo zero. ' +
-    (total.nClv < 300 ? `Servono circa 300 segnali chiusi: ora ${total.nClv}. Prima non e' una prova.` : 'Il campione e\' sufficiente per una prima lettura.');
+  txt += '\n\nLettura: un vantaggio vero si vede se il valore vs chiusura è positivo con intervallo sopra lo zero. ' +
+    (total.nClv < 300 ? `Servono circa 300 segnali chiusi: ora ${total.nClv}. Prima non è una prova.` : 'Il campione è sufficiente per una prima lettura.');
   return txt;
 }
 

@@ -74,11 +74,22 @@
   .cell { padding:12px 8px 12px 0; } .cell + .cell { padding-left:14px; border-left:1px solid var(--line); }
   .cell b { display:block; font:800 clamp(38px,11vw,50px)/1 var(--display); color:var(--ink); }
   .cell span { display:block; font-size:13px; color:var(--muted); margin-top:2px; }
-  .facts { margin:0; } .facts div { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--line); font-size:15px; } .facts dt { color:var(--muted); } .facts dd { margin:0; font-weight:700; }
+  .facts { margin:0; } .facts div { display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 14px; padding:10px 0; border-bottom:1px solid var(--line); font-size:15px; } .facts dt { color:var(--muted); } .facts dd { margin:0 0 0 auto; font-weight:700; text-align:right; }
   .pos { color:var(--ok); } .neg { color:var(--bad); }
   .prog { margin:16px 0 4px; } .track { position:relative; height:10px; border-radius:6px; background:var(--tint); overflow:hidden; }
   .fill { height:100%; background:var(--ink); border-radius:6px; transition:width .6s ease; }
   .ticks { position:relative; height:18px; font-size:12px; color:var(--muted); } .ticks span { position:absolute; top:4px; transform:translateX(-50%); } .ticks span:last-child { transform:translateX(-100%); }
+
+  /* tappe */
+  .ms { padding:12px 0; border-bottom:1px solid var(--line); } .ms:last-of-type { border-bottom:0; }
+  .ms > summary, .ms.plain { display:flex; gap:12px; align-items:center; list-style:none; padding:0; min-height:44px; }
+  .ms > summary::-webkit-details-marker { display:none; } .ms .cm { flex:none; }
+  .ms .snap { padding:10px 0 4px 21px; } .ms .snap h4 { font:700 19px/1.1 var(--display); color:var(--ink); margin:16px 0 4px; }
+  .callout { border-left:5px solid var(--muted); background:var(--tint); border-radius:0 12px 12px 0; padding:12px 14px; margin:12px 0; }
+  .callout.plausible { border-left-color:var(--ok); } .callout.close, .callout.mixed { border-left-color:var(--bad); } .callout.none { border-left-color:var(--warn); }
+  .callout b { display:block; } .callout span { color:var(--muted); font-size:14.5px; }
+  .hash { font:12.5px ui-monospace,Menlo,Consolas,monospace; color:var(--muted); margin-top:10px; word-break:break-all; }
+  .rule ul { padding-left:18px; margin:8px 0 0; } .rule li { margin:7px 0; color:var(--muted); font-size:14.5px; }
 
   /* righe di controllo */
   .list > div { display:flex; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); } .list > div:last-child { border-bottom:0; }
@@ -153,6 +164,7 @@
       <p class="muted">Con circa 66 segnali chiusi si riconosce un vantaggio del 3% sulla chiusura, con 150 uno del 2%.</p>
       <p id="strongLine" class="muted"></p>
     </section>
+    <section class="block"><h3>Tappe</h3><div id="milestones"></div></section>
     <section class="block"><h3>Controlli</h3><div id="checks" class="list"></div></section>
     <section class="block"><h3>Prossime partite</h3><div id="schedule"></div></section>
   </main>
@@ -203,14 +215,14 @@
     <section class="block"><h3>Impostazioni attuali</h3><div id="config" class="list"></div></section>
     <section class="block">
       <h3>Come funziona</h3>
-      <p class="muted" style="font-size:15px;">Ogni giorno alle 11:00 il tracker confronta la migliore quota tra i bookmaker con la probabilita' "onesta" di Pinnacle e salva i segnali. Quando le partite finiscono, registra da solo vinta o persa e confronta la tua quota con quella di chiusura.</p>
-      <p class="muted" style="font-size:15px;">Se in media le quote prese battono la chiusura, c'e' un vantaggio vero. Serve un campione grande: circa 300 segnali chiusi. Prima e' solo rumore.</p>
-      <p style="font-weight:600;">Non usare soldi veri finche' il verdetto in Home non dice che c'e' un vantaggio confermato. I test fatti finora non ne hanno trovato.</p>
+      <p class="muted" style="font-size:15px;">Ogni giorno alle 11:00 il tracker confronta la migliore quota tra i bookmaker con la probabilità "onesta" di Pinnacle e salva i segnali. Quando le partite finiscono, registra da solo vinta o persa e confronta la tua quota con quella di chiusura.</p>
+      <p class="muted" style="font-size:15px;">Se in media le quote prese battono la chiusura, c'è un vantaggio vero. Serve un campione grande: circa 300 segnali chiusi. Prima è solo rumore.</p>
+      <p style="font-weight:600;">Non usare soldi veri finché il verdetto in Home non dice che c'è un vantaggio confermato. I test fatti finora non ne hanno trovato.</p>
     </section>
     <section class="block">
       <h3>Collegare Telegram</h3>
       <ol class="steps">
-        <li>Su Telegram cerca <b>@BotFather</b>, scrivi <b>/newbot</b>, scegli un nome e un nome utente che finisca con "bot". Ti da' un <b>token</b> (una stringa lunga con i due punti): copialo.</li>
+        <li>Su Telegram cerca <b>@BotFather</b>, scrivi <b>/newbot</b>, scegli un nome e un nome utente che finisca con "bot". Ti dà un <b>token</b> (una stringa lunga con i due punti): copialo.</li>
         <li>Apri il tuo nuovo bot e scrivigli <b>ciao</b>.</li>
         <li>Su Render, in Environment, aggiungi <b>TELEGRAM_BOT_TOKEN</b> con il token. Salva e aspetta che sia Live.</li>
         <li>Qui in Azioni premi <b>Trova il mio chat Telegram</b>: ti mostra un numero.</li>
@@ -256,7 +268,7 @@
   async function getJson(url) { const r = await fetch(url); const d = await r.json(); if (d && d.error && !Array.isArray(d)) throw new Error(d.error); return d; }
 
   // ------------------------------------------------------------------ HOME
-  // Fascia di incertezza sul valore rispetto alla chiusura: si restringe man mano che arrivano dati. Lo zero e' la linea di meta' campo.
+  // Fascia di incertezza sul valore rispetto alla chiusura: si restringe man mano che arrivano dati. Lo zero è la linea di meta' campo.
   function gauge(t) {
     const has = t.clvCi95 && t.avgClvPct !== null && t.avgClvPct !== undefined;
     const big = has ? Math.max(Math.abs(t.clvCi95[0]), Math.abs(t.clvCi95[1]), Math.abs(t.avgClvPct)) : 10;
@@ -269,9 +281,38 @@
     return `<div class="gauge" role="img" aria-label="Valore rispetto alla chiusura"><div class="axis"><span class="zero"></span>${band}</div><div class="scale"><span>−${S}%</span><span>0</span><span>+${S}%</span></div><p class="cap">${cap}</p></div>`;
   }
 
+  const grpLine = (name, g) => `<div><dt>${esc(name)}</dt><dd>${g.n ? g.n + ' segnali, ' + pct(g.avgClvPct) : 'nessuno'}</dd></div>`;
+  function snapHtml(t) {
+    const s = t.snapshot, d = t.decision;
+    const ci = c => c ? ` (da ${pct(c[0])} a ${pct(c[1])})` : '';
+    return `<div class="snap">
+      ${d ? `<div class="callout ${esc(d.level)}"><b>${esc(d.title)}</b><span>${esc(d.text)}</span></div>` : ''}
+      <dl class="facts">
+        <div><dt>Valore vs chiusura</dt><dd class="${cls(s.avgClvPct)}">${pct(s.avgClvPct, 2)}</dd></div>
+        <div><dt>Fascia di incertezza</dt><dd>${s.clvCi95 ? pct(s.clvCi95[0]) + ' / ' + pct(s.clvCi95[1]) : '—'}</dd></div>
+        <div><dt>ROI a puntata fissa</dt><dd class="${cls(s.roiFlatPct)}">${pct(s.roiFlatPct)}${ci(s.roiCi95)}</dd></div>
+        <div><dt>Vinte contro attese</dt><dd>${s.wins} su ${num(s.expectedWins, 1)}</dd></div>
+        <div><dt>Con riferimento Pinnacle</dt><dd>${num(s.pinnacleSharePct, 0)}%</dd></div>
+      </dl>
+      <h4>Per vantaggio</h4><p class="muted" style="margin:0 0 4px;">Numero di segnali e valore medio rispetto alla chiusura.</p><dl class="facts">${Object.entries(s.groups.edge).map(([k, g]) => grpLine(k, g)).join('')}</dl>
+      <h4>Per campionato</h4><dl class="facts">${Object.entries(s.groups.tier).map(([k, g]) => grpLine(k, g)).join('')}</dl>
+      <h4>Per quota</h4><dl class="facts">${Object.entries(s.groups.odds).map(([k, g]) => grpLine(k, g)).join('')}</dl>
+      <p class="muted">Per l'analisi: scarica i segnali in Azioni e mandali in chat. Questa fotografia non si può modificare.</p>
+      <div class="hash">Impronta ${esc(t.hash)}</div></div>`;
+  }
+  function renderMilestones(m) {
+    if (!m) { $('milestones').innerHTML = '<div class="empty">Non disponibile: riesegui tutto db/schema.sql su Supabase (SQL Editor).</div>'; return; }
+    const rows = m.targets.map(t => t.reached
+      ? `<details class="ms"><summary>${marker('ok')}<span><b>Tappa ${t.target}</b> raggiunta il ${dt(t.reachedAt, { day: 'numeric', month: 'long' })}<br><span class="muted">Tocca per vedere la fotografia</span></span></summary>${snapHtml(t)}</details>`
+      : `<div class="ms plain">${marker('info')}<span><b>Tappa ${t.target}</b><br><span class="muted">${t.progress} su ${t.target} segnali chiusi</span></span></div>`).join('');
+    $('milestones').innerHTML = rows + `<details class="ms rule"><summary>${marker('warn')}<span><b>La regola della decisione</b><br><span class="muted">Fissata il ${dt(m.rule.fixedOn, { day: 'numeric', month: 'long' })}, prima di vedere i dati</span></span></summary>
+      <div class="snap"><p class="muted">${esc(m.rule.intro)}</p><ul>${m.rule.lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul></div></details>`;
+  }
+
   async function loadHome() {
     try {
-      const [o, h] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health')]);
+      const [o, h, m] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health'), getJson('/api/tracker/milestones').catch(() => null)]);
+      renderMilestones(m);
       const lv = h.todo.level;
       $('todo').className = 'todo ' + lv;
       $('todo').innerHTML = `${marker(lv)}<div><b>${esc(h.todo.title)}</b><span>${esc(h.todo.text)}</span></div>`;
@@ -328,12 +369,13 @@
   const I = {
     play: '<path d="M7 4l13 8-13 8z"/>', check: '<path d="M4 12.5l5 5L20 6.5"/>', file: '<path d="M6 3h9l4 4v14H6zM14 3v5h5"/>',
     refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/>', db: '<path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
-    send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>', find: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'
+    download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>', send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>', find: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'
   };
   const ACTIONS = {
-    run:     { path: '/api/run-daily',             method: 'POST', title: 'Analisi', icon: 'play', label: 'Esegui analisi ora', desc: 'Cerca i segnali di oggi. Lo fa gia\' da solo ogni giorno alle 11:00.', cost: 'Usa fino a circa 10 crediti delle quote', confirm: 'Consuma fino a circa 10 crediti delle quote (su 500 al mese). Continuare?' },
+    run:     { path: '/api/run-daily?detail=1',             method: 'POST', title: 'Analisi', icon: 'play', label: 'Esegui analisi ora', desc: 'Cerca i segnali di oggi. Lo fa già da solo ogni giorno alle 11:00.', cost: 'Usa fino a circa 10 crediti delle quote', confirm: 'Consuma fino a circa 10 crediti delle quote (su 500 al mese). Continuare?' },
     settle:  { path: '/api/settle-pending',        method: 'POST', title: 'Chiusura risultati', icon: 'check', label: 'Chiudi i risultati ora', desc: 'Registra vinta o persa per le partite finite.' },
-    weekly:  { path: '/api/weekly-report',         method: 'POST', title: 'Riepilogo settimanale', icon: 'file', label: 'Mostra e invia il riepilogo settimanale', desc: 'Lo invia anche come messaggio, se collegato.' },
+    weekly:  { path: '/api/weekly-report?detail=1',         method: 'POST', title: 'Riepilogo settimanale', icon: 'file', label: 'Mostra e invia il riepilogo settimanale', desc: 'Lo invia anche come messaggio, se collegato.' },
+    csv:     { path: '/api/tracker/export.csv',    method: 'GET',  title: 'Segnali in CSV', icon: 'download', download: true, label: 'Scarica i segnali (CSV)', desc: 'Per mandarli in chat all\'analisi di ogni tappa.' },
     refresh: { path: '/api/admin/refresh-history', method: 'POST', title: 'Aggiornamento storico', icon: 'refresh', label: 'Aggiorna lo storico partite', desc: 'Scarica i risultati recenti.' },
     hist:    { path: '/api/admin/history-status',  method: 'GET',  title: 'Stato dello storico', icon: 'db', label: 'Controlla lo storico', desc: 'Quante partite ci sono per ogni campionato.' },
     tgtest:  { path: '/api/notify-test',           method: 'POST', title: 'Messaggio di prova', icon: 'send', label: 'Invia un messaggio di prova su Telegram', desc: 'Per controllare che gli avvisi sul telefono funzionino.' },
@@ -358,7 +400,7 @@
 
   function describe(kind, d) {
     if (kind === 'run') return logHtml(d.log || []);
-    if (kind === 'settle') return `<div class="info">Risultati registrati: ${d.settled}. Ancora in attesa: ${d.stillPending}.</div>`;
+    if (kind === 'settle') return `<div class="info">Risultati registrati: ${d.settled}. Ancora in attesa: ${d.stillPending}.</div>` + (d.tappe && d.tappe.length ? `<div class="signal">Tappa raggiunta: ${d.tappe.join(', ')} segnali chiusi. Guarda la Home.</div>` : '');
     if (kind === 'weekly') return `<div class="info">${esc(d.text).replace(/\n/g, '<br>')}</div>`;
     if (kind === 'refresh') return (d.risultati || []).map(r => `<div class="${r.ok ? 'info' : 'warn'}">${esc(r.lega)}: ${r.ok ? r.partite + ' partite lette' : 'non riuscito (' + esc(r.error) + ')'}</div>`).join('');
     if (kind === 'tgtest') return d.sent ? '<div class="info">Messaggio inviato: controlla Telegram.</div>'
@@ -366,7 +408,7 @@
     if (kind === 'tgid') return !d.configured ? '<div class="warn">Manca TELEGRAM_BOT_TOKEN su Render: segui i passi nella scheda Info.</div>'
       : d.error ? `<div class="warn">Telegram risponde: ${esc(d.error)}</div>`
       : !d.chats.length ? '<div class="warn">Nessun messaggio trovato: apri il tuo bot su Telegram, scrivigli "ciao" e riprova.</div>'
-      : d.chats.map(c => `<div class="signal">Il tuo chat id e' <b>${esc(c.id)}</b> ${c.name ? '(' + esc(c.name) + ')' : ''} — copialo in TELEGRAM_CHAT_ID su Render.</div>`).join('');
+      : d.chats.map(c => `<div class="signal">Il tuo chat id è <b>${esc(c.id)}</b> ${c.name ? '(' + esc(c.name) + ')' : ''} — copialo in TELEGRAM_CHAT_ID su Render.</div>`).join('');
     if (kind === 'hist') return (Array.isArray(d) ? d : []).map(r => `<div class="info">${esc(r.lega)}: ${r.partite} partite, dal ${esc(r.dal)} al ${esc(r.al)}</div>`).join('') || '<div class="warn">Storico vuoto.</div>';
     return '';
   }
@@ -378,8 +420,12 @@
     $('resultCard').style.display = 'block'; $('resultTitle').textContent = a.title; $('result').innerHTML = '<div class="info">Un momento…</div>';
     try {
       const r = await fetch(a.path, { method: a.method, headers: { 'x-run-key': key } });
+      if (a.download && r.ok) {
+        const link = document.createElement('a'); link.href = URL.createObjectURL(await r.blob()); link.download = 'segnali_tracker.csv'; link.click();
+        $('result').innerHTML = '<div class="info">File scaricato: lo trovi nella cartella Download. Caricalo in chat.</div>'; return;
+      }
       const d = await r.json().catch(() => ({}));
-      if (r.status === 401) { lock(); $('lockMsg').textContent = 'La chiave non e\' piu\' valida: inseriscila di nuovo.'; return; }
+      if (r.status === 401) { lock(); $('lockMsg').textContent = 'La chiave non è più valida: inseriscila di nuovo.'; return; }
       if (!r.ok) { $('result').innerHTML = `<div class="warn">Errore: ${esc(d.error || r.status)}</div>`; return; }
       $('result').innerHTML = describe(kind, d);
     } catch (e) { $('result').innerHTML = `<div class="warn">Errore di connessione: ${esc(e.message)}</div>`; }
@@ -407,7 +453,7 @@
       const tg = c.notify.telegram || c.notify.email || c.notify.whatsapp;
       $('config').innerHTML = `
         <div>${marker('info')}<div><b>Campionati seguiti (${c.competitions.length})</b><span class="muted">${c.competitions.map(x => esc(x.name)).join(', ')}</span></div></div>
-        <div>${marker('info')}<div><b>Vantaggio minimo</b><span class="muted">${num(c.minEdgePct, 1)}%, massimo ${c.maxEdgePct}%: sopra, di solito e' una quota sbagliata</span></div></div>
+        <div>${marker('info')}<div><b>Vantaggio minimo</b><span class="muted">${num(c.minEdgePct, 1)}%, massimo ${c.maxEdgePct}%: sopra, di solito è una quota sbagliata</span></div></div>
         <div>${marker('info')}<div><b>Puntata di carta</b><span class="muted">${c.stake}€ fissi per ogni segnale, non sono soldi veri</span></div></div>
         <div>${marker('info')}<div><b>Massimo segnali al giorno</b><span class="muted">${c.maxDailySignals}</span></div></div>
         <div>${marker(tg ? 'ok' : 'warn')}<div><b>Riepilogo come messaggio</b><span class="muted">${[c.notify.telegram && 'Telegram', c.notify.email && 'email', c.notify.whatsapp && 'WhatsApp'].filter(Boolean).join(', ') || 'Non collegato: il riepilogo si legge qui in Home e in Azioni.'}</span></div></div>`;

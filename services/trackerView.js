@@ -10,12 +10,12 @@ const TARGET_SETTLED = 300;      // segnali chiusi per una lettura solida (vedi 
 /** Verdetto onesto in una frase. Mai "funziona" senza intervallo sopra lo zero e campione sufficiente. */
 function verdict(total) {
   const n = total.settled || 0, clv = total.avgClvPct, ci = total.clvCi95;
-  if (!total.signals) return { level: 'wait', title: 'Ancora nessun segnale', text: 'Il tracker e\' attivo. I segnali compaiono quando ci sono partite e quote che superano la soglia.' };
-  if (n < 30) return { level: 'wait', title: 'Troppo presto per dire qualcosa', text: `Hai ${total.signals} segnali, ${n} chiusi. Con cosi' pochi dati il risultato dipende dal caso: servono almeno ${TARGET_SETTLED} segnali chiusi per una lettura solida.` };
+  if (!total.signals) return { level: 'wait', title: 'Ancora nessun segnale', text: 'Il tracker è attivo. I segnali compaiono quando ci sono partite e quote che superano la soglia.' };
+  if (n < 30) return { level: 'wait', title: 'Troppo presto per dire qualcosa', text: `Hai ${total.signals} segnali, ${n} chiusi. Con così pochi dati il risultato dipende dal caso: servono almeno ${TARGET_SETTLED} segnali chiusi per una lettura solida.` };
   if (!ci) return { level: 'wait', title: 'Dati ancora pochi', text: `${n} segnali chiusi: il valore rispetto alla chiusura non ha ancora un intervallo affidabile.` };
-  if (ci[0] > 0 && n < 100) return { level: 'wait', title: 'Promettente, ma ancora pochi dati', text: `Valore medio ${clv.toFixed(2)}% con ${n} segnali chiusi: l'intervallo e' sopra lo zero, ma con meno di 100 segnali puo' essere fortuna. Aspetta di averne di piu'.` };
-  if (ci[0] > 0 && n >= 100) return { level: 'good', title: 'Segnale positivo, da confermare', text: `Il valore medio rispetto alla chiusura e' ${clv.toFixed(2)}% e l'intervallo e' sopra lo zero. Non e' ancora una prova di guadagno: controlla che regga anche con piu' dati e nel ROI.` };
-  if (ci[1] < 0) return { level: 'bad', title: 'Nessun vantaggio: va peggio della chiusura', text: `Il valore medio rispetto alla chiusura e' ${clv.toFixed(2)}% con intervallo sotto lo zero: in media il mercato chiude meglio delle quote che abbiamo preso.` };
+  if (ci[0] > 0 && n < 100) return { level: 'wait', title: 'Promettente, ma ancora pochi dati', text: `Valore medio ${clv.toFixed(2)}% con ${n} segnali chiusi: l'intervallo è sopra lo zero, ma con meno di 100 segnali può essere fortuna. Aspetta di averne di più.` };
+  if (ci[0] > 0 && n >= 100) return { level: 'good', title: 'Segnale positivo, da confermare', text: `Il valore medio rispetto alla chiusura è ${clv.toFixed(2)}% e l'intervallo è sopra lo zero. Non è ancora una prova di guadagno: controlla che regga anche con più dati e nel ROI.` };
+  if (ci[1] < 0) return { level: 'bad', title: 'Nessun vantaggio: va peggio della chiusura', text: `Il valore medio rispetto alla chiusura è ${clv.toFixed(2)}% con intervallo sotto lo zero: in media il mercato chiude meglio delle quote che abbiamo preso.` };
   return { level: 'neutral', title: 'Nessuna differenza dimostrata', text: `Valore medio ${clv.toFixed(2)}%, ma l'intervallo include lo zero: per ora non si distingue dal caso.` };
 }
 
@@ -54,6 +54,23 @@ function parseRun(row) {
     credits: m ? { used: Number(m[1]), remaining: Number(m[2]) } : null, lines };
 }
 
+/** Tutti i segnali in CSV (per mandarli in chat all'analisi di ogni tappa). */
+async function signalsCsv(pool) {
+  const { rows } = await pool.query(
+    `SELECT vb.id, vb.created_at, f.date AS kickoff, vb.league_code, vb.selection, vb.bookmaker_odd, vb.bookmaker_name, vb.edge_pct,
+            vb.estimated_probability, vb.sharp_source, vb.status, vb.result_score, vb.closing_fair_prob, vb.clv_pct, vb.settled_at, vb.model_version,
+            th.name AS home, ta.name AS away
+     FROM value_bets vb JOIN fixtures f ON f.id = vb.fixture_id
+     LEFT JOIN teams th ON th.id = f.home_team_id LEFT JOIN teams ta ON ta.id = f.away_team_id
+     WHERE vb.strategy = 'A_sharp' ORDER BY vb.id`);
+  const cols = ['id', 'creato', 'partita_inizio', 'campionato', 'campionato_nome', 'casa', 'trasferta', 'scelta', 'puntato_su', 'quota', 'bookmaker', 'vantaggio_pct',
+    'prob_pinnacle', 'riferimento', 'stato', 'risultato', 'prob_chiusura', 'valore_vs_chiusura_pct', 'chiuso_il', 'modello'];
+  const esc = x => { const s = x === null || x === undefined ? '' : x instanceof Date ? x.toISOString() : String(x); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const line = r => [r.id, r.created_at, r.kickoff, r.league_code, (LEAGUES[r.league_code] || {}).name || r.league_code, r.home, r.away, r.selection, pick(r), r.bookmaker_odd, r.bookmaker_name,
+    r.edge_pct, r.estimated_probability, r.sharp_source, r.status, r.result_score, r.closing_fair_prob, r.clv_pct, r.settled_at, r.model_version].map(esc).join(',');
+  return [cols.join(','), ...rows.map(line)].join('\n');
+}
+
 async function getOverview(pool) {
   const stats = await buildStats(pool);
   const [run, sched] = await Promise.all([
@@ -70,10 +87,17 @@ async function getOverview(pool) {
 }
 
 
+/** Data e minuti dall'inizio della giornata, ora italiana. */
+function romeParts(d) {
+  const o = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(new Date(d)).forEach(x => { o[x.type] = x.value; });
+  return { ymd: `${o.year}-${o.month}-${o.day}`, mins: Number(o.hour) * 60 + Number(o.minute) };
+}
 const hoursLabel = h => (h < 1 ? "meno di un'ora" : h < 1.5 ? "circa un'ora" : h < 48 ? `${Math.round(h)} ore` : `${Math.round(h / 24)} giorni`);
 
 /**
- * Controlli di salute in italiano semplice + "cosa fare adesso": se tutto e' a posto dice di non fare niente.
+ * Controlli di salute in italiano semplice + "cosa fare adesso": se tutto è a posto dice di non fare niente.
  * Ogni controllo: level ok | warn | bad.
  */
 async function getHealth(pool, now = new Date(), env = process.env) {
@@ -88,20 +112,23 @@ async function getHealth(pool, now = new Date(), env = process.env) {
     push('warn', 'Nessun giro registrato', 'Il tracker non ha ancora girato. Vai su Azioni e premi "Esegui analisi ora", oppure controlla il job delle 11:00 su cron-job.org.');
   } else {
     const hours = (now - new Date(run.at)) / 3600000;
+    const n = romeParts(now), l = romeParts(run.at);
+    const missedToday = n.mins >= 11 * 60 + 20 && !(l.ymd === n.ymd && l.mins >= 10 * 60 + 50);     // dopo le 11:20 deve esserci un giro di oggi, partito verso le 11:00
     if (!run.success) push('bad', 'Ultimo giro fallito', run.error || 'errore sconosciuto');
-    else if (hours > 26) push('bad', 'Il giro automatico non parte', `L'ultimo giro e' di ${hoursLabel(hours)} fa: il job delle 11:00 su cron-job.org potrebbe essere fermo. Controllalo.`);
+    else if (missedToday && hours <= 26) push('bad', 'Il giro di oggi non è partito', 'Alle 11:00 non risulta nessun giro. Apri la cronologia del job su cron-job.org: di solito è il server gratuito di Render ancora addormentato. Rimedio: aggiungi un job "sveglia" alle 10:55.');
+    else if (hours > 26) push('bad', 'Il giro automatico non parte', `L'ultimo giro è di ${hoursLabel(hours)} fa: il job delle 11:00 su cron-job.org potrebbe essere fermo. Controllalo.`);
     else push('ok', 'Giro automatico', `Ultimo giro ${hoursLabel(hours)} fa.`);
     if (run.credits) {
       const r = run.credits.remaining;
       push(r < 50 ? 'bad' : r < 120 ? 'warn' : 'ok', 'Crediti delle quote', `Ne restano ${r} su 500 questo mese.` + (r < 120 ? ' Stanno finendo: togli qualche campionato dalla variabile COMPETITIONS su Render.' : ''));
     }
     const names = run.lines.find(l => /NOMI SQUADRA NON RICONOSCIUTI/.test(l.text));
-    if (names) push('warn', 'Nomi di squadra non riconosciuti', `${names.text.replace(/^NOMI SQUADRA NON RICONOSCIUTI \([^)]*\):\s*/, '')} — mandameli in chat e li aggiungo: finche' non si riconoscono, quelle partite non producono segnali.`);
+    if (names) push('warn', 'Nomi di squadra non riconosciuti', `${names.text.replace(/^NOMI SQUADRA NON RICONOSCIUTI \([^)]*\):\s*/, '')} — mandameli in chat e li aggiungo: finché non si riconoscono, quelle partite non producono segnali.`);
   }
   try {
     const old = (await pool.query(`SELECT COUNT(*)::int AS n FROM value_bets vb JOIN fixtures f ON f.id = vb.fixture_id
       WHERE vb.strategy = 'A_sharp' AND vb.status = 'pending' AND f.date < NOW() - INTERVAL '4 days'`)).rows[0];
-    if (old && old.n > 0) push('warn', 'Segnali senza risultato', `${old.n} segnali aspettano il risultato da piu' di 4 giorni: di solito e' un nome di squadra che non si abbina allo storico. Premi "Chiudi i risultati ora" in Azioni; se resta cosi', scrivimelo in chat.`);
+    if (old && old.n > 0) push('warn', 'Segnali senza risultato', `${old.n} segnali aspettano il risultato da più di 4 giorni: di solito è un nome di squadra che non si abbina allo storico. Premi "Chiudi i risultati ora" in Azioni; se resta così, scrivimelo in chat.`);
   } catch (e) { /* tabella non ancora pronta */ }
   try { await pool.query(`SELECT 1 FROM league_schedule LIMIT 1`); }
   catch (e) { push('warn', 'Risparmio crediti non attivo', 'Manca la tabella league_schedule: riesegui tutto db/schema.sql su Supabase (SQL Editor).'); }
@@ -130,4 +157,4 @@ function getConfig(env = process.env) {
   };
 }
 
-module.exports = { getOverview, getSignals, getHealth, getRuns, getConfig, verdict, pick, parseRun, TARGET_SETTLED };
+module.exports = { getOverview, getSignals, signalsCsv, getHealth, getRuns, getConfig, verdict, pick, parseRun, TARGET_SETTLED };

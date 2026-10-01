@@ -12,7 +12,7 @@ assert.strictEqual(view.verdict({ ...base, signals: 60, settled: 50, avgClvPct: 
 const early = view.verdict({ ...base, signals: 80, settled: 60, avgClvPct: 4, clvCi95: [1, 7] });
 assert.strictEqual(early.level, 'wait'); assert.ok(/Promettente/.test(early.title));   // <100 chiusi: mai "positivo", anche con intervallo sopra lo zero
 assert.strictEqual(view.verdict({ ...base, signals: 150, settled: 120, avgClvPct: 3, clvCi95: [1, 5] }).level, 'good');
-assert.ok(/non e' ancora una prova/i.test(view.verdict({ ...base, signals: 150, settled: 120, avgClvPct: 3, clvCi95: [1, 5] }).text));
+assert.ok(/non è ancora una prova/i.test(view.verdict({ ...base, signals: 150, settled: 120, avgClvPct: 3, clvCi95: [1, 5] }).text));
 assert.strictEqual(view.verdict({ ...base, signals: 150, settled: 120, avgClvPct: -2, clvCi95: [-4, -0.5] }).level, 'bad');
 assert.strictEqual(view.verdict({ ...base, signals: 150, settled: 120, avgClvPct: 1, clvCi95: [-1, 3] }).level, 'neutral');
 console.log('verdetto: ok');
@@ -25,7 +25,7 @@ assert.strictEqual(view.pick({ selection: 'draw', home: 'Inter', away: 'Milan' }
 // --- log dell'ultimo giro
 const run = view.parseRun({ run_at: '2026-10-02T09:00:00Z', success: true, value_bets_found: 2, odds_api_requests: 3, error_message: null,
   log_text: ['Esiti registrati in automatico: 1; ancora in attesa del risultato: 0.', "T1: prossima partita il 2026-10-09 17:00 UTC (oltre 24 ore): quote non richieste, nessun credito speso.",
-    "SEGNALE A vs B: away a 4.20 (Unibet), probabilita' Pinnacle 25.1%, vantaggio +5.4%.", 'NOMI SQUADRA NON RICONOSCIUTI (mandami questa riga per aggiungerli): T1: X',
+    "SEGNALE A vs B: away a 4.20 (Unibet), probabilità Pinnacle 25.1%, vantaggio +5.4%.", 'NOMI SQUADRA NON RICONOSCIUTI (mandami questa riga per aggiungerli): T1: X',
     'Analisi completata. Segnali salvati: 2. Richieste football-data.org: 3, The Odds API: 3 (crediti usati nel mese: 64, rimasti: 436).'].join('\n') });
 assert.deepStrictEqual(run.credits, { used: 64, remaining: 436 });
 assert.deepStrictEqual(run.lines.map(l => l.kind), ['info', 'saving', 'signal', 'warn', 'info']);
