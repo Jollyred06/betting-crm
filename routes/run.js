@@ -9,19 +9,31 @@ const { authorized } = require('../services/auth');
  * che chiunque trovi l'URL possa consumare le tue richieste API.
  * Pensata per essere chiamata manualmente o da un cron esterno (es. cron-job.org).
  */
+let dailyRunning = false;     // un solo giro alla volta: due chiamate ravvicinate non partono in parallelo
+
 router.post('/run-daily', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  if (dailyRunning) return res.json({ success: true, giaInCorso: true });
 
+  // Chiamata da cron-job.org (senza ?detail=1): risponde SUBITO con poche parole e fa il lavoro in background.
+  // Cosi' non scade mai il timeout di 30 secondi e la risposta e' sempre minuscola (cron-job.org scarta quelle grandi).
+  // Il log completo e un eventuale errore restano salvati (scheda Log dell'app, avviso Telegram).
+  if (req.query.detail !== '1') {
+    dailyRunning = true;
+    res.json({ success: true, avviato: true });
+    runDailyAnalysis().catch(err => console.error('Errore analisi giornaliera:', err.message)).finally(() => { dailyRunning = false; });
+    return;
+  }
+
+  // Chiamata dall'app (?detail=1): aspetta la fine e mostra il log completo.
+  dailyRunning = true;
   try {
     const result = await runDailyAnalysis();
-    // Risposta minuscola di default: cron-job.org scarta le risposte grandi e segna il giro come "fallito" anche se e' riuscito.
-    // Il log completo e' gia' salvato (scheda Log dell'app). L'app usa ?detail=1 per mostrarlo subito.
-    res.json(req.query.detail === '1' ? { success: true, ...result }
-      : { success: true, segnali: result.totalValueBetsFound, partite: result.fixturesAnalyzed, richiesteQuote: result.oddsApiRequestsUsed });
+    res.json({ success: true, ...result });
   } catch (err) {
     console.error('Errore analisi giornaliera:', err.message);
     res.status(500).json({ error: err.message });
-  }
+  } finally { dailyRunning = false; }
 });
 
 const pool = require('../db/pool');
