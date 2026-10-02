@@ -51,7 +51,7 @@ function parseRun(row) {
   const m = /crediti usati nel mese: (\d+), rimasti: (\d+)/.exec(text);
   const lines = text.split('\n').filter(Boolean).map(l => ({
     text: l,
-    kind: /^SEGNALE/.test(l) ? 'signal' : /NOMI SQUADRA NON RICONOSCIUTI/.test(l) ? 'warn' : /nessun credito speso/.test(l) ? 'saving' : /non disponibili|non riuscit|errore/i.test(l) ? 'warn' : 'info'
+    kind: /^SEGNALE/.test(l) ? 'signal' : /^CONTROLLO/.test(l) ? 'info' : /NOMI SQUADRA NON RICONOSCIUTI/.test(l) ? 'warn' : /nessun credito speso/.test(l) ? 'saving' : /non disponibili|non riuscit|errore/i.test(l) ? 'warn' : 'info'
   }));
   return { at: row.run_at, success: row.success, error: row.error_message, signals: row.value_bets_found, oddsRequests: row.odds_api_requests,
     credits: m ? { used: Number(m[1]), remaining: Number(m[2]) } : null, lines };

@@ -53,9 +53,11 @@ function analyzeEvent(event, { minEdge = 0.03, maxEdge = 0.15 } = {}) {
     }
   }
   const candidates = [];
+  let top = null;   // il vantaggio piu' alto della partita, anche se sotto soglia (solo per il Log)
   for (const sel of ['home', 'draw', 'away']) {
     if (!best[sel] || count[sel] < MIN_SOFT_BOOKS) continue;
     const edge = best[sel].odd * ref.fair[sel] - 1;
+    if (!top || edge > top.edge) top = { selection: sel, edge, odd: best[sel].odd, bookmaker: best[sel].bookmaker, fair: ref.fair[sel] };
     if (edge >= minEdge && edge <= maxEdge) {
       // quote complete al momento del segnale: servono a capire se la quota migliore era davvero ottenibile (non un'unica quota fuori linea)
       const quotes = all[sel].slice().sort((x, y) => y.odd - x.odd), odds = quotes.map(q => q.odd), mid = Math.floor(odds.length / 2);
@@ -64,7 +66,7 @@ function analyzeEvent(event, { minEdge = 0.03, maxEdge = 0.15 } = {}) {
         quotes: quotes.slice(0, 12), nBooks: count[sel], nNear: odds.filter(o => o >= best[sel].odd * 0.97).length, medianOdd: Math.round(median * 1000) / 1000, sharpOdd: ref.odds ? ref.odds[sel] : null });
     }
   }
-  return { ok: true, source: ref.source, fair: ref.fair, candidates, softBooks: Math.max(count.home, count.draw, count.away) };
+  return { ok: true, source: ref.source, fair: ref.fair, candidates, top, softBooks: Math.max(count.home, count.draw, count.away) };
 }
 
 module.exports = { analyzeEvent, sharpReference, noVig, h2h, MIN_SOFT_BOOKS };

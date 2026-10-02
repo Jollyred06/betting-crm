@@ -95,6 +95,16 @@ async function insertSignal(c) {
   }
 }
 
+const SEL_IT = { home: 'vittoria casa (1)', draw: 'pareggio (X)', away: 'vittoria trasferta (2)' };
+/** Riga del Log per ogni partita controllata: solo informativa, non cambia i segnali. */
+function checkLine(label, code, a, minEdge, maxEdge) {
+  const t = a.top;
+  if (!t) return `CONTROLLO ${label} (${code}): meno di 3 bookmaker con quote, non valutabile.`;
+  const pct = (t.edge * 100).toFixed(1);
+  const esito = t.edge >= minEdge && t.edge <= maxEdge ? 'SEGNALE' : t.edge > maxEdge ? 'oltre il massimo, scartato' : 'sotto soglia';
+  return `CONTROLLO ${label} (${code}): miglior vantaggio ${t.edge >= 0 ? '+' : ''}${pct}% su ${SEL_IT[t.selection]}, quota ${t.odd.toFixed(2)} (${t.bookmaker}), Pinnacle ${(t.fair * 100).toFixed(1)}%: ${esito}.`;
+}
+
 async function runDailyAnalysisInner() {
   const log = [];
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -135,6 +145,7 @@ async function runDailyAnalysisInner() {
     const a = analyzeEvent(ev, { minEdge: MIN_EDGE, maxEdge: MAX_EDGE });
     if (!a.ok) { log.push(`${label}: ${a.reason}.`); return; }
     stats.withSharp++;
+    log.push(checkLine(label, code, a, MIN_EDGE, MAX_EDGE));
     for (const c of a.candidates) candidates.push({ ...c, code, fixtureId, label, source: a.source, home: ev.home_team, away: ev.away_team, kickoff: ev.commence_time });
   }
 
@@ -242,4 +253,4 @@ async function runDailyAnalysis() {
   }
 }
 
-module.exports = { runDailyAnalysis, stableInt };
+module.exports = { runDailyAnalysis, stableInt, checkLine };
