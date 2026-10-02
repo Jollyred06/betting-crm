@@ -1,0 +1,20 @@
+name: Giro giornaliero
+on:
+  schedule:
+    - cron: '15 9 * * *'
+    - cron: '15 10 * * *'
+  workflow_dispatch:
+jobs:
+  giro:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lancia il giro
+        env:
+          RUN_KEY: ${{ secrets.RUN_KEY }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ] && [ "$(TZ=Europe/Rome date +%H)" != "11" ]; then echo "Non è l'ora giusta"; exit 0; fi
+          for i in 1 2 3 4 5 6 7 8; do
+            curl -sf -o /dev/null -m 60 https://betting-crm.onrender.com/api/status && break
+            sleep 15
+          done
+          curl -s -o /dev/null -m 60 -w "%{http_code}\n" -X POST -H "x-run-key: $RUN_KEY" https://betting-crm.onrender.com/api/run-daily
