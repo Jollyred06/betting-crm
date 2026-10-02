@@ -16,7 +16,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 // L'unico indirizzo da ricordare: la home porta al centro di controllo.
 app.get('/', (req, res) => res.redirect('/app.html'));
 
+// Risposta breve per cron-job.org (limite sull'output).
+// I dettagli completi restano disponibili su /api/status-full.
 app.get('/api/status', (req, res) => {
+  res.status(200).send('ok');
+});
+
+app.get('/api/status-full', (req, res) => {
   res.json({
     status: 'ok',
     message: 'Betting CRM API attivo',
