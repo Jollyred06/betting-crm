@@ -34,21 +34,21 @@ function sharpReference(event) {
   const books = event.bookmakers || [];
   for (const key of SHARP) {
     const b = books.find(x => x.key === key); const p = b && h2h(b, event);
-    if (p) return { source: key, fair: noVig(p) };
+    if (p) return { source: key, fair: noVig(p), odds: p };
   }
   const ex = books.find(x => isExchange(x.key) && h2h(x, event));
-  return ex ? { source: ex.key, fair: noVig(h2h(ex, event)) } : null;
+  return ex ? { source: ex.key, fair: noVig(h2h(ex, event)), odds: h2h(ex, event) } : null;
 }
 
 function analyzeEvent(event, { minEdge = 0.03, maxEdge = 0.15 } = {}) {
   const ref = sharpReference(event);
   if (!ref) return { ok: false, reason: 'nessun riferimento Pinnacle/exchange' };
-  const best = {}, count = { home: 0, draw: 0, away: 0 };
+  const best = {}, count = { home: 0, draw: 0, away: 0 }, all = { home: [], draw: [], away: [] };
   for (const b of event.bookmakers || []) {
     if (SHARP.includes(b.key) || isExchange(b.key)) continue;
     const p = h2h(b, event); if (!p) continue;
     for (const sel of ['home', 'draw', 'away']) {
-      count[sel]++;
+      count[sel]++; all[sel].push({ bookmaker: b.title || b.key, odd: p[sel] });
       if (!best[sel] || p[sel] > best[sel].odd) best[sel] = { odd: p[sel], bookmaker: b.title || b.key };
     }
   }
@@ -56,7 +56,13 @@ function analyzeEvent(event, { minEdge = 0.03, maxEdge = 0.15 } = {}) {
   for (const sel of ['home', 'draw', 'away']) {
     if (!best[sel] || count[sel] < MIN_SOFT_BOOKS) continue;
     const edge = best[sel].odd * ref.fair[sel] - 1;
-    if (edge >= minEdge && edge <= maxEdge) candidates.push({ selection: sel, odd: best[sel].odd, bookmaker: best[sel].bookmaker, fair: ref.fair[sel], edge });
+    if (edge >= minEdge && edge <= maxEdge) {
+      // quote complete al momento del segnale: servono a capire se la quota migliore era davvero ottenibile (non un'unica quota fuori linea)
+      const quotes = all[sel].slice().sort((x, y) => y.odd - x.odd), odds = quotes.map(q => q.odd), mid = Math.floor(odds.length / 2);
+      const median = odds.length % 2 ? odds[mid] : (odds[mid - 1] + odds[mid]) / 2;
+      candidates.push({ selection: sel, odd: best[sel].odd, bookmaker: best[sel].bookmaker, fair: ref.fair[sel], edge,
+        quotes: quotes.slice(0, 12), nBooks: count[sel], nNear: odds.filter(o => o >= best[sel].odd * 0.97).length, medianOdd: Math.round(median * 1000) / 1000, sharpOdd: ref.odds ? ref.odds[sel] : null });
+    }
   }
   return { ok: true, source: ref.source, fair: ref.fair, candidates, softBooks: Math.max(count.home, count.draw, count.away) };
 }

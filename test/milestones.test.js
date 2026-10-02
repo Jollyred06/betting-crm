@@ -10,7 +10,7 @@ function makeRows(n, { clvShift = 0 } = {}) {
   const r = rng(11), out = [], leagues = ['T1', 'SP2', 'SA', 'E3', 'B1', 'I2'];
   for (let i = 0; i < n; i++) {
     const odd = 2.2 + r() * 7, p = 1 / odd * 0.97, won = r() < p;
-    out.push({ id: i + 1, odd, status: won ? 'won' : 'lost', edge_pct: 2 + r() * 8, clv_pct: (r() - 0.5) * 24 + clvShift, est_prob: p, league_code: leagues[i % 6], selection: ['home', 'draw', 'away'][i % 3], sharp_source: i % 10 ? 'pinnacle' : 'betfair_ex_eu' });
+    out.push({ id: i + 1, odd, status: won ? 'won' : 'lost', edge_pct: 2 + r() * 8, clv_pct: (r() - 0.5) * 24 + clvShift, est_prob: p, league_code: leagues[i % 6], selection: ['home', 'draw', 'away'][i % 3], sharp_source: i % 10 ? 'pinnacle' : 'betfair_ex_eu', n_near_best: i % 4 === 0 ? 1 : (i % 4 === 1 ? 3 : null) });
   }
   return out;
 }
@@ -27,6 +27,10 @@ assert.strictEqual(snap.groups.selection.casa.n + snap.groups.selection.pareggio
 assert.strictEqual(snap.groups.odds['sotto 4'].n + snap.groups.odds['4 o più'].n, 100);
 assert.ok(snap.clvCi95 && snap.clvCi95[0] < snap.avgClvPct && snap.avgClvPct < snap.clvCi95[1]); assert.ok(snap.pinnacleSharePct > 80 && snap.pinnacleSharePct < 100);
 assert.strictEqual(snap.quality.pendingNow, 7);
+// disponibilità della quota: più bookmaker / uno solo; quelle senza dato non finiscono in nessun gruppo
+const a1 = rows.filter(r => r.n_near_best === 1).length, a3 = rows.filter(r => r.n_near_best === 3).length;
+assert.strictEqual(snap.groups.avail['un solo bookmaker'].n, a1); assert.strictEqual(snap.groups.avail['più bookmaker'].n, a3);
+assert.strictEqual(snap.quality.quoteRegistrate, a1 + a3); assert.ok(a1 > 0 && a3 > 0 && a1 + a3 < 100);
 console.log('fotografia: ok');
 
 // --- decisione: regola fissata
@@ -72,9 +76,10 @@ console.log('decisione: ok');
 
   // --- CSV
   const csvPool = { query: async () => ({ rows: [{ id: 1, created_at: new Date('2026-10-02T09:00:00Z'), kickoff: '2026-10-02T18:30:00Z', league_code: 'SP2', selection: 'draw', bookmaker_odd: '3.80', bookmaker_name: 'Bet "X", Co', edge_pct: '3.2', estimated_probability: '0.2750',
-    sharp_source: 'pinnacle', status: 'won', result_score: '1-1', closing_fair_prob: '0.2600', clv_pct: '-1.2', settled_at: null, model_version: 'sharp-v1', home: 'Almeria', away: 'Sp Gijon' }] }) };
+    sharp_source: 'pinnacle', quotes: [{ bookmaker: 'A', odd: 4 }, { bookmaker: 'B', odd: 3.9 }, { bookmaker: 'C', odd: 3.5 }], sharp_odd: '3.6', n_books: 3, n_near_best: 2, status: 'won', result_score: '1-1', closing_fair_prob: '0.2600', clv_pct: '-1.2', settled_at: null, model_version: 'sharp-v1', home: 'Almeria', away: 'Sp Gijon' }] }) };
   const csv = await view.signalsCsv(csvPool), lines = csv.split('\n');
-  assert.strictEqual(lines.length, 2); assert.ok(lines[0].startsWith('id,creato,partita_inizio')); assert.strictEqual(lines[0].split(',').length, 20);
+  assert.strictEqual(lines.length, 2); assert.ok(lines[0].startsWith('id,creato,partita_inizio')); assert.strictEqual(lines[0].split(',').length, 25);
+  assert.ok(lines[1].includes(',3,2,3.6,3.9,') && lines[1].includes('"[{""bookmaker"":""A""'), 'colonne delle quote complete: ' + lines[1]);
   assert.ok(lines[1].includes('"Bet ""X"", Co"') && lines[1].includes(',Pareggio,3.80,') && lines[1].includes('Segunda Division'));        // virgole e virgolette nei nomi non rompono il file
   console.log('esportazione CSV: ok');
   console.log('TUTTI I TEST milestones OK');

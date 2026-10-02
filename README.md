@@ -16,17 +16,22 @@ non a giustificare puntate con soldi veri. Report: `backtest_serieA_report.md`, 
 Riepilogo: segnali, ROI a puntata fissa, valore medio vs chiusura con intervallo. Prova solo dopo circa 300 segnali chiusi.
 
 ## Centro di controllo (l'unico indirizzo da ricordare)
-`/` porta a `/app.html`: Home (cosa fare adesso, verdetto, numeri, controlli di salute, prossime partite), Segnali, Azioni (pulsanti: analisi, chiusura risultati, riepilogo, storico; si sbloccano con la chiave, salvata solo nel browser e inviata nell'intestazione, mai nell'indirizzo), Log, Info.
+`/` porta a `/app.html`, l'unica pagina: Home (cosa fare adesso, verdetto, numeri, bankroll di carta, tappe, controlli, prossime partite), Segnali, Strategie (quella in prova con le varianti, piu' le provate e scartate), Bankroll (curva, movimenti, deposito/prelievo/imposta saldo) e Altro (Azioni, Log, Info). La chiave si chiede solo quando serve (salvata nel browser, inviata nell'intestazione, mai nell'indirizzo). Le vecchie pagine /dashboard.html e /tracker.html portano all'app.
 Il vecchio stato JSON e' su `/api/status`.
+
+## Affidabilità e controlli
+- **Quote complete per segnale** (`quotes`, `n_near_best`): per ogni segnale si salvano tutte le quote dei bookmaker. Dice se la quota migliore era offerta da più bookmaker (ottenibile) o da uno solo (possibile quota fuori linea); compare nei segnali, nelle fotografie delle tappe, nelle strategie e nel CSV. Se le colonne non esistono ancora (schema non rieseguito) il segnale si salva comunque senza.
+- **Controllo di sistema** (Altro, Azioni): database, tabelle e colonne, variabili, The Odds API, football-data.org, Telegram, giro giornaliero, Pinnacle. Mai il valore di una chiave.
+- **Copia di sicurezza** (Altro, Azioni): file JSON con segnali, bankroll, tappe, log e partite collegate.
+- **Giro di riserva**: POST `/api/run-daily-if-missing` (cron-job.org alle 11:30). Se il giro delle 11:00 è già riuscito non fa niente; altrimenti lo esegue e avvisa su Telegram.
+- **Chiave nell'intestazione** `x-run-key`; con `ALLOW_KEY_IN_URL=0` la chiave negli indirizzi viene rifiutata.
+- **App installabile** (manifest, icone, service worker): Aggiungi a schermata Home.
 
 ## Tappe (100, 200, 300 segnali chiusi)
 Alla soglia il server salva UNA fotografia dei numeri (sui primi N segnali chiusi, con impronta sha256), mai modificabile dall'app. La regola della decisione e' fissata in `services/milestones.js` (1 ottobre 2026): 100 e 200 sono solo controlli, si decide a 300. Azioni, "Scarica i segnali (CSV)" per mandare i dati in chat all'analisi.
 
 ## Avvisi Telegram
 Un solo messaggio per giro quando compaiono NUOVI segnali (mai ripetuti), piu' un avviso se il giro fallisce. Variabili su Render: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Nell'app (Azioni): "Trova il mio chat Telegram" e "Invia un messaggio di prova"; i passi sono nella scheda Info.
-
-## Pagina Tracker
-`/tracker.html` (link "Tracker" nella dashboard): verdetto in parole semplici, riepilogo, segnali (tutti / in attesa / chiusi), prossime partite per campionato, crediti rimasti e log dell'ultimo giro. Sola lettura: nessuna chiave, nessuna azione che consumi crediti.
 
 ## Test (senza database ne' rete)
 `npm test`

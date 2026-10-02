@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../db/pool');
 const bankrollEngine = require('../services/bankrollEngine');
+const { authorized } = require('../services/auth');
 
 // Lista value bets attive, ordinate per edge decrescente
 router.get('/value-bets', async (req, res) => {
@@ -41,6 +42,7 @@ router.get('/bankroll', async (req, res) => {
 // (es. hai puntato un importo diverso da quello consigliato, o il
 // bookmaker arrotonda la vincita).
 router.post('/value-bets/:id/settle', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
   const { id } = req.params;
   const { outcome, amount: manualAmount } = req.body; // outcome: 'won' | 'lost' | 'void'
 
@@ -52,7 +54,7 @@ router.post('/value-bets/:id/settle', async (req, res) => {
     const bankrollRes = await pool.query(
       'SELECT balance_after FROM bankroll_log ORDER BY created_at DESC LIMIT 1'
     );
-    const currentBalance = bankrollRes.rows[0]?.balance_after ?? parseFloat(process.env.INITIAL_BANKROLL || '100');
+    const currentBalance = Number(bankrollRes.rows[0]?.balance_after ?? parseFloat(process.env.INITIAL_BANKROLL || '100'));   // NUMERIC arriva come testo: senza Number() i due importi si incollerebbero
 
     let amount = 0;
     if (manualAmount !== undefined && manualAmount !== null && manualAmount !== '') {
@@ -87,6 +89,7 @@ router.post('/value-bets/:id/settle', async (req, res) => {
 // Le puntate future (Kelly) si adeguano automaticamente al nuovo saldo,
 // perché il calcolo dello stake legge sempre l'ultimo balance_after.
 router.post('/bankroll/adjust', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
   const { amount, note } = req.body;
 
   const parsedAmount = parseFloat(amount);
@@ -98,7 +101,7 @@ router.post('/bankroll/adjust', async (req, res) => {
     const bankrollRes = await pool.query(
       'SELECT balance_after FROM bankroll_log ORDER BY created_at DESC LIMIT 1'
     );
-    const currentBalance = bankrollRes.rows[0]?.balance_after ?? parseFloat(process.env.INITIAL_BANKROLL || '100');
+    const currentBalance = Number(bankrollRes.rows[0]?.balance_after ?? parseFloat(process.env.INITIAL_BANKROLL || '100'));   // NUMERIC arriva come testo: senza Number() i due importi si incollerebbero
     const newBalance = Number((currentBalance + parsedAmount).toFixed(2));
 
     await pool.query(

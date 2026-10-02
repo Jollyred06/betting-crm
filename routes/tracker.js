@@ -17,6 +17,12 @@ router.get('/runs', async (req, res) => {
   try { res.json(await view.getRuns(pool, req.query.limit)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 router.get('/config', (req, res) => res.json(view.getConfig()));
+router.get('/bankroll', async (req, res) => {
+  try { res.json(await view.getBankroll(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+router.get('/strategies', async (req, res) => {
+  try { res.json(await view.getStrategies(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/milestones', async (req, res) => {
   try { res.json(await require('../services/milestones').getMilestones(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -24,6 +30,17 @@ router.get('/milestones', async (req, res) => {
 // Verifica della chiave per sbloccare i pulsanti della pagina (la chiave resta nel browser, mai nella pagina).
 const { authorized } = require('../services/auth');
 router.post('/auth-check', (req, res) => authorized(req) ? res.json({ ok: true }) : res.status(401).json({ ok: false, error: 'Chiave non valida' }));
+
+// Copia di sicurezza di tutti i dati che non si possono riscaricare (protetta dalla chiave).
+router.get('/backup.json', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida' });
+  try {
+    const b = await require('../services/backup').buildBackup(pool);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="backup_betting_crm_${b.creato.slice(0, 10)}.json"`);
+    res.send(JSON.stringify(b));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 // Esportazione completa dei segnali: protetta dalla chiave (e' un file pesante e serve solo a te).
 router.get('/export.csv', async (req, res) => {

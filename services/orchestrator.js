@@ -77,6 +77,24 @@ async function upsertEventFixture(ev, code) {
   return fid;
 }
 
+/** Salva un segnale con le quote complete. Se le colonne nuove non esistono ancora (schema non rieseguito) salva la versione base: non si perde mai un segnale. */
+async function insertSignal(c) {
+  const base = [c.fixtureId, c.selection, c.odd, c.bookmaker, c.fair, 1 / c.odd, c.edge * 100, TRACK_STAKE, c.source, c.code];
+  try {
+    await pool.query(
+      `INSERT INTO value_bets (fixture_id, market, selection, bookmaker_odd, bookmaker_name, estimated_probability, implied_probability,
+                               edge_pct, recommended_stake, model_version, strategy, sharp_source, league_code, quotes, sharp_odd, n_books, n_near_best)
+       VALUES ($1,'1X2',$2,$3,$4,$5,$6,$7,$8,'sharp-v1','A_sharp',$9,$10,$11,$12,$13,$14)`,
+      [...base, JSON.stringify(c.quotes || null), c.sharpOdd ?? null, c.nBooks ?? null, c.nNear ?? null]);
+  } catch (err) {
+    if (!/column .* does not exist|colonna .* non esiste/i.test(err.message)) throw err;
+    await pool.query(
+      `INSERT INTO value_bets (fixture_id, market, selection, bookmaker_odd, bookmaker_name, estimated_probability, implied_probability,
+                               edge_pct, recommended_stake, model_version, strategy, sharp_source, league_code)
+       VALUES ($1,'1X2',$2,$3,$4,$5,$6,$7,$8,'sharp-v1','A_sharp',$9,$10)`, base);
+  }
+}
+
 async function runDailyAnalysisInner() {
   const log = [];
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -191,11 +209,7 @@ async function runDailyAnalysisInner() {
   for (const c of candidates.slice(0, MAX_DAILY_SIGNALS)) {
     const dup = await pool.query(`SELECT 1 FROM value_bets WHERE fixture_id=$1 AND market='1X2' AND selection=$2 AND strategy='A_sharp'`, [c.fixtureId, c.selection]);
     if (dup.rows.length) continue;
-    await pool.query(
-      `INSERT INTO value_bets (fixture_id, market, selection, bookmaker_odd, bookmaker_name, estimated_probability, implied_probability,
-                               edge_pct, recommended_stake, model_version, strategy, sharp_source, league_code)
-       VALUES ($1,'1X2',$2,$3,$4,$5,$6,$7,$8,'sharp-v1','A_sharp',$9,$10)`,
-      [c.fixtureId, c.selection, c.odd, c.bookmaker, c.fair, 1 / c.odd, c.edge * 100, TRACK_STAKE, c.source, c.code]);
+    await insertSignal(c);
     log.push(`SEGNALE ${c.label}: ${c.selection} a ${c.odd.toFixed(2)} (${c.bookmaker}), probabilità Pinnacle ${(c.fair * 100).toFixed(1)}%, vantaggio +${(c.edge * 100).toFixed(1)}%.`);
     signalsSaved++; saved.push(c);
   }

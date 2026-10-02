@@ -40,6 +40,8 @@ const pool = require('../db/pool');
 const { buildStats } = require('../services/weeklyReport');
 const { settlePending } = require('../services/settler');
 const { checkMilestones } = require('../services/milestones');
+const { ranToday } = require('../services/runState');
+const { runSystemCheck } = require('../services/systemCheck');
 const { sendTelegramNotification, sendTelegramDetailed, findTelegramChats, sendEmailNotification, sendWhatsAppNotification } = require('../services/notifier');
 
 // Riepilogo settimanale: da mettere su cron-job.org una volta a settimana (POST). Invia anche la notifica.
@@ -50,6 +52,26 @@ router.post('/weekly-report', async (req, res) => {
     await sendTelegramNotification(stats.text); await sendEmailNotification('Betting CRM: riepilogo settimanale', stats.text); await sendWhatsAppNotification(stats.text);
     res.json(req.query.detail === '1' ? { success: true, ...stats } : { success: true });     // risposta minuscola per cron-job.org
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Giro di RISERVA: da mettere su cron-job.org alle 11:30. Se il giro delle 11:00 e' gia' riuscito non fa niente (0 crediti);
+// altrimenti lo esegue lui e te lo dice su Telegram.
+router.post('/run-daily-if-missing', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  if (dailyRunning) return res.json({ success: true, giaInCorso: true });
+  try { if (await ranToday(pool)) return res.json({ success: true, saltato: true }); } catch (e) { /* se non si riesce a controllare, meglio eseguire */ }
+  dailyRunning = true;
+  res.json({ success: true, avviato: true, riserva: true });
+  runDailyAnalysis()
+    .then(() => sendTelegramNotification('🔁 <b>Giro di riserva</b>\nIl giro delle 11:00 non risultava: l\'ho eseguito adesso. Controlla il job delle 11:00 su cron-job.org.'))
+    .catch(err => console.error('Errore giro di riserva:', err.message))
+    .finally(() => { dailyRunning = false; });
+});
+
+// Controllo di sistema: database, tabelle, chiavi, servizi esterni, Telegram e giro giornaliero in un solo colpo.
+router.post('/system-check', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json({ success: true, ...(await runSystemCheck(pool)) }); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Chiude subito i segnali di cui c'e' il risultato (lo fa gia' l'analisi giornaliera).

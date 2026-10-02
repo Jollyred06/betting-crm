@@ -13,16 +13,13 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Le vecchie pagine non esistono piu': tutto e' nell'app. I vecchi preferiti portano li'.
+app.get(['/dashboard.html', '/tracker.html'], (req, res) => res.redirect('/app.html'));
+
 // L'unico indirizzo da ricordare: la home porta al centro di controllo.
 app.get('/', (req, res) => res.redirect('/app.html'));
 
-// Risposta breve per cron-job.org (limite sull'output).
-// I dettagli completi restano disponibili su /api/status-full.
 app.get('/api/status', (req, res) => {
-  res.status(200).send('ok');
-});
-
-app.get('/api/status-full', (req, res) => {
   res.json({
     status: 'ok',
     message: 'Betting CRM API attivo',

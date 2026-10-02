@@ -198,3 +198,9 @@ CREATE TABLE IF NOT EXISTS milestone_snapshots (
   decision JSONB,
   hash TEXT NOT NULL
 );
+
+-- Quote complete al momento del segnale: servono a verificare se la quota migliore era davvero ottenibile
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS quotes JSONB;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS sharp_odd NUMERIC(8,3);
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS n_books INTEGER;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS n_near_best INTEGER;

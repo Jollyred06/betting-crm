@@ -31,6 +31,8 @@ function ci95(values) {
   return [round(m - h), round(m + h)];
 }
 
+const known = r => r.n_near_best !== null && r.n_near_best !== undefined;
+
 function group(rows) {
   if (!rows.length) return { n: 0, avgClvPct: null, roiFlatPct: null, hitRatePct: null };
   const s = summarize(rows.map(r => ({ odd: r.odd, status: r.status, edge_pct: r.edge_pct, clv_pct: r.clv_pct })));
@@ -54,9 +56,11 @@ function buildSnapshot(rows, { pendingNow = null } = {}) {
       edge: { '2-3%': group(p(r => Number(r.edge_pct) < 3)), '3% o più': group(p(r => Number(r.edge_pct) >= 3)) },
       tier: { maggiori: group(p(r => !MINOR.has(r.league_code))), minori: group(p(r => MINOR.has(r.league_code))) },
       selection: { casa: group(p(r => r.selection === 'home')), pareggio: group(p(r => r.selection === 'draw')), trasferta: group(p(r => r.selection === 'away')) },
-      odds: { 'sotto 4': group(p(r => Number(r.odd) < 4)), '4 o più': group(p(r => Number(r.odd) >= 4)) }
+      odds: { 'sotto 4': group(p(r => Number(r.odd) < 4)), '4 o più': group(p(r => Number(r.odd) >= 4)) },
+      // la quota migliore era offerta da più bookmaker (ottenibile) o da uno solo (possibile quota fuori linea)?
+      avail: { 'più bookmaker': group(p(r => known(r) && Number(r.n_near_best) >= 2)), 'un solo bookmaker': group(p(r => known(r) && Number(r.n_near_best) === 1)) }
     },
-    quality: { pendingNow }
+    quality: { pendingNow, quoteRegistrate: rows.filter(r => r.n_near_best !== null && r.n_near_best !== undefined).length }
   };
 }
 
@@ -81,7 +85,7 @@ async function checkMilestones(pool) {
     const cnt = await pool.query(`SELECT COUNT(*)::int AS n FROM value_bets WHERE strategy = 'A_sharp' AND status IN ('won','lost')`);
     if (Number((cnt.rows[0] || {}).n || 0) < target) break;                                   // le tappe seguenti non sono raggiunte
     const { rows } = await pool.query(
-      `SELECT id, bookmaker_odd AS odd, status, edge_pct, clv_pct, estimated_probability AS est_prob, league_code, selection, sharp_source
+      `SELECT id, bookmaker_odd AS odd, status, edge_pct, clv_pct, estimated_probability AS est_prob, league_code, selection, sharp_source, n_near_best
        FROM value_bets WHERE strategy = 'A_sharp' AND status IN ('won','lost') ORDER BY settled_at ASC NULLS LAST, id ASC LIMIT $1`, [target]);
     const pend = await pool.query(`SELECT COUNT(*)::int AS n FROM value_bets WHERE strategy = 'A_sharp' AND status = 'pending'`);
     const snapshot = buildSnapshot(rows, { pendingNow: Number((pend.rows[0] || {}).n || 0) });
