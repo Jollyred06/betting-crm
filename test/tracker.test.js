@@ -19,9 +19,9 @@ const ev = { home_team: 'Inter Milan', away_team: 'AC Milan', commence_time: '20
 let a = analyzeEvent(ev);
 assert.strictEqual(a.ok, true); assert.strictEqual(a.source, 'pinnacle');
 const p = a.fair; assert.ok(Math.abs(p.home + p.draw + p.away - 1) < 1e-12);
-// Pinnacle: 1/2 + 1/3.5 + 1/3.8 = 1.0486 -> fair away = 0.2632/1.0486 = 0.2510; migliore quota away 4.20 -> edge = 4.20*0.2510-1 = +5.4%
+// Pinnacle 2.00/3.50/3.80, margine tolto con il metodo power (c = 1.0475 tale che somma((1/quota)^c) = 1): fair away = 0.2470; migliore quota away 4.20 -> edge = 4.20*0.2470-1 = +3.7%
 const away = a.candidates.find(c => c.selection === 'away');
-assert.ok(away && away.bookmaker === 'Unibet' && away.odd === 4.20 && Math.abs(away.edge - 0.0541) < 0.002, JSON.stringify(a.candidates));
+assert.ok(away && away.bookmaker === 'Unibet' && away.odd === 4.20 && Math.abs(away.edge - 0.0373) < 0.002, JSON.stringify(a.candidates));
 assert.ok(!a.candidates.some(c => c.selection === 'home'));                       // home: 2.05*0.4774-1 = -2.1%: nessun segnale
 // quote troppo alte (>15%) scartate; Pinnacle e exchange non contano come "morbidi"
 const wild = { ...ev, bookmakers: [...ev.bookmakers, bk('sport888', 1.9, 3.4, 6.0)] };

@@ -204,3 +204,18 @@ ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS quotes JSONB;
 ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS sharp_odd NUMERIC(8,3);
 ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS n_books INTEGER;
 ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS n_near_best INTEGER;
+
+-- Cattura della quota di chiusura Pinnacle e CLV vero (services/closingCapture.js): quota presa, massimo di mercato, Pinnacle pre e chiusura
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS quota_presa NUMERIC(8,3);
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS presa_book TEXT;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS quota_max NUMERIC(8,3);
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS max_book TEXT;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS goldbet_odd NUMERIC(8,3);
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS odds_event_id TEXT;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS pin_pre_odds JSONB;
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS close_pin_h NUMERIC(8,3);
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS close_pin_d NUMERIC(8,3);
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS close_pin_a NUMERIC(8,3);
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS clv_source TEXT;            -- 'pinnacle' (chiusura catturata) oppure 'avg' (ripiego sulla media di chiusura)
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS close_lag_min INTEGER;      -- minuti tra la cattura e il calcio d'inizio
+ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS close_captured_at TIMESTAMP;

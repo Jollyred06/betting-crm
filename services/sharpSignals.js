@@ -1,8 +1,11 @@
 /**
  * Strategia A dal vivo ("quote contro il bookmaker piu' preciso"), funzioni PURE.
- * Riferimento di prezzo onesto = Pinnacle (o, se manca, una exchange), margine tolto in proporzione.
- * Si segnala l'esito dove la MIGLIORE quota tra i bookmaker "morbidi" supera la probabilita' onesta
- * di almeno minEdge (e al massimo maxEdge: sopra, quasi sempre e' una quota sbagliata o scaduta).
+ * Riferimento di prezzo onesto = Pinnacle (o, se manca, una exchange), margine tolto con il metodo "power":
+ * si cerca c tale che somma((1/quota)^c) = 1 e la probabilita' onesta e' (1/quota)^c.
+ * Edge = quota_book * p_pinnacle_pre - 1, dove quota_book e' la MIGLIORE quota tra i bookmaker "morbidi".
+ * Si segnala l'esito solo se l'edge sta tra minEdge e maxEdge (default 2% e 25%: sopra, quasi sempre e' una quota sbagliata o scaduta).
+ * Per ogni segnale si restituiscono anche: la quota presa (quota_presa), la quota massima di tutto il mercato (quota_max),
+ * la quota Pinnacle pre-partita e l'eventuale quota Goldbet se il bookmaker compare tra le quote.
  * NOTA: nel backtest la strategia usava le quote di Bet365; qui Bet365 non e' disponibile, quindi
  * si usa la quota migliore tra tutti i bookmaker europei: e' una variante, non la stessa cosa.
  */
@@ -23,10 +26,24 @@ function h2h(book, event) {
   return p.home > 1 && p.draw > 1 && p.away > 1 ? p : null;
 }
 
+/** Margine tolto in proporzione (metodo vecchio, tenuto per i confronti). */
 function noVig(p) {
   const inv = { home: 1 / p.home, draw: 1 / p.draw, away: 1 / p.away };
   const s = inv.home + inv.draw + inv.away;
   return { home: inv.home / s, draw: inv.draw / s, away: inv.away / s };
+}
+
+/** Margine tolto con il metodo "power": trova c con somma((1/quota)^c) = 1. Rispetto al metodo proporzionale da' meno probabilita' alle quote alte. */
+function noVigPower(p) {
+  const q = [1 / p.home, 1 / p.draw, 1 / p.away];
+  if (q[0] + q[1] + q[2] <= 1) return noVig(p);          // nessun margine (o negativo): niente da togliere in questo modo
+  let lo = 1, hi = 30;
+  for (let i = 0; i < 100; i++) {
+    const c = (lo + hi) / 2, s = q[0] ** c + q[1] ** c + q[2] ** c;
+    if (s > 1) lo = c; else hi = c;
+  }
+  const c = (lo + hi) / 2, r = q.map(x => x ** c), s = r[0] + r[1] + r[2];
+  return { home: r[0] / s, draw: r[1] / s, away: r[2] / s };
 }
 
 /** Riferimento onesto dell'evento: Pinnacle se presente, altrimenti la prima exchange. */
@@ -34,19 +51,31 @@ function sharpReference(event) {
   const books = event.bookmakers || [];
   for (const key of SHARP) {
     const b = books.find(x => x.key === key); const p = b && h2h(b, event);
-    if (p) return { source: key, fair: noVig(p), odds: p };
+    if (p) return { source: key, fair: noVigPower(p), odds: p };
   }
   const ex = books.find(x => isExchange(x.key) && h2h(x, event));
-  return ex ? { source: ex.key, fair: noVig(h2h(ex, event)), odds: h2h(ex, event) } : null;
+  return ex ? { source: ex.key, fair: noVigPower(h2h(ex, event)), odds: h2h(ex, event) } : null;
 }
 
-function analyzeEvent(event, { minEdge = 0.03, maxEdge = 0.15 } = {}) {
+/** Quota "presa": se BOOK_PRESA elenca i tuoi bookmaker (nomi anche parziali, es. "goldbet,codere") e uno ha la quota, si usa la migliore tra quelli; altrimenti la migliore in assoluto. */
+function pickPresa(quotes, best) {
+  const prefs = (process.env.BOOK_PRESA || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  for (const pref of prefs) {
+    const hit = quotes.find(q => String(q.bookmaker).toLowerCase().includes(pref));   // quotes e' ordinata dalla migliore
+    if (hit) return hit;
+  }
+  return best;
+}
+
+function analyzeEvent(event, { minEdge = 0.02, maxEdge = 0.25 } = {}) {
   const ref = sharpReference(event);
   if (!ref) return { ok: false, reason: 'nessun riferimento Pinnacle/exchange' };
-  const best = {}, count = { home: 0, draw: 0, away: 0 }, all = { home: [], draw: [], away: [] };
+  const best = {}, count = { home: 0, draw: 0, away: 0 }, all = { home: [], draw: [], away: [] }, maxAll = {};
   for (const b of event.bookmakers || []) {
-    if (SHARP.includes(b.key) || isExchange(b.key)) continue;
     const p = h2h(b, event); if (!p) continue;
+    for (const sel of ['home', 'draw', 'away'])                 // massimo di TUTTO il mercato (anche Pinnacle ed exchange)
+      if (!maxAll[sel] || p[sel] > maxAll[sel].odd) maxAll[sel] = { odd: p[sel], bookmaker: b.title || b.key };
+    if (SHARP.includes(b.key) || isExchange(b.key)) continue;
     for (const sel of ['home', 'draw', 'away']) {
       count[sel]++; all[sel].push({ bookmaker: b.title || b.key, odd: p[sel] });
       if (!best[sel] || p[sel] > best[sel].odd) best[sel] = { odd: p[sel], bookmaker: b.title || b.key };
@@ -59,14 +88,17 @@ function analyzeEvent(event, { minEdge = 0.03, maxEdge = 0.15 } = {}) {
     const edge = best[sel].odd * ref.fair[sel] - 1;
     if (!top || edge > top.edge) top = { selection: sel, edge, odd: best[sel].odd, bookmaker: best[sel].bookmaker, fair: ref.fair[sel] };
     if (edge >= minEdge && edge <= maxEdge) {
-      // quote complete al momento del segnale: servono a capire se la quota migliore era davvero ottenibile (non un'unica quota fuori linea)
+      // quote di TUTTI i bookmaker al momento del segnale: servono a capire se la quota migliore era davvero ottenibile (non un'unica quota fuori linea)
       const quotes = all[sel].slice().sort((x, y) => y.odd - x.odd), odds = quotes.map(q => q.odd), mid = Math.floor(odds.length / 2);
       const median = odds.length % 2 ? odds[mid] : (odds[mid - 1] + odds[mid]) / 2;
+      const presa = pickPresa(quotes, best[sel]), gold = quotes.find(q => /goldbet/i.test(q.bookmaker));
       candidates.push({ selection: sel, odd: best[sel].odd, bookmaker: best[sel].bookmaker, fair: ref.fair[sel], edge,
-        quotes: quotes.slice(0, 12), nBooks: count[sel], nNear: odds.filter(o => o >= best[sel].odd * 0.97).length, medianOdd: Math.round(median * 1000) / 1000, sharpOdd: ref.odds ? ref.odds[sel] : null });
+        quotes, nBooks: count[sel], nNear: odds.filter(o => o >= best[sel].odd * 0.97).length, medianOdd: Math.round(median * 1000) / 1000,
+        sharpOdd: ref.odds ? ref.odds[sel] : null, sharpOdds: ref.odds || null,
+        presaOdd: presa.odd, presaBook: presa.bookmaker ?? null, maxOdd: maxAll[sel].odd, maxBook: maxAll[sel].bookmaker, goldbetOdd: gold ? gold.odd : null });
     }
   }
   return { ok: true, source: ref.source, fair: ref.fair, candidates, top, softBooks: Math.max(count.home, count.draw, count.away) };
 }
 
-module.exports = { analyzeEvent, sharpReference, noVig, h2h, MIN_SOFT_BOOKS };
+module.exports = { analyzeEvent, sharpReference, noVig, noVigPower, h2h, pickPresa, MIN_SOFT_BOOKS };

@@ -45,7 +45,11 @@ process.env.RUN_SECRET_KEY = 'k';
   const { runDailyAnalysis } = require('../services/orchestrator');
   await runDailyAnalysis();
   assert.strictEqual(inserts.length, 1); assert.strictEqual(inserts[0].withQuotes, true);
-  assert.strictEqual(inserts[0].params[1], 'away'); assert.strictEqual(inserts[0].params.length, 14);
+  assert.strictEqual(inserts[0].params[1], 'away'); assert.strictEqual(inserts[0].params.length, 21);
+  assert.strictEqual(inserts[0].params[7], 2);                                                               // puntata fissa di carta: 2 euro
+  const px = inserts[0].params;                                                                              // quota presa, massimo di mercato, Goldbet (assente), id evento, Pinnacle pre
+  assert.strictEqual(px[14], 4.3); assert.strictEqual(px[15], 'A'); assert.strictEqual(px[16], 4.3); assert.strictEqual(px[17], 'A'); assert.strictEqual(px[18], null);
+  assert.strictEqual(px[19], 'e1'); assert.deepStrictEqual(JSON.parse(px[20]), { home: 2, draw: 3.5, away: 3.8 });
   assert.strictEqual(JSON.parse(inserts[0].params[10]).length, 4); assert.strictEqual(inserts[0].params[11], 3.8); assert.strictEqual(inserts[0].params[12], 4); assert.strictEqual(inserts[0].params[13], 2);
   inserts.length = 0; schemaOld = true; await runDailyAnalysis();                                            // schema vecchio: il segnale si salva lo stesso
   assert.strictEqual(inserts.length, 1); assert.strictEqual(inserts[0].withQuotes, false); assert.strictEqual(inserts[0].params.length, 10);

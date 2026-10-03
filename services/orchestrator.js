@@ -25,9 +25,9 @@ require('dotenv').config();
  * Nei test questa strategia NON ha mostrato un vantaggio dimostrato: qui serve a misurarla dal vivo.
  */
 const COMPETITIONS = (process.env.COMPETITIONS || DEFAULT_COMPETITIONS).split(',').map(s => s.trim()).filter(c => LEAGUES[c]);
-const MIN_EDGE = parseFloat(process.env.MIN_EDGE || '0.03'), MAX_EDGE = 0.15;   // MIN_EDGE modificabile da Render (es. 0.02 = più segnali, più deboli)
+const MIN_EDGE = parseFloat(process.env.MIN_EDGE || '0.02'), MAX_EDGE = parseFloat(process.env.MAX_EDGE || '0.25');   // edge = quota_book * p_pinnacle_pre - 1, tra 2% e 25% (modificabili da Render)
 const MAX_DAILY_SIGNALS = parseInt(process.env.MAX_DAILY_SIGNALS || '40', 10);
-const TRACK_STAKE = parseFloat(process.env.TRACK_STAKE || '2');   // puntata fissa "di carta", per confrontare i segnali tra loro
+const TRACK_STAKE = parseFloat(process.env.TRACK_STAKE || '2');   // puntata fissa di carta in euro (2 = la puntata minima), niente Kelly: tutti i segnali pesano uguale
 const WINDOW_HOURS = 24;
 
 /** Memoria della "prossima partita" di ogni campionato, per non spendere crediti quando non si gioca. Se la tabella manca, si procede senza. */
@@ -77,17 +77,35 @@ async function upsertEventFixture(ev, code) {
   return fid;
 }
 
-/** Salva un segnale con le quote complete. Se le colonne nuove non esistono ancora (schema non rieseguito) salva la versione base: non si perde mai un segnale. */
+const missingColumn = err => /column .* does not exist|colonna .* non esiste/i.test(err.message);
+
+/** Salva un segnale con le quote complete. Tre livelli: tutto (quota presa, massimo, Pinnacle pre, id evento) -> come prima -> versione base: non si perde mai un segnale. */
 async function insertSignal(c) {
   const base = [c.fixtureId, c.selection, c.odd, c.bookmaker, c.fair, 1 / c.odd, c.edge * 100, TRACK_STAKE, c.source, c.code];
+  const extra = [JSON.stringify(c.quotes || null), c.sharpOdd ?? null, c.nBooks ?? null, c.nNear ?? null];
+  const closing = [c.presaOdd ?? c.odd, c.presaBook ?? c.bookmaker, c.maxOdd ?? null, c.maxBook ?? null, c.goldbetOdd ?? null, c.eventId ?? null, c.sharpOdds ? JSON.stringify(c.sharpOdds) : null];
+  try {
+    await pool.query(
+      `INSERT INTO value_bets (fixture_id, market, selection, bookmaker_odd, bookmaker_name, estimated_probability, implied_probability,
+                               edge_pct, recommended_stake, model_version, strategy, sharp_source, league_code, quotes, sharp_odd, n_books, n_near_best,
+                               quota_presa, presa_book, quota_max, max_book, goldbet_odd, odds_event_id, pin_pre_odds)
+       VALUES ($1,'1X2',$2,$3,$4,$5,$6,$7,$8,'sharp-v1','A_sharp',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+      [...base, ...extra, ...closing]);
+  } catch (err) {
+    if (!missingColumn(err)) throw err;
+    await insertSignalPrev(base, extra);
+  }
+}
+
+async function insertSignalPrev(base, extra) {
   try {
     await pool.query(
       `INSERT INTO value_bets (fixture_id, market, selection, bookmaker_odd, bookmaker_name, estimated_probability, implied_probability,
                                edge_pct, recommended_stake, model_version, strategy, sharp_source, league_code, quotes, sharp_odd, n_books, n_near_best)
        VALUES ($1,'1X2',$2,$3,$4,$5,$6,$7,$8,'sharp-v1','A_sharp',$9,$10,$11,$12,$13,$14)`,
-      [...base, JSON.stringify(c.quotes || null), c.sharpOdd ?? null, c.nBooks ?? null, c.nNear ?? null]);
+      [...base, ...extra]);
   } catch (err) {
-    if (!/column .* does not exist|colonna .* non esiste/i.test(err.message)) throw err;
+    if (!missingColumn(err)) throw err;
     await pool.query(
       `INSERT INTO value_bets (fixture_id, market, selection, bookmaker_odd, bookmaker_name, estimated_probability, implied_probability,
                                edge_pct, recommended_stake, model_version, strategy, sharp_source, league_code)
@@ -108,7 +126,8 @@ function checkLine(label, code, a, minEdge, maxEdge) {
 async function runDailyAnalysisInner() {
   const log = [];
   const todayStr = new Date().toISOString().slice(0, 10);
-  let signalsSaved = 0, fixturesAnalyzed = 0;
+  let signalsSaved = 0, fixturesAnalyzed = 0, lowCredits = false;
+  if (oddsApi.resetRun) oddsApi.resetRun();
   const unresolved = {};                       // nomi squadra non riconosciuti, per campionato
 
   // 1) chiusura automatica dei segnali passati
@@ -146,7 +165,7 @@ async function runDailyAnalysisInner() {
     if (!a.ok) { log.push(`${label}: ${a.reason}.`); return; }
     stats.withSharp++;
     log.push(checkLine(label, code, a, MIN_EDGE, MAX_EDGE));
-    for (const c of a.candidates) candidates.push({ ...c, code, fixtureId, label, source: a.source, home: ev.home_team, away: ev.away_team, kickoff: ev.commence_time });
+    for (const c of a.candidates) candidates.push({ ...c, code, fixtureId, label, source: a.source, home: ev.home_team, away: ev.away_team, kickoff: ev.commence_time, eventId: ev.id });
   }
 
   // 2a) campionati coperti da football-data.org: le partite di oggi arrivano da li'
@@ -163,7 +182,7 @@ async function runDailyAnalysisInner() {
     if (!names.length) { log.push(`${code}: nessuno storico per abbinare i nomi delle squadre, campionato saltato.`); continue; }
     let events = [];
     try { events = await oddsApi.getOddsForCompetition(code); }
-    catch (err) { log.push(`${code}: quote non disponibili (${err.message}).`); continue; }
+    catch (err) { if (/soglia di sicurezza/.test(err.message)) lowCredits = true; log.push(`${code}: quote non disponibili (${err.message}).`); continue; }
     const stats = { withSharp: 0 }; let matched = 0;
     for (const match of matches) {
       const label = `${match.homeTeam.name} vs ${match.awayTeam.name}`;
@@ -192,7 +211,7 @@ async function runDailyAnalysisInner() {
     if (!names.length) { log.push(`${code}: nessuno storico per abbinare i nomi delle squadre, campionato saltato.`); continue; }
     let events = [];
     try { events = await oddsApi.getOddsForCompetition(code); }
-    catch (err) { log.push(`${code}: quote non disponibili (${err.message}).`); continue; }
+    catch (err) { if (/soglia di sicurezza/.test(err.message)) lowCredits = true; log.push(`${code}: quote non disponibili (${err.message}).`); continue; }
     await saveSchedule(code, events);
     // controllo "a secco" su TUTTE le partite ricevute (anche quelle dei prossimi giorni, stessa chiamata: nessun credito in più):
     // dice ora se Pinnacle c'è e se i nomi si riconoscono, senza aspettare che riprenda il campionato
@@ -234,9 +253,16 @@ async function runDailyAnalysisInner() {
   const bad = Object.entries(unresolved).map(([code, s]) => `${code}: ${[...s].join('; ')}`);
   if (bad.length) log.push(`NOMI SQUADRA NON RICONOSCIUTI (mandami questa riga per aggiungerli): ${bad.join(' | ')}`);
   const cr = oddsApi.getCredits ? oddsApi.getCredits() : {};
-  log.push(`Analisi completata. Segnali salvati: ${signalsSaved}. Richieste football-data.org: ${footballData.getRequestCount()}, The Odds API: ${oddsApi.getRequestCount()}` +
+  const runReq = oddsApi.getRunRequestCount ? oddsApi.getRunRequestCount() : oddsApi.getRequestCount();
+  const spent = oddsApi.getRunSpent ? oddsApi.getRunSpent() : null;
+  log.push(`Analisi completata. Segnali salvati: ${signalsSaved}. Richieste football-data.org: ${footballData.getRequestCount()}, The Odds API: ${runReq} in questo giro` +
+    (spent !== null ? `, crediti spesi: ${spent}` : '') +
     (cr && cr.remaining !== null && cr.remaining !== undefined ? ` (crediti usati nel mese: ${cr.used}, rimasti: ${cr.remaining}).` : '.'));
-  return { log, totalValueBetsFound: signalsSaved, fixturesAnalyzed, footballDataRequestsUsed: footballData.getRequestCount(), oddsApiRequestsUsed: oddsApi.getRequestCount() };
+  if (lowCredits) {
+    log.push('ATTENZIONE: crediti The Odds API sotto la soglia di sicurezza, alcuni campionati non sono stati controllati.');
+    try { await sendTelegramNotification(`⚠️ <b>Crediti The Odds API quasi finiti</b>\nRimasti: ${cr && cr.remaining}. Le quote dei campionati non vengono più richieste fino al reset del mese.`); } catch (e) { /* notifica facoltativa */ }
+  }
+  return { log, totalValueBetsFound: signalsSaved, fixturesAnalyzed, footballDataRequestsUsed: footballData.getRequestCount(), oddsApiRequestsUsed: oddsApi.getRunRequestCount ? oddsApi.getRunRequestCount() : oddsApi.getRequestCount() };
 }
 
 async function runDailyAnalysis() {

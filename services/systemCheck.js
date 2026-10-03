@@ -7,7 +7,7 @@ const view = require('./trackerView');
 const { getKeyUsage } = require('./auth');
 
 const TABLES = ['value_bets', 'fixtures', 'teams', 'historical_matches', 'bankroll_log', 'run_logs', 'league_schedule', 'milestone_snapshots'];
-const COLUMNS = ['strategy', 'league_code', 'clv_pct', 'settled_at', 'result_score', 'quotes', 'n_near_best'];
+const COLUMNS = ['strategy', 'league_code', 'clv_pct', 'settled_at', 'result_score', 'quotes', 'n_near_best', 'quota_presa', 'quota_max', 'odds_event_id', 'close_pin_h', 'clv_source'];
 const RUN_TITLES = ['Giro automatico', 'Il giro di oggi non è partito', 'Il giro automatico non parte', 'Ultimo giro fallito', 'Nessun giro registrato'];
 
 function defaultHttp() { const axios = require('axios'); return { get: (url, opts) => axios.get(url, { timeout: 15000, ...opts }) }; }
@@ -28,7 +28,7 @@ async function runSystemCheck(pool, { env = process.env, http = defaultHttp(), n
       else {
         const c = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name = 'value_bets'`);
         const have = new Set(c.rows.map(r => r.column_name)), lack = COLUMNS.filter(x => !have.has(x));
-        if (lack.length) push('warn', 'Colonne mancanti', `Nella tabella dei segnali mancano: ${lack.join(', ')}. Esegui di nuovo tutto db/schema.sql: finché non lo fai, le quote complete non vengono salvate.`);
+        if (lack.length) push('warn', 'Colonne mancanti', `Nella tabella dei segnali mancano: ${lack.join(', ')}. Esegui di nuovo tutto db/schema.sql: finché non lo fai, le quote complete e la quota di chiusura Pinnacle non vengono salvate.`);
         else push('ok', 'Tabelle e colonne', 'Tutte presenti.');
       }
     } catch (e) { push('warn', 'Tabelle', `Non riesco a controllarle (${why(e)}).`); }

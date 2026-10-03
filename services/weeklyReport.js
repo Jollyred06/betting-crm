@@ -10,7 +10,11 @@ function summarize(bets) {
     const m = mean(clvs), sd = Math.sqrt(clvs.reduce((s, x) => s + (x - m) ** 2, 0) / (clvs.length - 1));
     clvCi = [m - 1.96 * sd / Math.sqrt(clvs.length), m + 1.96 * sd / Math.sqrt(clvs.length)];
   }
+  // cattura = quanta parte dello spazio tra Pinnacle (pre) e il massimo del mercato ha preso la quota presa: (presa - pin) / (max - pin)
+  const caps = bets.map(b => { const o = Number(b.odd), pin = Number(b.pin_pre), mx = Number(b.max_odd); return pin > 1 && mx > pin ? (o - pin) / (mx - pin) : null; })
+    .filter(v => v !== null && Number.isFinite(v));
   return {
+    captureAvgPct: caps.length ? mean(caps) * 100 : null, nCapture: caps.length,
     signals: bets.length, settled: settled.length, pending: bets.filter(b => b.status === 'pending').length,
     hitRatePct: settled.length ? (settled.filter(b => b.status === 'won').length / settled.length) * 100 : null,
     roiFlatPct: profits.length ? mean(profits) * 100 : null,
@@ -22,7 +26,7 @@ function summarize(bets) {
 const f = (v, d = 1, sign = false) => (v === null || v === undefined ? '—' : (sign && v >= 0 ? '+' : '') + Number(v).toFixed(d));
 
 function formatReport(week, total, strong) {
-  const line = (t, s) => `${t}: ${s.signals} segnali (${s.settled} chiusi, ${s.pending} in attesa) | vinte ${f(s.hitRatePct)}% | ROI a puntata fissa ${f(s.roiFlatPct, 1, true)}% | valore medio vs chiusura ${f(s.avgClvPct, 2, true)}% su ${s.nClv}`;
+  const line = (t, s) => `${t}: ${s.signals} segnali (${s.settled} chiusi, ${s.pending} in attesa) | vinte ${f(s.hitRatePct)}% | ROI a puntata fissa ${f(s.roiFlatPct, 1, true)}% | CLV medio (chiusura Pinnacle) ${f(s.avgClvPct, 2, true)}% su ${s.nClv} | cattura media ${f(s.captureAvgPct, 0)}% su ${s.nCapture}`;
   let txt = `📊 Riepilogo settimanale (tracker, senza soldi veri)\n${line('Ultimi 7 giorni', week)}\n${line('Da inizio tracciamento', total)}`;
   if (strong && strong.signals && strong.signals !== total.signals) txt += `\n${line('Solo vantaggio >= 3%', strong)}`;
   if (total.clvCi95) txt += `\nValore vs chiusura, intervallo 95%: da ${f(total.clvCi95[0], 2, true)}% a ${f(total.clvCi95[1], 2, true)}%`;
@@ -32,10 +36,16 @@ function formatReport(week, total, strong) {
 }
 
 async function loadBets(pool, sinceDays) {
-  const { rows } = await pool.query(
-    `SELECT bookmaker_odd AS odd, status, edge_pct, clv_pct FROM value_bets
-     WHERE strategy = 'A_sharp' ${sinceDays ? `AND created_at >= NOW() - INTERVAL '${Number(sinceDays)} days'` : ''}`);
-  return rows;
+  const where = `WHERE strategy = 'A_sharp' ${sinceDays ? `AND created_at >= NOW() - INTERVAL '${Number(sinceDays)} days'` : ''}`;
+  try {   // quota presa, Pinnacle pre, massimo e CLV contro la chiusura Pinnacle (solo quello conta nel CLV del riepilogo)
+    const { rows } = await pool.query(
+      `SELECT COALESCE(quota_presa, bookmaker_odd) AS odd, status, edge_pct, CASE WHEN clv_source = 'pinnacle' THEN clv_pct END AS clv_pct,
+              sharp_odd AS pin_pre, quota_max AS max_odd FROM value_bets ${where}`);
+    return rows;
+  } catch (e) {   // schema non ancora aggiornato: riepilogo come prima
+    const { rows } = await pool.query(`SELECT bookmaker_odd AS odd, status, edge_pct, clv_pct FROM value_bets ${where}`);
+    return rows;
+  }
 }
 
 async function buildStats(pool) {

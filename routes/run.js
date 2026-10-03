@@ -68,6 +68,20 @@ router.post('/run-daily-if-missing', async (req, res) => {
     .finally(() => { dailyRunning = false; });
 });
 
+// Cattura la quota di chiusura Pinnacle dei segnali che stanno per iniziare (da chiamare ogni 30 minuti, vedi .github/workflows/chiusura.yml).
+// Senza segnali in finestra non spende nessun credito. Risposta minuscola.
+let closingRunning = false;
+router.post('/capture-closing', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  if (closingRunning) return res.json({ success: true, giaInCorso: true });
+  closingRunning = true;
+  try {
+    const r = await require('../services/closingCapture').captureClosing(pool, require('../services/oddsApi'));
+    res.json({ success: true, ...r });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+  finally { closingRunning = false; }
+});
+
 // Controllo di sistema: database, tabelle, chiavi, servizi esterni, Telegram e giro giornaliero in un solo colpo.
 router.post('/system-check', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
