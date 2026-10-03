@@ -9,7 +9,7 @@ Module._load = function (request) {
 };
 const { noVigPower, noVig, analyzeEvent, pickPresa } = require('../services/sharpSignals');
 const { captureClosing } = require('../services/closingCapture');
-const { settlePending } = require('../services/settler');
+const { settlePending, settleManual, verifyManual } = require('../services/settler');
 const { summarize, formatReport, buildStats } = require('../services/weeklyReport');
 
 (async () => {
@@ -86,6 +86,29 @@ const { summarize, formatReport, buildStats } = require('../services/weeklyRepor
   assert.ok(Math.abs(sets[0].p[3] - (4.0 * (1 / 3.8) / (1 / 2 + 1 / 3.5 + 1 / 3.8) - 1) * 100) < 1e-6);                   // ripiego sulla quota PRESA
   console.log('chiusura a fine partita (Pinnacle gia salvato / ripiego): ok');
 
+
+  // 4b) il file dei risultati si riscarica PRIMA di chiudere (una volta per campionato con segnali aperti), cosi' l'esito non slitta di un giorno
+  const hist2 = require('../services/history'), origRefresh = hist2.refreshCurrentSeason, refreshed = [];
+  hist2.refreshCurrentSeason = async (pool, code) => { refreshed.push(code); return { ok: true }; };
+  await settlePending(mk([pend({ league_code: 'E3', quota_presa: '4.00' }), pend({ id: 2, league_code: 'E3' }), pend({ id: 3, league_code: 'SP2' })]));
+  assert.deepStrictEqual(refreshed.sort(), ['E3', 'SP2']);
+  hist2.refreshCurrentSeason = origRefresh;
+  console.log('file risultati riscaricato prima della chiusura: ok');
+
+
+  // 4c) due processi che chiudono lo stesso segnale insieme: il secondo trova rowCount 0 e non muove il bankroll
+  const raceIns = [];
+  const racePool = { query: async (sql, p) => {
+    if (/SELECT quota_presa, clv_source/.test(sql)) return { rows: [] };
+    if (/FROM value_bets vb JOIN fixtures/.test(sql)) return { rows: [pend({ quota_presa: '4.00', clv_source: null, closing_fair_prob: null })] };
+    if (/FROM historical_matches/.test(sql)) return { rows: hist };
+    if (/SELECT balance_after/.test(sql)) return { rows: [{ balance_after: '100' }] };
+    if (/UPDATE value_bets/.test(sql)) { assert.ok(/AND status='pending'/.test(sql)); return { rowCount: 0, rows: [] }; }
+    if (/INSERT INTO bankroll_log/.test(sql)) raceIns.push(p); return { rows: [] }; } };
+  const rr = await settlePending(racePool);
+  assert.strictEqual(raceIns.length, 0); assert.strictEqual(rr.settled, 0);
+  console.log('chiusura gia fatta da un altro processo: nessun doppio movimento: ok');
+
   // 5) riepilogo: n segnali, CLV medio (solo Pinnacle), ROI a 1 unita', cattura media
   const bets = [
     { odd: 4.0, status: 'won',  edge_pct: 4, clv_pct: 3, pin_pre: 3.6, max_odd: 4.4 },     // cattura (4.0-3.6)/(4.4-3.6) = 0.5
@@ -106,5 +129,56 @@ const { summarize, formatReport, buildStats } = require('../services/weeklyRepor
   let n = 0; const old = await buildStats({ query: async sql => { if (/quota_presa/.test(sql)) throw new Error('column "quota_presa" does not exist'); n++; return { rows: [{ odd: 2, status: 'won', edge_pct: 3, clv_pct: 1 }] }; } });
   assert.ok(n >= 2 && old.total.signals === 1);
   console.log('riepilogo settimanale (n, CLV, ROI, cattura): ok');
+
+  // 6) risultato a mano: stesso calcolo dell'esito automatico (quota presa, puntata di carta), bankroll aggiornato, nessun doppione
+  const log = [], upd2 = [];
+  const mpool = (row, rowCount = 1) => ({ query: async (sql, p) => {
+    if (/SELECT quota_presa, clv_source/.test(sql)) return { rows: [] };
+    if (/FROM value_bets WHERE id/.test(sql)) return { rows: row ? [row] : [] };
+    if (/SELECT balance_after/.test(sql)) return { rows: [{ balance_after: '100.00' }] };
+    if (/UPDATE value_bets SET status/.test(sql)) { upd2.push(p); return { rowCount }; }
+    if (/INSERT INTO bankroll_log/.test(sql)) log.push(p); return { rows: [] }; } });
+  const sig = { id: 9, selection: 'home', bookmaker_odd: '1.66', recommended_stake: '2', status: 'pending', quota_presa: '1.60' };
+  const w = await settleManual(mpool(sig), 9, '2', 1);
+  assert.strictEqual(w.outcome, 'won'); assert.strictEqual(w.newBalance, 101.2);          // 2 euro x (1,60 - 1) = +1,20 sulla quota PRESA
+  assert.deepStrictEqual(upd2[0], ['won', '2-1', 9]); assert.ok(/Esito a mano: won \(2-1\)/.test(log[0][3]));
+  const l = await settleManual(mpool(sig), 9, 0, 0); assert.strictEqual(l.outcome, 'lost'); assert.strictEqual(l.newBalance, 98);   // 0-0: vittoria casa persa, -2 euro
+  await assert.rejects(() => settleManual(mpool({ ...sig, status: 'won' }), 9, 1, 0), e => e.status === 409);
+  await assert.rejects(() => settleManual(mpool(sig, 0), 9, 1, 0), e => e.status === 409);          // chiuso nel frattempo dal giro automatico
+  await assert.rejects(() => settleManual(mpool(null), 9, 1, 0), e => e.status === 404);
+  await assert.rejects(() => settleManual(mpool(sig), 9, 'x', 1), e => e.status === 400);
+  await assert.rejects(() => settleManual(mpool(sig), 9, -1, 1), e => e.status === 400);
+  const before = log.length; await assert.rejects(() => settleManual(mpool({ ...sig, status: 'lost' }), 9, 1, 0)); assert.strictEqual(log.length, before, 'nessun movimento di bankroll per un segnale gia chiuso');
+  console.log('risultato a mano: ok');
+
+  // 7) controllo dei risultati scritti a mano: uguale -> niente; diverso -> vince il file ufficiale, correzione del segnale e del bankroll; assente -> si riprova
+  const hist3 = [
+    { date: '2026-10-03', home: 'Casa', away: 'Fuori', hg: 2, ag: 1 },                    // uguale a quello scritto
+    { date: '2026-10-03', home: 'Alfa', away: 'Beta', hg: 1, ag: 1 },                     // scritto 2-1: il file dice 1-1 (esito cambia)
+    { date: '2026-10-03', home: 'Gamma', away: 'Delta', hg: 3, ag: 0 } ];                 // scritto 2-0: stesso esito, punteggio diverso
+  const ups = [], ins = [];
+  const vpool = rows => ({ query: async (sql, p) => {
+    if (/FROM value_bets vb JOIN fixtures/.test(sql)) return { rows };
+    if (/FROM historical_matches/.test(sql)) return { rows: hist3 };
+    if (/SELECT balance_after/.test(sql)) return { rows: [{ balance_after: '100.00' }] };
+    if (/UPDATE value_bets/.test(sql)) ups.push(p);
+    if (/INSERT INTO bankroll_log/.test(sql)) ins.push(p); return { rows: [] }; } });
+  const mrow = (id, home, away, selection, status, score, odd = '2.00') => ({ id, selection, bookmaker_odd: odd, recommended_stake: '2', status, result_score: score, league_code: 'E3', date: new Date('2026-10-03T14:00:00Z'), home_name: home, away_name: away });
+  const ctx = () => ({ byLeague: {}, refreshed: new Set(['E3']), today: '2026-10-05', cols: false });
+  const v = await verifyManual(vpool([
+    mrow(1, 'Casa', 'Fuori', 'home', 'won', '2-1'),
+    mrow(2, 'Alfa', 'Beta', 'home', 'won', '2-1'),
+    mrow(3, 'Gamma', 'Delta', 'home', 'won', '2-0'),
+    mrow(4, 'Zeta', 'Eta', 'home', 'lost', '0-1') ]), ctx());
+  assert.deepStrictEqual({ checked: v.checked, same: v.same, notYet: v.notYet, corrected: v.corrected.length }, { checked: 3, same: 1, notYet: 1, corrected: 2 });
+  assert.deepStrictEqual(ups[0], ['lost', '1-1', 2]);                                      // 1-1: la vittoria casa e' persa
+  assert.strictEqual(v.corrected[0].delta, -4);                                            // da +2 (2 euro x quota 2,00 - 1) a -2: differenza -4 euro
+  assert.strictEqual(ins.length, 1); assert.strictEqual(ins[0][1], -4); assert.strictEqual(ins[0][2], 96); assert.ok(/Correzione: a mano 2-1, nel file ufficiale 1-1/.test(ins[0][3]));
+  assert.deepStrictEqual(ups[1], ['won', '3-0', 3]); assert.strictEqual(v.corrected[1].delta, 0);   // stesso esito: si corregge il punteggio, il bankroll non cambia
+  // gia' corretto al giro dopo: ora coincide con il file, niente piu' da fare
+  ups.length = 0; ins.length = 0;
+  const v2 = await verifyManual(vpool([mrow(2, 'Alfa', 'Beta', 'home', 'lost', '1-1')]), ctx());
+  assert.strictEqual(v2.same, 1); assert.strictEqual(v2.corrected.length, 0); assert.strictEqual(ups.length + ins.length, 0);
+  console.log('controllo risultati a mano (uguali / corretti / non ancora nel file): ok');
   console.log('TUTTI I TEST closing OK');
 })().catch(e => { console.error(e); process.exit(1); });

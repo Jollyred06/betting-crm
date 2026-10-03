@@ -136,6 +136,15 @@
   .retry { margin-top:10px; }
   .chk { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); font-family:var(--body); font-size:15px; line-height:1.4; } .chk:last-child { border-bottom:0; } .chk .cm { margin-top:6px; }
   .avail { font-size:13px; color:var(--muted); margin-top:4px; } .avail.lone { color:var(--warn); font-weight:600; }
+  .resform { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0 2px; } .resform[hidden] { display:none; }
+  .resform input { width:48px; height:42px; text-align:center; font:700 20px/1 var(--display); border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--text); }
+  .resform button { margin-left:6px; height:42px; padding:0 14px; border:1px solid var(--line); border-radius:999px; background:var(--tint); color:var(--ink); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; } .resform button:disabled { opacity:.5; }
+  .live { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 600; color: inherit; text-decoration: underline; opacity: .9; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:8px; vertical-align:baseline; background:var(--muted); opacity:.55; }
+  .dot.on { background:var(--ok); opacity:1; animation:pulse 1.6s ease-in-out infinite; } .dot.end { background:var(--bad); opacity:1; }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(27,138,75,.5); } 50% { box-shadow:0 0 0 6px rgba(27,138,75,0); } }
+  @media (prefers-reduced-motion: reduce) { .dot.on { animation:none; } }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:13px; margin:0 0 10px; } .legend .dot { margin-right:5px; width:9px; height:9px; animation:none; }
   @media (prefers-reduced-motion: reduce) { .band { animation:none; } .fill { transition:none; } .sk { animation:none; } }
 </style>
 </head>
@@ -480,19 +489,60 @@
     try {
       const rows = await getJson('/api/tracker/signals' + (sigTab ? '?status=' + sigTab : ''));
       if (!rows.length) { el.innerHTML = '<div class="empty">Nessun segnale in questa lista. Compaiono quando ci sono partite con una quota sopra la soglia.</div>'; return; }
-      el.innerHTML = rows.map(r => `
+      el.innerHTML = '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + rows.map(r => `
         <article class="ticket">
           <div class="stub"><span>${dt(r.kickoff, { weekday: 'short' })}</span><b>${dt(r.kickoff, { day: 'numeric' })}</b><span>${dt(r.kickoff, { hour: '2-digit', minute: '2-digit' })}</span></div>
           <div class="tmain">
-            <div class="teams">${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.leagueName)}</div>
+            <div class="teams"><span class="dot" data-ko="${Date.parse(r.kickoff) || ''}" data-done="${r.status !== 'pending' ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.leagueName)}</div>
+            ${r.status === 'pending' ? `<div class="resform" hidden data-name="${esc((r.home || '') + ' – ' + (r.away || ''))}"><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(r.home || 'casa')}"><span>–</span><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(r.away || 'trasferta')}"><button onclick="saveResult(${r.id}, this)">Salva risultato</button></div>` : ''}
             <div class="pick"><span>Punta su <b>${esc(r.pick)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
             ${r.near === null || r.near === undefined ? '' : r.near >= 2 ? `<div class="avail">Quota vicina a questa offerta da ${r.near} bookmaker</div>` : '<div class="avail lone">Un solo bookmaker offre questa quota: da prendere con cautela</div>'}
             <div class="foot"><span class="chip ${r.status}">${r.status === 'pending' ? 'in attesa' : (r.status === 'won' ? 'vinta ' : 'persa ') + esc(r.score || '')}</span>
               <span>${esc(r.bookmaker || 'n/d')}, vantaggio ${pct(r.edgePct)}</span>${r.clvPct !== null ? `<span class="${cls(r.clvPct)}">${pct(r.clvPct)} rispetto alla chiusura</span>` : ''}</div>
+            <a class="live" target="_blank" rel="noopener" data-q="${esc((r.home || '') + ' ' + (r.away || ''))}" href="https://www.google.com/search?q=${encodeURIComponent((r.home || '') + ' ' + (r.away || '') + ' diretta')}">Segui in diretta</a>
           </div>
         </article>`).join('');
+      paintDots();
     } catch (e) { el.innerHTML = '<div class="empty">Non riesco a caricare i segnali: ' + esc(e.message) + '</div>'; }
   }
+
+  // Risultato a mano quando i file ufficiali non lo hanno ancora: si scrivono i gol sotto il nome della partita (casa, trasferta).
+  // Stesso effetto dell'esito automatico: segnale chiuso e bankroll aggiornato.
+  async function saveResult(id, btn) {
+    const box = btn.closest('.resform'), [a, b] = box.querySelectorAll('input'), name = box.dataset.name;
+    const ok = v => /^\d{1,2}$/.test(v.trim());
+    if (!ok(a.value) || !ok(b.value)) { alert('Scrivi i gol di tutte e due le squadre (numeri), per esempio 2 e 1.'); return; }
+    const hg = Number(a.value), ag = Number(b.value);
+    if (!confirm(name + ' ' + hg + '-' + ag + '\nChiudo il segnale con questo risultato? Il saldo cambia subito.')) return;
+    if (!(await ensureKey())) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/tracker/signals/' + id + '/result', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ homeGoals: hg, awayGoals: ag }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova e inseriscila di nuovo.'); btn.disabled = false; return; }
+      if (!r.ok) { alert('Errore: ' + (d.error || r.status)); btn.disabled = false; return; }
+      loadSignals(); loadHome();
+    } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
+  }
+
+  // Pallino di stato dedotto dall'orario d'inizio (non e' un dato dal vivo): verde = in corso (da 0 a 115 minuti dopo il calcio d'inizio),
+  // rosso = finita (oltre i 115 minuti, o gia' chiusa con il risultato), grigio = da iniziare. Un rinvio puo' risultare "finita".
+  function paintDots() {
+    try {   // un errore qui non deve mai rompere la lista dei segnali
+      const now = Date.now();
+      document.querySelectorAll('#signals .teams .dot').forEach(d => {
+        const ko = Number(d.dataset.ko), done = d.dataset.done === '1';
+        const st = done || (ko && now > ko + 115 * 60000) ? 'end' : (ko && now >= ko ? 'on' : '');
+        d.className = 'dot' + (st ? ' ' + st : '');
+        d.setAttribute('aria-label', st === 'end' ? 'partita finita' : st === 'on' ? 'partita in corso' : 'partita da iniziare');
+        const rf = d.closest('.tmain').querySelector('.resform'); if (rf) rf.hidden = st !== 'end' || d.dataset.done === '1';   // i campi dei gol servono solo a partita finita e segnale ancora aperto
+        // a partita finita il link porta al risultato; sul segnale gia' chiuso (che mostra il risultato) serve per notizie e dettagli
+        const a = d.closest('.tmain').querySelector('a.live');   // a partita finita il link porta al risultato finale su Google
+        if (a) { a.textContent = d.dataset.done === '1' ? 'Vedi la partita' : st === 'end' ? 'Vedi il risultato' : 'Segui in diretta'; a.href = 'https://www.google.com/search?q=' + encodeURIComponent(a.dataset.q + (st === 'end' ? ' risultato' : ' diretta')); }
+      });
+    } catch (e) { /* solo il colore del pallino */ }
+  }
+  if (typeof setInterval === 'function') setInterval(paintDots, 60000);   // il pallino si aggiorna da solo ogni minuto
 
   // ------------------------------------------------------------------ ALTRO: azioni, log, info
   function moreTab(el) {
@@ -532,7 +582,7 @@
       return head + d.items.map(i => `<div class="chk">${marker(i.level)}<div><b>${esc(i.title)}</b><div class="muted">${esc(i.text)}</div></div></div>`).join('');
     }
     if (kind === 'run') return logHtml(d.log || []);
-    if (kind === 'settle') return `<div class="info">Risultati registrati: ${d.settled}. Ancora in attesa: ${d.stillPending}.</div>` + (d.tappe && d.tappe.length ? `<div class="signal">Tappa raggiunta: ${d.tappe.join(', ')} segnali chiusi. Guarda la Home.</div>` : '');
+    if (kind === 'settle') return `<div class="info">Risultati registrati: ${d.settled}. Ancora in attesa: ${d.stillPending}.</div>` + (d.manual && (d.manual.checked || d.manual.notYet) ? `<div class="info">Risultati scritti a mano: ${d.manual.same} uguali al file ufficiale, ${d.manual.corrected.length} corretti, ${d.manual.notYet} non ancora nel file.</div>` : '') + (d.tappe && d.tappe.length ? `<div class="signal">Tappa raggiunta: ${d.tappe.join(', ')} segnali chiusi. Guarda la Home.</div>` : '');
     if (kind === 'weekly') return `<div class="info">${esc(d.text).replace(/\n/g, '<br>')}</div>`;
     if (kind === 'refresh') return (d.risultati || []).map(r => `<div class="${r.ok ? 'info' : 'warn'}">${esc(r.lega)}: ${r.ok ? r.partite + ' partite lette' : 'non riuscito (' + esc(r.error) + ')'}</div>`).join('');
     if (kind === 'tgtest') return d.sent ? '<div class="info">Messaggio inviato: controlla Telegram.</div>'

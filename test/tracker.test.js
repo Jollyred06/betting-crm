@@ -72,7 +72,7 @@ console.log('riepilogo: ok');
     return { rows: [] };
   } };
   const r = await settler.settlePending(pool);
-  assert.deepStrictEqual(r, { settled: 2, stillPending: 1 });            // la 3a partita non è ancora nel file
+  assert.deepStrictEqual({ settled: r.settled, stillPending: r.stillPending }, { settled: 2, stillPending: 1 });            // la 3a partita non è ancora nel file
   const upd = q.filter(x => /UPDATE value_bets/.test(x[0]));
   assert.strictEqual(upd[0][1][0], 'lost'); assert.strictEqual(upd[0][1][1], '2-1'); assert.ok(Math.abs(upd[0][1][3] - 5.4) < 0.2);   // Milan a 4.20 perde 2-1, CLV +5.4%
   assert.strictEqual(upd[1][1][0], 'lost');                                                                                          // Roma-Verona 0-0: 'home' perde

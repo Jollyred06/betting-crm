@@ -91,7 +91,7 @@ router.post('/system-check', async (req, res) => {
 // Chiude subito i segnali di cui c'e' il risultato (lo fa gia' l'analisi giornaliera).
 router.post('/settle-pending', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
-  try { const s = await settlePending(pool); let m = []; try { m = await checkMilestones(pool); } catch (e) { /* tabella non ancora creata */ } res.json({ success: true, ...s, tappe: m }); } catch (err) { res.status(500).json({ error: err.message }); }
+  try { const s = await settlePending(pool); let m = []; try { m = await checkMilestones(pool); } catch (e) { /* tabella non ancora creata */ } if (s.manual && s.manual.corrected.length) { try { await sendTelegramNotification('⚠️ <b>Risultati corretti</b>\n' + s.manual.corrected.map(c => `${c.home} – ${c.away}: a mano ${c.was}, ufficiale ${c.now}`).join('\n')); } catch (e) { /* avviso facoltativo */ } } res.json({ success: true, ...s, tappe: m }); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Messaggio di prova su Telegram (per controllare che il collegamento funzioni, senza aspettare un segnale).

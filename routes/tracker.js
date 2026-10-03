@@ -31,6 +31,13 @@ router.get('/milestones', async (req, res) => {
 const { authorized } = require('../services/auth');
 router.post('/auth-check', (req, res) => authorized(req) ? res.json({ ok: true }) : res.status(401).json({ ok: false, error: 'Chiave non valida' }));
 
+// Risultato a mano di un segnale ancora in attesa (protetto dalla chiave): chiude il segnale e muove il bankroll come l'esito automatico.
+router.post('/signals/:id/result', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json({ success: true, ...(await require('../services/settler').settleManual(pool, Number(req.params.id), req.body && req.body.homeGoals, req.body && req.body.awayGoals)) }); }
+  catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
+
 // Copia di sicurezza di tutti i dati che non si possono riscaricare (protetta dalla chiave).
 router.get('/backup.json', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida' });

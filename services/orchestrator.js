@@ -134,6 +134,12 @@ async function runDailyAnalysisInner() {
   try {
     const s = await settlePending(pool);
     log.push(`Esiti registrati in automatico: ${s.settled}; ancora in attesa del risultato: ${s.stillPending}.`);
+    const m = s.manual;
+    if (m && (m.checked || m.notYet)) {
+      log.push(`Risultati scritti a mano controllati con il file ufficiale: ${m.same} uguali, ${m.corrected.length} corretti, ${m.notYet} non ancora nel file.`);
+      for (const c of m.corrected) log.push(`CORREZIONE ${c.home} – ${c.away}: a mano ${c.was}, nel file ufficiale ${c.now}${c.delta ? ` (saldo ${c.delta > 0 ? '+' : ''}${c.delta.toFixed(2)} €)` : ''}.`);
+      if (m.corrected.length) { try { await sendTelegramNotification(`⚠️ <b>Risultati corretti</b>\n` + m.corrected.map(c => `${c.home} – ${c.away}: a mano ${c.was}, ufficiale ${c.now}`).join('\n')); } catch (e) { /* avviso facoltativo */ } }
+    }
   } catch (err) { log.push(`Chiusura automatica non riuscita: ${err.message}`); }
   try {
     const newly = await checkMilestones(pool);
