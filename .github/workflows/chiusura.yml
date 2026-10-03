@@ -10,5 +10,5 @@ jobs:
       - name: cattura quote di chiusura
         run: |
           curl -sS --retry 2 --retry-delay 10 --max-time 90 -X POST \
-            -H "x-run-key: ${{ secrets.RUN_SECRET_KEY }}" \
+            -H "x-run-key: ${{ secrets.RUN_KEY }}" \
             "https://betting-crm.onrender.com/api/capture-closing"
