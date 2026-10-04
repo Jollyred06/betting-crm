@@ -17,6 +17,13 @@ function tokens(name) {
 
 // Nomi completi ambigui o molto diversi, risolti a mano.
 const FULL_NAME_ALIASES = {
+  // Nuovi campionati (nomi di The Odds API verso i file "new" di football-data.co.uk): ipotesi sui nomi, i non riconosciuti finiscono nel Log
+  'urawa red diamonds': 'Urawa Reds', 'urawa reds': 'Urawa Reds',
+  'austria wien': 'Austria Vienna', 'blau weiss linz': 'BW Linz', 'fc blau weiss linz': 'BW Linz', 'austria lustenau': 'A. Lustenau', 'sc austria lustenau': 'A. Lustenau',
+  'flamengo': 'Flamengo RJ', 'cr flamengo': 'Flamengo RJ', 'botafogo': 'Botafogo RJ', 'botafogo fr': 'Botafogo RJ',
+  'atletico mineiro': 'Atletico-MG', 'clube atletico mineiro': 'Atletico-MG', 'athletico paranaense': 'Athletico-PR', 'athletico pr': 'Athletico-PR',
+  'chapecoense': 'Chapecoense-SC', 'associacao chapecoense': 'Chapecoense-SC',
+  'la galaxy': 'Los Angeles Galaxy', 'los angeles galaxy': 'Los Angeles Galaxy', 'dc united': 'DC United', 'd c united': 'DC United',
   'inter milan': 'Inter',
   'internazionale': 'Inter',
   'internazionale milano': 'Inter',

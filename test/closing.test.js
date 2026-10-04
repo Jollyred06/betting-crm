@@ -11,6 +11,7 @@ const { noVigPower, noVig, analyzeEvent, pickPresa } = require('../services/shar
 const { captureClosing } = require('../services/closingCapture');
 const { settlePending, settleManual, verifyManual } = require('../services/settler');
 const { summarize, formatReport, buildStats } = require('../services/weeklyReport');
+const { buildSnapshot, checkMilestones } = require('../services/milestones');
 
 (async () => {
   // 1) metodo power: somma((1/quota)^c) = 1, probabilita' che sommano 1 e meno peso alle quote alte rispetto al metodo proporzionale
@@ -180,5 +181,30 @@ const { summarize, formatReport, buildStats } = require('../services/weeklyRepor
   const v2 = await verifyManual(vpool([mrow(2, 'Alfa', 'Beta', 'home', 'lost', '1-1')]), ctx());
   assert.strictEqual(v2.same, 1); assert.strictEqual(v2.corrected.length, 0); assert.strictEqual(ups.length + ins.length, 0);
   console.log('controllo risultati a mano (uguali / corretti / non ancora nel file): ok');
+
+  // 8) tappe: divisione per probabilita' dell'esito e CLV solo Pinnacle / quota presa nella fotografia
+  const snapRows = [
+    { odd: 3.8, status: 'lost', edge_pct: 3, clv_pct: 2, est_prob: 0.27, league_code: 'E3', selection: 'draw', sharp_source: 'pinnacle', n_near_best: 1 },
+    { odd: 3.7, status: 'won',  edge_pct: 4, clv_pct: -1, est_prob: 0.28, league_code: 'E3', selection: 'draw', sharp_source: 'pinnacle', n_near_best: 2 },
+    { odd: 1.66, status: 'won', edge_pct: 2.5, clv_pct: 1, est_prob: 0.62, league_code: 'SP2', selection: 'home', sharp_source: 'pinnacle', n_near_best: 3 },
+    { odd: 2.1, status: 'lost', edge_pct: 2.2, clv_pct: null, est_prob: 0.47, league_code: 'E2', selection: 'home', sharp_source: 'pinnacle', n_near_best: 2 } ];
+  const sn = buildSnapshot(snapRows);
+  assert.deepStrictEqual([sn.groups.prob['sotto il 40%'].n, sn.groups.prob['40% o più'].n], [2, 2]);
+  assert.ok(Math.abs(sn.groups.prob['40% o più'].roiFlatPct - (-17)) < 0.01);                  // (0,66 - 1) / 2 = -17%
+  assert.strictEqual(sn.groups.prob['sotto il 40%'].avgClvPct, 0.5);                            // CLV medio 2 e -1
+  // la tappa legge quota presa e CLV Pinnacle (ripiego sulle colonne vecchie se mancano)
+  const seen = [];
+  const mpool2 = failNew => ({ query: async sql => {
+    seen.push(sql);
+    if (/FROM milestone_snapshots WHERE target/.test(sql)) return { rows: [] };
+    if (/COUNT\(\*\)::int AS n FROM value_bets WHERE strategy = 'A_sharp' AND status IN/.test(sql)) return { rows: [{ n: 100 }] };
+    if (/COALESCE\(quota_presa/.test(sql)) { if (failNew) throw new Error('column "quota_presa" does not exist'); return { rows: [] }; }
+    if (/estimated_probability AS est_prob/.test(sql)) return { rows: [] };
+    return { rows: [{ n: 0 }] }; } });
+  await checkMilestones(mpool2(false));
+  assert.ok(seen.some(q => /CASE WHEN clv_source = 'pinnacle' THEN clv_pct END AS clv_pct/.test(q) && /COALESCE\(quota_presa, bookmaker_odd\) AS odd/.test(q)));
+  seen.length = 0; await checkMilestones(mpool2(true));
+  assert.ok(seen.some(q => /estimated_probability AS est_prob/.test(q) && !/COALESCE\(quota_presa/.test(q)), 'schema vecchio: query di prima');
+  console.log('tappe (probabilità, quota presa, CLV Pinnacle): ok');
   console.log('TUTTI I TEST closing OK');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -60,6 +60,26 @@ function rowsToMatches(leagueCode, rows) {
   return out;
 }
 
+/** File "new" di football-data.co.uk (Svezia, Norvegia, Giappone, Brasile, USA...): colonne Date, Home, Away, HG, AG, AvgCH/CD/CA. Si tengono solo le partite recenti. */
+function newRowsToMatches(leagueCode, rows, sinceStr) {
+  const out = [];
+  for (const r of rows) {
+    const date = parseDate(r.Date);
+    const hg = num(r.HG), ag = num(r.AG);
+    if (!date || !r.Home || !r.Away || hg === null || ag === null) continue;      // partite non ancora giocate
+    if (sinceStr && date < sinceStr) continue;
+    out.push({ league: leagueCode, date, home: r.Home, away: r.Away, hg, ag, closeH: num(r.AvgCH), closeD: num(r.AvgCD), closeA: num(r.AvgCA), closeO25: null, closeU25: null });
+  }
+  return out;
+}
+
+/** Indirizzo del file da scaricare per una lega (file della stagione per l'Europa, file unico "new" per gli altri campionati). */
+function leagueFileUrl(leagueCode, todayStr) {
+  const l = LEAGUES[leagueCode];
+  if (!l || !l.csv) return null;
+  return l.newFmt ? `https://football-data.co.uk/new/${l.csv}.csv` : `https://www.football-data.co.uk/mmz4281/${seasonCode(todayStr)}/${l.csv}.csv`;
+}
+
 async function upsertMatches(pool, matches) {
   const seen = new Map();
   for (const m of matches) seen.set(`${m.league}|${m.date}|${m.home}|${m.away}`, m); // niente doppioni nello stesso comando
@@ -113,11 +133,12 @@ function seasonCode(dateStr) {
 async function refreshCurrentSeason(pool, leagueCode, todayStr) {
   const csv = LEAGUE_CSV[leagueCode];
   if (!csv) return { ok: false, error: `lega ${leagueCode} senza file storico` };
-  const url = `https://www.football-data.co.uk/mmz4281/${seasonCode(todayStr)}/${csv}.csv`;
+  const url = leagueFileUrl(leagueCode, todayStr);
   try {
     const axios = require('axios'); // caricato solo qui: le altre funzioni restano testabili senza rete
     const { data } = await axios.get(url, { responseType: 'text', timeout: 20000, headers: { 'User-Agent': 'betting-crm/1.0' } });
-    const matches = rowsToMatches(leagueCode, parseCsv(data));
+    const since = new Date(new Date(todayStr + 'T00:00:00Z').getTime() - 150 * 86400000).toISOString().slice(0, 10);   // i file "new" contengono tutte le stagioni: bastano gli ultimi 5 mesi
+    const matches = LEAGUES[leagueCode].newFmt ? newRowsToMatches(leagueCode, parseCsv(data), since) : rowsToMatches(leagueCode, parseCsv(data));
     const n = await upsertMatches(pool, matches);
     return { ok: true, url, partite: n };
   } catch (err) {
@@ -137,4 +158,4 @@ async function loadMatches(pool, leagueCode) {
   return rows;
 }
 
-module.exports = { LEAGUE_CSV, parseCsv, parseDate, rowsToMatches, upsertMatches, importLocalFiles, refreshCurrentSeason, loadMatches, seasonCode };
+module.exports = { LEAGUE_CSV, parseCsv, parseDate, rowsToMatches, newRowsToMatches, leagueFileUrl, upsertMatches, importLocalFiles, refreshCurrentSeason, loadMatches, seasonCode };

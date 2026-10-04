@@ -362,6 +362,7 @@
       <h4>Per campionato</h4><dl class="facts">${Object.entries(s.groups.tier).map(([k, g]) => grpLine(k, g)).join('')}</dl>
       <h4>Per quota</h4><dl class="facts">${Object.entries(s.groups.odds).map(([k, g]) => grpLine(k, g)).join('')}</dl>
       ${s.groups.avail ? `<h4>Quota offerta da</h4><p class="muted" style="margin:0 0 4px;">Se la quota migliore era offerta da più bookmaker, era davvero ottenibile.</p><dl class="facts">${Object.entries(s.groups.avail).map(([k, g]) => grpLine(k, g)).join('')}</dl>` : ''}
+      ${s.groups.prob ? `<h4>Per probabilità dell'esito</h4><p class="muted" style="margin:0 0 4px;">Secondo Pinnacle: gli esiti probabili (40% o più) mantengono il vantaggio meglio di pareggi e underdog?</p><dl class="facts">${Object.entries(s.groups.prob).map(([k, g]) => grpLine(k, g)).join('')}</dl>` : ''}
       <p class="muted">Per l'analisi: scarica i segnali in Altro, Azioni, e mandali in chat. Questa fotografia non si può modificare.</p>
       <div class="hash">Impronta ${esc(t.hash)}</div></div>`;
   }
@@ -371,7 +372,7 @@
       ? `<details class="ms"><summary>${marker('ok')}<span><b>Tappa ${t.target}</b> raggiunta il ${dt(t.reachedAt, { day: 'numeric', month: 'long' })}<br><span class="muted">Tocca per vedere la fotografia</span></span></summary>${snapHtml(t)}</details>`
       : `<div class="ms plain">${marker('info')}<span><b>Tappa ${t.target}</b><br><span class="muted">${t.progress} su ${t.target} segnali chiusi</span></span></div>`).join('');
     $('milestones').innerHTML = rows + `<details class="ms rule"><summary>${marker('warn')}<span><b>La regola della decisione</b><br><span class="muted">Fissata il ${dt(m.rule.fixedOn, { day: 'numeric', month: 'long' })}, prima di vedere i dati</span></span></summary>
-      <div class="snap"><p class="muted">${esc(m.rule.intro)}</p><ul>${m.rule.lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul></div></details>`;
+      <div class="snap"><p class="muted">${esc(m.rule.intro)}</p><ul>${m.rule.lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>${m.rule.note ? `<p class="muted">${esc(m.rule.note)}</p>` : ''}</div></details>`;
   }
 
   // ------------------------------------------------------------------ BANKROLL

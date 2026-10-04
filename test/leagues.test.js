@@ -56,3 +56,28 @@ assert.strictEqual(resolveHistoryTeam('Manchester City', ['Man City', 'Man Unite
 assert.strictEqual(resolveHistoryTeam('Manchester City', ['Leicester City', 'Bristol City']), null);   // solo 'City' in comune: mai abbinato
 assert.strictEqual(resolveHistoryTeam('Amed SK', ['Amedspor', 'Amedspor Genclik']), null);     // due candidati: ambiguo
 console.log(`nomi dei 4 campionati nuovi: ${n} casi ok`);
+
+// ---- 8 campionati in stagione: file "new" di football-data.co.uk (Svezia, Norvegia, Giappone, Danimarca, Austria, Irlanda, Brasile, USA) ----
+{
+  const { LEAGUES } = require('../services/leagues');
+  const { newRowsToMatches, leagueFileUrl, parseCsv } = require('../services/history');
+  for (const c of ['SWE', 'NOR', 'JPN', 'DNK', 'AUT', 'IRL', 'BRA', 'USA']) {
+    assert.ok(LEAGUES[c] && LEAGUES[c].oddsKey && LEAGUES[c].csv === c && LEAGUES[c].newFmt && LEAGUES[c].fd === false, c);
+    assert.strictEqual(leagueFileUrl(c, '2026-10-03'), `https://football-data.co.uk/new/${c}.csv`);   // un file unico per tutte le stagioni
+  }
+  assert.strictEqual(leagueFileUrl('SP2', '2026-10-03'), 'https://www.football-data.co.uk/mmz4281/2627/SP2.csv');   // l'Europa resta come prima
+  const sample = 'Country,League,Season,Date,Time,Home,Away,HG,AG,Res,PSCH,PSCD,PSCA,MaxCH,MaxCD,MaxCA,AvgCH,AvgCD,AvgCA\r\n' +
+    'Sweden,Allsvenskan,2026,20/09/2026,14:00,Malmo FF,Hacken,2,1,H,1.9,3.6,4.0,2.0,3.7,4.2,1.85,3.5,3.9\r\n' +
+    'Sweden,Allsvenskan,2026,11/04/2026,14:00,AIK,Elfsborg,0,0,D,2.5,3.2,2.9,2.6,3.3,3.0,2.4,3.1,2.8\r\n' +      // piu' vecchia della soglia
+    'Sweden,Allsvenskan,2026,04/10/2026,14:00,Kalmar,Sirius,,,,,,,,,,,,\r\n';                                   // non ancora giocata
+  const m = newRowsToMatches('SWE', parseCsv(sample), '2026-05-01');
+  assert.strictEqual(m.length, 1); assert.deepStrictEqual([m[0].league, m[0].date, m[0].home, m[0].away, m[0].hg, m[0].ag], ['SWE', '2026-09-20', 'Malmo FF', 'Hacken', 2, 1]);
+  assert.deepStrictEqual([m[0].closeH, m[0].closeD, m[0].closeA], [1.85, 3.5, 3.9]);
+  const csvN = { JPN: ['Urawa Reds', 'Vissel Kobe'], AUT: ['Austria Vienna', 'BW Linz', 'A. Lustenau', 'Salzburg'], BRA: ['Flamengo RJ', 'Botafogo RJ', 'Atletico-MG', 'Athletico-PR', 'Chapecoense-SC'], USA: ['Los Angeles Galaxy', 'DC United', 'Los Angeles FC'] };
+  const apiN = { JPN: [['Urawa Red Diamonds', 'Urawa Reds']], AUT: [['Austria Wien', 'Austria Vienna'], ['Blau-Weiß Linz', 'BW Linz'], ['Austria Lustenau', 'A. Lustenau']],
+    BRA: [['Flamengo', 'Flamengo RJ'], ['Botafogo', 'Botafogo RJ'], ['Atlético Mineiro', 'Atletico-MG'], ['Athletico Paranaense', 'Athletico-PR'], ['Chapecoense', 'Chapecoense-SC']],
+    USA: [['LA Galaxy', 'Los Angeles Galaxy'], ['D.C. United', 'DC United'], ['Los Angeles FC', 'Los Angeles FC']] };
+  let k = 0;
+  for (const [c, list] of Object.entries(apiN)) for (const [a, f] of list) { assert.strictEqual(resolveHistoryTeam(a, csvN[c]), f, a); k++; }
+  console.log(`8 campionati nuovi (file "new", nomi squadra): ${k} abbinamenti ok`);
+}

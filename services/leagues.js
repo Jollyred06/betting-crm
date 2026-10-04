@@ -28,7 +28,16 @@ const LEAGUES = {
   I2:  { name: 'Serie B',        oddsKey: 'soccer_italy_serie_b',          csv: 'I2',  fd: false },
   SP2: { name: 'Segunda Division', oddsKey: 'soccer_spain_segunda_division', csv: 'SP2', fd: false },
   F2:  { name: 'Ligue 2',        oddsKey: 'soccer_france_ligue_two',       csv: 'F2',  fd: false },
-  D2:  { name: '2. Bundesliga',  oddsKey: 'soccer_germany_bundesliga2',    csv: 'D2',  fd: false }
+  D2:  { name: '2. Bundesliga',  oddsKey: 'soccer_germany_bundesliga2',    csv: 'D2',  fd: false },
+  // campionati con stagione in autunno (non europei del Nord e Americhe): risultati dai file "new" di football-data.co.uk (newFmt: true)
+  SWE: { name: 'Allsvenskan (Svezia)',   oddsKey: 'soccer_sweden_allsvenskan',     csv: 'SWE', fd: false, newFmt: true },
+  NOR: { name: 'Eliteserien (Norvegia)', oddsKey: 'soccer_norway_eliteserien',     csv: 'NOR', fd: false, newFmt: true },
+  JPN: { name: 'J League (Giappone)',    oddsKey: 'soccer_japan_j_league',         csv: 'JPN', fd: false, newFmt: true },
+  DNK: { name: 'Superliga (Danimarca)',  oddsKey: 'soccer_denmark_superliga',      csv: 'DNK', fd: false, newFmt: true },
+  AUT: { name: 'Bundesliga (Austria)',   oddsKey: 'soccer_austria_bundesliga',     csv: 'AUT', fd: false, newFmt: true },
+  IRL: { name: 'Premier Division (Irlanda)', oddsKey: 'soccer_league_of_ireland',  csv: 'IRL', fd: false, newFmt: true },
+  BRA: { name: 'Brasileirão',            oddsKey: 'soccer_brazil_campeonato',      csv: 'BRA', fd: false, newFmt: true },
+  USA: { name: 'MLS (USA)',              oddsKey: 'soccer_usa_mls',                csv: 'USA', fd: false, newFmt: true }
 };
 const DEFAULT_COMPETITIONS = 'SA,PL,BL1,PD,FL1,DED,PPL,ELC,T1,G1,B1,SC0';
 module.exports = { LEAGUES, DEFAULT_COMPETITIONS };

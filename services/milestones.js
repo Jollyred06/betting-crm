@@ -19,7 +19,8 @@ const RULE = {
     'Fascia che include lo zero: nessun vantaggio dimostrato. Si prosegue fino a circa 600 segnali chiusi, oppure si chiude.',
     'Fascia tutta sotto lo zero: nessun vantaggio, si chiude.',
     'Valore sulla chiusura positivo ma ROI chiaramente negativo: qualcosa nei dati non torna, da indagare prima di fidarsi.'
-  ]
+  ],
+  note: 'Dal 3 ottobre 2026 il valore rispetto alla chiusura è misurato sulla chiusura di Pinnacle (non più sulla media dei bookmaker) e la quota è quella presa. La regola di decisione non cambia. Analisi secondaria dichiarata in anticipo: segnali con probabilità Pinnacle sotto il 40% contro 40% o più.'
 };
 
 const mean = a => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
@@ -58,7 +59,9 @@ function buildSnapshot(rows, { pendingNow = null } = {}) {
       selection: { casa: group(p(r => r.selection === 'home')), pareggio: group(p(r => r.selection === 'draw')), trasferta: group(p(r => r.selection === 'away')) },
       odds: { 'sotto 4': group(p(r => Number(r.odd) < 4)), '4 o più': group(p(r => Number(r.odd) >= 4)) },
       // la quota migliore era offerta da più bookmaker (ottenibile) o da uno solo (possibile quota fuori linea)?
-      avail: { 'più bookmaker': group(p(r => known(r) && Number(r.n_near_best) >= 2)), 'un solo bookmaker': group(p(r => known(r) && Number(r.n_near_best) === 1)) }
+      avail: { 'più bookmaker': group(p(r => known(r) && Number(r.n_near_best) >= 2)), 'un solo bookmaker': group(p(r => known(r) && Number(r.n_near_best) === 1)) },
+      // analisi secondaria dichiarata in anticipo (3 ottobre 2026): gli esiti probabili (>= 40% secondo Pinnacle) mantengono il vantaggio meglio di pareggi e underdog?
+      prob: { 'sotto il 40%': group(p(r => Number(r.est_prob) > 0 && Number(r.est_prob) < 0.4)), '40% o più': group(p(r => Number(r.est_prob) >= 0.4)) }
     },
     quality: { pendingNow, quoteRegistrate: rows.filter(r => r.n_near_best !== null && r.n_near_best !== undefined).length }
   };
@@ -84,9 +87,17 @@ async function checkMilestones(pool) {
     if (exists.rows.length) continue;
     const cnt = await pool.query(`SELECT COUNT(*)::int AS n FROM value_bets WHERE strategy = 'A_sharp' AND status IN ('won','lost')`);
     if (Number((cnt.rows[0] || {}).n || 0) < target) break;                                   // le tappe seguenti non sono raggiunte
-    const { rows } = await pool.query(
-      `SELECT id, bookmaker_odd AS odd, status, edge_pct, clv_pct, estimated_probability AS est_prob, league_code, selection, sharp_source, n_near_best
-       FROM value_bets WHERE strategy = 'A_sharp' AND status IN ('won','lost') ORDER BY settled_at ASC NULLS LAST, id ASC LIMIT $1`, [target]);
+    let rows;
+    try {   // quota PRESA e valore vs chiusura PINNACLE (il ripiego sulla media di chiusura non conta nel CLV)
+      ({ rows } = await pool.query(
+        `SELECT id, COALESCE(quota_presa, bookmaker_odd) AS odd, status, edge_pct, CASE WHEN clv_source = 'pinnacle' THEN clv_pct END AS clv_pct,
+                estimated_probability AS est_prob, league_code, selection, sharp_source, n_near_best
+         FROM value_bets WHERE strategy = 'A_sharp' AND status IN ('won','lost') ORDER BY settled_at ASC NULLS LAST, id ASC LIMIT $1`, [target]));
+    } catch (e) {   // schema non ancora aggiornato
+      ({ rows } = await pool.query(
+        `SELECT id, bookmaker_odd AS odd, status, edge_pct, clv_pct, estimated_probability AS est_prob, league_code, selection, sharp_source, n_near_best
+         FROM value_bets WHERE strategy = 'A_sharp' AND status IN ('won','lost') ORDER BY settled_at ASC NULLS LAST, id ASC LIMIT $1`, [target]));
+    }
     const pend = await pool.query(`SELECT COUNT(*)::int AS n FROM value_bets WHERE strategy = 'A_sharp' AND status = 'pending'`);
     const snapshot = buildSnapshot(rows, { pendingNow: Number((pend.rows[0] || {}).n || 0) });
     const decision = target === TARGETS[TARGETS.length - 1] ? decide(snapshot) : null;
