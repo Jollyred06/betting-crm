@@ -13,6 +13,9 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Rotta leggera per svegliare il server su Render (usata da cron-job.org alle 10:55)
+app.get('/health', (req, res) => res.status(200).send('ok'));
+
 // Le vecchie pagine non esistono piu': tutto e' nell'app. I vecchi preferiti portano li'.
 app.get(['/dashboard.html', '/tracker.html'], (req, res) => res.redirect('/app.html'));
 
