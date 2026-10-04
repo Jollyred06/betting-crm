@@ -140,9 +140,9 @@
   .resform input { width:48px; height:42px; text-align:center; font:700 20px/1 var(--display); border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--text); }
   .resform button { margin-left:6px; height:42px; padding:0 14px; border:1px solid var(--line); border-radius:999px; background:var(--tint); color:var(--ink); font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; } .resform button:disabled { opacity:.5; }
   .live { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 600; color: inherit; text-decoration: underline; opacity: .9; }
-  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:8px; vertical-align:baseline; background:var(--muted); opacity:.55; }
-  .dot.on { background:var(--ok); opacity:1; animation:pulse 1.6s ease-in-out infinite; } .dot.end { background:var(--bad); opacity:1; }
-  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(27,138,75,.5); } 50% { box-shadow:0 0 0 6px rgba(27,138,75,0); } }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:8px; vertical-align:baseline; background:transparent; border:2px solid var(--muted); box-sizing:border-box; opacity:.7; }
+  .dot.on { background:#2a9df4; border-color:transparent; opacity:1; animation:pulse 1.6s ease-in-out infinite; } .dot.end { background:var(--muted); border-color:transparent; opacity:.85; }
+  @keyframes pulse { 0%,100% { box-shadow:0 0 0 0 rgba(42,157,244,.5); } 50% { box-shadow:0 0 0 6px rgba(42,157,244,0); } }
   @media (prefers-reduced-motion: reduce) { .dot.on { animation:none; } }
   .legend { display:flex; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:13px; margin:0 0 10px; } .legend .dot { margin-right:5px; width:9px; height:9px; animation:none; }
   @media (prefers-reduced-motion: reduce) { .band { animation:none; } .fill { transition:none; } .sk { animation:none; } }
@@ -526,8 +526,8 @@
     } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
   }
 
-  // Pallino di stato dedotto dall'orario d'inizio (non e' un dato dal vivo): verde = in corso (da 0 a 115 minuti dopo il calcio d'inizio),
-  // rosso = finita (oltre i 115 minuti, o gia' chiusa con il risultato), grigio = da iniziare. Un rinvio puo' risultare "finita".
+  // Pallino di stato dedotto dall'orario d'inizio (non e' un dato dal vivo): azzurro = in corso (da 0 a 115 minuti dopo il calcio d'inizio),
+  // grigio pieno = finita (oltre i 115 minuti, o gia' chiusa con il risultato), vuoto = da iniziare. Un rinvio puo' risultare "finita".
   function paintDots() {
     try {   // un errore qui non deve mai rompere la lista dei segnali
       const now = Date.now();
