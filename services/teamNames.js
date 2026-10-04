@@ -91,4 +91,24 @@ function resolveHistoryTeam(apiName, csvNames) {
 }
 
 /**
- * Ultimo ripiego, molto prudente: una parola del nome e'
+ * Ultimo ripiego, molto prudente: una parola del nome e' l'inizio di una parola di UN SOLO nome nello storico
+ * (es. "Erzurum BB" -> "Erzurumspor", "Amed SK" -> "Amedspor"). Almeno 4 lettere, e solo se il candidato e' unico:
+ * nel dubbio restituisce null e il nome finisce nel log.
+ */
+function prefixFallback(apiTokens, csvNames) {
+  const hit = csvNames.filter(n => tokens(n).some(c => [...apiTokens].some(t => t !== c && Math.min(t.length, c.length) >= 4 && (c.startsWith(t) || t.startsWith(c)))));
+  return hit.length === 1 ? hit[0] : null;
+}
+
+/** Due nomi (di fonti diverse) indicano la stessa squadra? Prudente: nel dubbio, no. */
+function sameTeam(a, b, csvNames) {
+  const ra = resolveHistoryTeam(a, csvNames), rb = resolveHistoryTeam(b, csvNames);
+  if (ra && rb) return ra === rb;
+  const ta = tokens(a), tb = tokens(b);
+  if (ta.join(' ') === tb.join(' ')) return true;
+  if (ra || rb) return false;
+  const sa = new Set(ta), sb = new Set(tb);
+  return ta.every(t => sb.has(t)) || tb.every(t => sa.has(t));
+}
+
+module.exports = { tokens, resolveHistoryTeam, sameTeam };
