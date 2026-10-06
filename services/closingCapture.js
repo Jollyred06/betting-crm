@@ -3,12 +3,13 @@
  * Per ogni segnale: ultima quota Pinnacle 1X2 vista prima della partita -> probabilita' onesta (metodo power)
  * -> clv = quota_presa * p_pinnacle_chiusura - 1 (salvato in percentuale in clv_pct, con clv_source = 'pinnacle').
  * Costo: 1 credito di The Odds API per campionato con segnali in finestra (nessun credito se non ce ne sono).
- * Va chiamata ogni 30 minuti (POST /api/capture-closing, vedi .github/workflows/chiusura.yml): ogni segnale viene
- * catturato una volta, tra 0 e 30 minuti prima del calcio d'inizio (close_lag_min dice quanti).
+ * Va chiamata ogni 10-30 minuti (POST /api/capture-closing, vedi .github/workflows/chiusura.yml): ogni segnale viene
+ * catturato tra 0 e 45 minuti prima del calcio d'inizio e ricatturato se l'ultima cattura e' piu' vecchia di MIN_GAP_MIN:
+ * vale l'ultima, la piu' vicina al calcio d'inizio (close_lag_min dice quanti minuti mancavano).
  */
 const { h2h, noVigPower } = require('./sharpSignals');
 
-const WINDOW_MIN = 30;      // segnali con calcio d'inizio entro 30 minuti
+const WINDOW_MIN = 45;      // segnali con calcio d'inizio entro 45 minuti
 const MIN_GAP_MIN = 20;     // non ricatturare lo stesso segnale se l'ultima cattura e' recente (ritardi del cron)
 
 async function captureClosing(pool, oddsApi, { windowMin = WINDOW_MIN, minGapMin = MIN_GAP_MIN, now = Date.now() } = {}) {
