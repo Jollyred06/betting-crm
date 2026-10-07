@@ -101,4 +101,62 @@ function analyzeEvent(event, { minEdge = 0.02, maxEdge = 0.25 } = {}) {
   return { ok: true, source: ref.source, fair: ref.fair, candidates, top, softBooks: Math.max(count.home, count.draw, count.away) };
 }
 
-module.exports = { analyzeEvent, sharpReference, noVig, noVigPower, h2h, pickPresa, MIN_SOFT_BOOKS };
+/* ===== Over/Under (mercato "totals" di The Odds API), una sola linea per volta (default 2,5) =====
+ * Stessa idea dell'1X2 ma a 2 esiti: riferimento Pinnacle senza margine (power), edge = quota * p_pinnacle - 1.
+ * I segnali hanno strategy 'A_sharp_ou' e market 'OU2.5': cosi' non si mescolano con l'1X2 in nessuna statistica. */
+const OU_LINE = parseFloat(process.env.OU_LINE || '2.5');
+
+function ou(book, line = OU_LINE) {
+  const m = (book.markets || []).find(x => x.key === 'totals');
+  if (!m) return null;
+  const p = {};
+  for (const o of m.outcomes || []) {
+    if (Number(o.point) !== line) continue;                       // ogni bookmaker puo' avere linee diverse: conta solo quella scelta
+    const n = String(o.name).toLowerCase();
+    if (n === 'over') p.over = o.price; else if (n === 'under') p.under = o.price;
+  }
+  return p.over > 1 && p.under > 1 ? p : null;
+}
+
+/** Margine tolto con il metodo "power" a 2 esiti: trova c con (1/over)^c + (1/under)^c = 1. */
+function noVigPower2(p) {
+  const q = [1 / p.over, 1 / p.under];
+  if (q[0] + q[1] <= 1) { const s = q[0] + q[1]; return { over: q[0] / s, under: q[1] / s }; }
+  let lo = 1, hi = 30;
+  for (let i = 0; i < 100; i++) { const c = (lo + hi) / 2; if (q[0] ** c + q[1] ** c > 1) lo = c; else hi = c; }
+  const c = (lo + hi) / 2, r = [q[0] ** c, q[1] ** c], s = r[0] + r[1];
+  return { over: r[0] / s, under: r[1] / s };
+}
+
+function analyzeTotals(event, { minEdge = 0.02, maxEdge = 0.25, line = OU_LINE } = {}) {
+  const books = event.bookmakers || [];
+  const pin = books.find(x => x.key === 'pinnacle'), pp = pin && ou(pin, line);
+  if (!pp) return { ok: false, reason: `nessuna quota Pinnacle Over/Under ${line}` };
+  const fair = noVigPower2(pp);
+  const best = {}, all = { over: [], under: [] }, maxAll = {};
+  for (const b of books) {
+    const p = ou(b, line); if (!p) continue;
+    for (const sel of ['over', 'under']) {
+      if (!maxAll[sel] || p[sel] > maxAll[sel].odd) maxAll[sel] = { odd: p[sel], bookmaker: b.title || b.key };
+      if (SHARP.includes(b.key) || isExchange(b.key)) continue;
+      all[sel].push({ bookmaker: b.title || b.key, odd: p[sel] });
+      if (!best[sel] || p[sel] > best[sel].odd) best[sel] = { odd: p[sel], bookmaker: b.title || b.key };
+    }
+  }
+  const candidates = [];
+  for (const sel of ['over', 'under']) {
+    if (!best[sel] || all[sel].length < MIN_SOFT_BOOKS) continue;
+    const edge = best[sel].odd * fair[sel] - 1;
+    if (edge < minEdge || edge > maxEdge) continue;
+    const quotes = all[sel].slice().sort((x, y) => y.odd - x.odd), odds = quotes.map(q => q.odd), mid = Math.floor(odds.length / 2);
+    const median = odds.length % 2 ? odds[mid] : (odds[mid - 1] + odds[mid]) / 2;
+    const presa = pickPresa(quotes, best[sel]), gold = quotes.find(q => /goldbet/i.test(q.bookmaker));
+    candidates.push({ market: `OU${line}`, strategy: 'A_sharp_ou', selection: sel, odd: best[sel].odd, bookmaker: best[sel].bookmaker, fair: fair[sel], edge,
+      quotes, nBooks: quotes.length, nNear: odds.filter(o => o >= best[sel].odd * 0.97).length, medianOdd: Math.round(median * 1000) / 1000,
+      sharpOdd: pp[sel], sharpOdds: pp, presaOdd: presa.odd, presaBook: presa.bookmaker ?? null,
+      maxOdd: maxAll[sel].odd, maxBook: maxAll[sel].bookmaker, goldbetOdd: gold ? gold.odd : null });
+  }
+  return { ok: true, fair, candidates };
+}
+
+module.exports = { analyzeEvent, sharpReference, noVig, noVigPower, h2h, pickPresa, MIN_SOFT_BOOKS, ou, noVigPower2, analyzeTotals, OU_LINE };

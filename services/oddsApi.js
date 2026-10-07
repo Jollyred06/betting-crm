@@ -31,24 +31,28 @@ const { LEAGUES } = require('./leagues');
 const SPORT_KEY_MAP = { BSA: 'soccer_brazil_campeonato' };
 for (const [code, l] of Object.entries(LEAGUES)) SPORT_KEY_MAP[code] = l.oddsKey;
 
-async function getOddsForCompetition(competitionCode) {
+/** Interruttore Over/Under: spento di default. Con TOTALS_ENABLED=1 il giro giornaliero chiede anche i totals (2 crediti per campionato invece di 1). */
+const totalsEnabled = () => process.env.TOTALS_ENABLED === '1';
+
+async function getOddsForCompetition(competitionCode, { markets } = {}) {
   const sportKey = SPORT_KEY_MAP[competitionCode];
   if (!sportKey) return [];
 
   if (credits.remaining !== null && Number(credits.remaining) <= MIN_CREDITS)
     throw new Error(`crediti rimasti ${credits.remaining}, sotto la soglia di sicurezza (${MIN_CREDITS}): chiamata saltata`);
 
+  const mk = markets || (totalsEnabled() ? 'h2h,totals' : 'h2h'), cost = mk.split(',').length;   // 1 credito per mercato e per chiamata
   requestCount++; runCount++;
   const resp = await client.get(`/sports/${sportKey}/odds`, {
     params: {
       apiKey: process.env.ODDS_API_KEY,
       regions: 'eu',
-      markets: 'h2h',   // solo 1X2: 1 credito per campionato e per chiamata
+      markets: mk,
       oddsFormat: 'decimal'
     }
   });
   readCredits(resp);
-  if (runStartUsed === null && credits.used !== null) runStartUsed = Number(credits.used) - 1;   // prima di questa chiamata
+  if (runStartUsed === null && credits.used !== null) runStartUsed = Number(credits.used) - cost;   // prima di questa chiamata
   return resp.data; // array di eventi, ognuno con bookmakers -> markets -> outcomes
 }
 
@@ -75,4 +79,4 @@ function getRunRequestCount() { return runCount; }
 function getRunSpent() { return runStartUsed === null || credits.used === null ? 0 : Math.max(0, Number(credits.used) - runStartUsed); }
 function __setClient(c) { client = c; }   // solo per i test
 
-module.exports = { getOddsForCompetition, getActiveSportKeys, getCredits, getRequestCount, getRunRequestCount, getRunSpent, resetRun, MIN_CREDITS, SPORT_KEY_MAP, __setClient };
+module.exports = { totalsEnabled, getOddsForCompetition, getActiveSportKeys, getCredits, getRequestCount, getRunRequestCount, getRunSpent, resetRun, MIN_CREDITS, SPORT_KEY_MAP, __setClient };

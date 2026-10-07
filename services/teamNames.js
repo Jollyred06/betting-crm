@@ -17,11 +17,6 @@ function tokens(name) {
 
 // Nomi completi ambigui o molto diversi, risolti a mano.
 const FULL_NAME_ALIASES = {
-  // Aggiunte da avviso "Nomi non riconosciuti" (4 ottobre)
-  'sarpsborg fk': ['Sarpsborg 08', 'Sarpsborg'], 'sarpsborg': ['Sarpsborg 08', 'Sarpsborg'],
-  'kfum': ['KFUM Oslo', 'KFUM', 'Kfum Oslo'], 'kfum oslo': ['KFUM Oslo', 'KFUM', 'Kfum Oslo'],
-  'rapid wien': ['Rapid Vienna', 'Rapid Wien'], 'sk rapid wien': ['Rapid Vienna', 'Rapid Wien'],
-  'atletico paranaense': 'Athletico-PR', 'club athletico paranaense': 'Athletico-PR',
   // Nuovi campionati (nomi di The Odds API verso i file "new" di football-data.co.uk): ipotesi sui nomi, i non riconosciuti finiscono nel Log
   'urawa red diamonds': 'Urawa Reds', 'urawa reds': 'Urawa Reds',
   'austria wien': 'Austria Vienna', 'blau weiss linz': 'BW Linz', 'fc blau weiss linz': 'BW Linz', 'austria lustenau': 'A. Lustenau', 'sc austria lustenau': 'A. Lustenau',

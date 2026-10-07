@@ -78,7 +78,7 @@ console.log('decisione: ok');
   const csvPool = { query: async () => ({ rows: [{ id: 1, created_at: new Date('2026-10-02T09:00:00Z'), kickoff: '2026-10-02T18:30:00Z', league_code: 'SP2', selection: 'draw', bookmaker_odd: '3.80', bookmaker_name: 'Bet "X", Co', edge_pct: '3.2', estimated_probability: '0.2750',
     sharp_source: 'pinnacle', quotes: [{ bookmaker: 'A', odd: 4 }, { bookmaker: 'B', odd: 3.9 }, { bookmaker: 'C', odd: 3.5 }], sharp_odd: '3.6', n_books: 3, n_near_best: 2, status: 'won', result_score: '1-1', closing_fair_prob: '0.2600', clv_pct: '-1.2', settled_at: null, model_version: 'sharp-v1', home: 'Almeria', away: 'Sp Gijon' }] }) };
   const csv = await view.signalsCsv(csvPool), lines = csv.split('\n');
-  assert.strictEqual(lines.length, 2); assert.ok(lines[0].startsWith('id,creato,partita_inizio')); assert.strictEqual(lines[0].split(',').length, 25);
+  assert.strictEqual(lines.length, 2); assert.ok(lines[0].startsWith('id,creato,partita_inizio')); assert.strictEqual(lines[0].split(',').length, 31);
   assert.ok(lines[1].includes(',3,2,3.6,3.9,') && lines[1].includes('"[{""bookmaker"":""A""'), 'colonne delle quote complete: ' + lines[1]);
   assert.ok(lines[1].includes('"Bet ""X"", Co"') && lines[1].includes(',Pareggio,3.80,') && lines[1].includes('Segunda Division'));        // virgole e virgolette nei nomi non rompono il file
   console.log('esportazione CSV: ok');

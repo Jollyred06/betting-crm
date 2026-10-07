@@ -76,8 +76,11 @@ router.post('/capture-closing', async (req, res) => {
   if (closingRunning) return res.json({ success: true, giaInCorso: true });
   closingRunning = true;
   try {
-    const r = await require('../services/closingCapture').captureClosing(pool, require('../services/oddsApi'));
-    res.json({ success: true, ...r });
+    const cc = require('../services/closingCapture'), odds = require('../services/oddsApi');
+    const r = await cc.captureClosing(pool, odds);
+    let ouRes = null;
+    try { const o = await cc.captureClosingOU(pool, odds); if (o.segnaliInFinestra) ouRes = o; } catch (e) { ouRes = { errori: [e.message] }; }   // Over/Under: non deve mai bloccare l'1X2
+    res.json({ success: true, ...r, ...(ouRes ? { overUnder: ouRes } : {}) });
   } catch (err) { res.status(500).json({ error: err.message }); }
   finally { closingRunning = false; }
 });

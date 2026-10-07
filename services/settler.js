@@ -8,7 +8,11 @@
  */
 const { resolveHistoryTeam } = require('./teamNames');
 
-function outcomeFromScore(selection, hg, ag) {
+function outcomeFromScore(selection, hg, ag, market) {
+  if (market && /^OU/.test(market)) {                          // Over/Under: market 'OU2.5' -> linea 2.5 (solo linee .5, niente rimborsi)
+    const line = parseFloat(market.slice(2));
+    return ((hg + ag > line) ? 'over' : 'under') === selection ? 'won' : 'lost';
+  }
   const actual = hg > ag ? 'home' : hg < ag ? 'away' : 'draw';
   return actual === selection ? 'won' : 'lost';
 }
@@ -94,7 +98,7 @@ async function verifyManual(pool, ctx) {
 async function settlePending(pool) {
   const cols = await hasClosingCols(pool);
   const { rows: pend } = await pool.query(
-    `SELECT vb.id, vb.selection, vb.bookmaker_odd, vb.recommended_stake, vb.league_code, f.date,
+    `SELECT vb.id, vb.market, vb.selection, vb.bookmaker_odd, vb.recommended_stake, vb.league_code, f.date,
             ${cols ? 'vb.quota_presa, vb.clv_source, vb.closing_fair_prob,' : ''}
             th.name AS home_name, ta.name AS away_name
      FROM value_bets vb JOIN fixtures f ON f.id = vb.fixture_id
@@ -115,7 +119,7 @@ async function settlePending(pool) {
     const dateStr = new Date(b.date).toISOString().slice(0, 10);
     const res = findResult(L.rows, b.home_name, b.away_name, dateStr, L.names);
     if (!res) continue;                                   // risultato non ancora nel file: riprova al prossimo giro
-    const outcome = outcomeFromScore(b.selection, res.hg, res.ag);
+    const outcome = outcomeFromScore(b.selection, res.hg, res.ag, b.market);
     const stake = Number(b.recommended_stake || 0), odd = Number((cols && b.quota_presa) || b.bookmaker_odd);   // si guadagna/perde sulla quota PRESA
     const amount = outcome === 'won' ? stake * (odd - 1) : -stake;
     const bal = (await pool.query('SELECT balance_after FROM bankroll_log ORDER BY created_at DESC LIMIT 1')).rows[0];
@@ -126,7 +130,7 @@ async function settlePending(pool) {
       upd = await pool.query(`UPDATE value_bets SET status=$1, result_score=$2, settled_at=NOW() WHERE id=$3 AND status='pending'`, [outcome, `${res.hg}-${res.ag}`, b.id]);
     } else {
       // ripiego (cattura Pinnacle mancata): media di chiusura dei bookmaker, marcata come tale e NON conteggiata nel CLV Pinnacle
-      const fair = closingFair(res, b.selection), clv = clvPct(odd, fair);
+      const fair = /^OU/.test(b.market || '') ? null : closingFair(res, b.selection), clv = clvPct(odd, fair);   // Over/Under: nessun ripiego sulla media (il file non ha i totals di chiusura)
       if (cols) upd = await pool.query(`UPDATE value_bets SET status=$1, result_score=$2, closing_fair_prob=$3, clv_pct=$4, clv_source=$5, settled_at=NOW() WHERE id=$6 AND status='pending'`,
         [outcome, `${res.hg}-${res.ag}`, fair, clv, fair ? 'avg' : null, b.id]);
       else upd = await pool.query(`UPDATE value_bets SET status=$1, result_score=$2, closing_fair_prob=$3, clv_pct=$4, settled_at=NOW() WHERE id=$5 AND status='pending'`,

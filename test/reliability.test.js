@@ -45,7 +45,7 @@ process.env.RUN_SECRET_KEY = 'k';
   const { runDailyAnalysis } = require('../services/orchestrator');
   await runDailyAnalysis();
   assert.strictEqual(inserts.length, 1); assert.strictEqual(inserts[0].withQuotes, true);
-  assert.strictEqual(inserts[0].params[1], 'away'); assert.strictEqual(inserts[0].params.length, 21);
+  assert.strictEqual(inserts[0].params[1], 'away'); assert.strictEqual(inserts[0].params.length, 23); assert.strictEqual(inserts[0].params[21], '1X2'); assert.strictEqual(inserts[0].params[22], 'A_sharp');   // mercato e strategia dell'1X2 invariati
   assert.strictEqual(inserts[0].params[7], 2);                                                               // puntata fissa di carta: 2 euro
   const px = inserts[0].params;                                                                              // quota presa, massimo di mercato, Goldbet (assente), id evento, Pinnacle pre
   assert.strictEqual(px[14], 4.3); assert.strictEqual(px[15], 'A'); assert.strictEqual(px[16], 4.3); assert.strictEqual(px[17], 'A'); assert.strictEqual(px[18], null);

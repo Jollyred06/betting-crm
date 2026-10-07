@@ -5,7 +5,7 @@ const oddsApi = require('./oddsApi');
 const history = require('./history');
 const { LEAGUES, DEFAULT_COMPETITIONS } = require('./leagues');
 const { sameTeam, resolveHistoryTeam } = require('./teamNames');
-const { analyzeEvent, sharpReference } = require('./sharpSignals');
+const { analyzeEvent, sharpReference, analyzeTotals } = require('./sharpSignals');
 const { settlePending } = require('./settler');
 const { sendTelegramNotification } = require('./notifier');
 const { checkMilestones } = require('./milestones');
@@ -27,6 +27,7 @@ require('dotenv').config();
 const COMPETITIONS = (process.env.COMPETITIONS || DEFAULT_COMPETITIONS).split(',').map(s => s.trim()).filter(c => LEAGUES[c]);
 const MIN_EDGE = parseFloat(process.env.MIN_EDGE || '0.02'), MAX_EDGE = parseFloat(process.env.MAX_EDGE || '0.25');   // edge = quota_book * p_pinnacle_pre - 1, tra 2% e 25% (modificabili da Render)
 const MAX_DAILY_SIGNALS = parseInt(process.env.MAX_DAILY_SIGNALS || '40', 10);
+const MAX_DAILY_SIGNALS_OU = parseInt(process.env.MAX_DAILY_SIGNALS_OU || '20', 10);   // limite separato per l'Over/Under (attivo solo con TOTALS_ENABLED=1)
 const TRACK_STAKE = parseFloat(process.env.TRACK_STAKE || '2');   // puntata fissa di carta in euro (2 = la puntata minima), niente Kelly: tutti i segnali pesano uguale
 const WINDOW_HOURS = 24;
 
@@ -89,10 +90,10 @@ async function insertSignal(c) {
       `INSERT INTO value_bets (fixture_id, market, selection, bookmaker_odd, bookmaker_name, estimated_probability, implied_probability,
                                edge_pct, recommended_stake, model_version, strategy, sharp_source, league_code, quotes, sharp_odd, n_books, n_near_best,
                                quota_presa, presa_book, quota_max, max_book, goldbet_odd, odds_event_id, pin_pre_odds)
-       VALUES ($1,'1X2',$2,$3,$4,$5,$6,$7,$8,'sharp-v1','A_sharp',$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
-      [...base, ...extra, ...closing]);
+       VALUES ($1,$22,$2,$3,$4,$5,$6,$7,$8,'sharp-v1',$23,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+      [...base, ...extra, ...closing, c.market || '1X2', c.strategy || 'A_sharp']);
   } catch (err) {
-    if (!missingColumn(err)) throw err;
+    if (!missingColumn(err) || c.strategy) throw err;   // i vecchi schemi senza colonne nuove valgono solo per l'1X2
     await insertSignalPrev(base, extra);
   }
 }
@@ -155,7 +156,7 @@ async function runDailyAnalysisInner() {
   catch (err) { log.push(`Elenco campionati attivi non disponibile (${err.message}): provo comunque tutti.`); }
   const isActive = code => !activeKeys || activeKeys.has(LEAGUES[code].oddsKey);
 
-  const candidates = [];
+  const candidates = [], ouCandidates = [];
   const context = {};                          // storico per campionato (nomi per abbinare e chiudere)
   async function leagueNames(code) {
     if (context[code]) return context[code];
@@ -172,6 +173,11 @@ async function runDailyAnalysisInner() {
     stats.withSharp++;
     log.push(checkLine(label, code, a, MIN_EDGE, MAX_EDGE));
     for (const c of a.candidates) candidates.push({ ...c, code, fixtureId, label, source: a.source, home: ev.home_team, away: ev.away_team, kickoff: ev.commence_time, eventId: ev.id });
+    // Over/Under: solo se acceso (TOTALS_ENABLED=1); non tocca in nessun modo i segnali 1X2
+    if (oddsApi.totalsEnabled && oddsApi.totalsEnabled()) {
+      const t = analyzeTotals(ev, { minEdge: MIN_EDGE, maxEdge: MAX_EDGE });
+      if (t.ok) for (const c of t.candidates) ouCandidates.push({ ...c, code, fixtureId, label, source: 'pinnacle', home: ev.home_team, away: ev.away_team, kickoff: ev.commence_time, eventId: ev.id });
+    }
   }
 
   // 2a) campionati coperti da football-data.org: le partite di oggi arrivano da li'
@@ -248,6 +254,19 @@ async function runDailyAnalysisInner() {
     await insertSignal(c);
     log.push(`SEGNALE ${c.label}: ${c.selection} a ${c.odd.toFixed(2)} (${c.bookmaker}), probabilità Pinnacle ${(c.fair * 100).toFixed(1)}%, vantaggio +${(c.edge * 100).toFixed(1)}%.`);
     signalsSaved++; saved.push(c);
+  }
+  // Over/Under (solo se acceso): stesso criterio dell'1X2, limite e doppioni separati, nessuna notifica Telegram
+  let ouSaved = 0;
+  if (ouCandidates.length) {
+    ouCandidates.sort((x, y) => x.edge - y.edge);
+    for (const c of ouCandidates.slice(0, MAX_DAILY_SIGNALS_OU)) {
+      const dup = await pool.query(`SELECT 1 FROM value_bets WHERE fixture_id=$1 AND market=$2 AND selection=$3 AND strategy=$4`, [c.fixtureId, c.market, c.selection, c.strategy]);
+      if (dup.rows.length) continue;
+      await insertSignal(c);
+      log.push(`SEGNALE ${c.market} ${c.label}: ${c.selection === 'over' ? 'Over' : 'Under'} a ${c.odd.toFixed(2)} (${c.bookmaker}), probabilità Pinnacle ${(c.fair * 100).toFixed(1)}%, vantaggio +${(c.edge * 100).toFixed(1)}%.`);
+      ouSaved++;
+    }
+    log.push(`Over/Under: ${ouCandidates.length} candidati, ${ouSaved} salvati.`);
   }
   if (saved.length) {
     // un solo messaggio Telegram per giro, con i segnali NUOVI (quelli già salvati nei giri precedenti non si ripetono)

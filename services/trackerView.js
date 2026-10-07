@@ -22,6 +22,7 @@ function verdict(total) {
 }
 
 function pick(row) {
+  if (row.selection === 'over' || row.selection === 'under') return (row.selection === 'over' ? 'Over ' : 'Under ') + String(row.market || 'OU2.5').slice(2);
   return row.selection === 'home' ? (row.home || 'Casa') : row.selection === 'away' ? (row.away || 'Trasferta') : 'Pareggio';
 }
 
@@ -79,18 +80,18 @@ function leoCols(r) {
 /** Tutti i segnali in CSV (per mandarli in chat all'analisi di ogni tappa). */
 async function signalsCsv(pool) {
   const { rows } = await pool.query(
-    `SELECT vb.id, vb.created_at, f.date AS kickoff, vb.league_code, vb.selection, vb.bookmaker_odd, vb.bookmaker_name, vb.edge_pct,
+    `SELECT vb.id, vb.market, vb.created_at, f.date AS kickoff, vb.league_code, vb.selection, vb.bookmaker_odd, vb.bookmaker_name, vb.edge_pct,
             vb.estimated_probability, vb.sharp_source, vb.status, vb.result_score, vb.closing_fair_prob, vb.clv_pct, vb.settled_at, vb.model_version, vb.quotes, vb.sharp_odd, vb.n_books, vb.n_near_best, vb.clv_source, vb.close_lag_min,
             th.name AS home, ta.name AS away
      FROM value_bets vb JOIN fixtures f ON f.id = vb.fixture_id
      LEFT JOIN teams th ON th.id = f.home_team_id LEFT JOIN teams ta ON ta.id = f.away_team_id
-     WHERE vb.strategy = 'A_sharp' ORDER BY vb.id`);
+     WHERE vb.strategy IN ('A_sharp','A_sharp_ou') ORDER BY vb.id`);
   const cols = ['id', 'creato', 'partita_inizio', 'campionato', 'campionato_nome', 'casa', 'trasferta', 'scelta', 'puntato_su', 'quota', 'bookmaker', 'vantaggio_pct',
-    'prob_pinnacle', 'riferimento', 'stato', 'risultato', 'prob_chiusura', 'valore_vs_chiusura_pct', 'chiuso_il', 'modello', 'n_bookmaker', 'n_vicini_alla_migliore', 'quota_pinnacle', 'quota_mediana', 'clv_source', 'minuti_prima_chiusura', 'quota_leovegas', 'edge_leovegas_pct', 'clv_leovegas_pct', 'quote_json'];
+    'prob_pinnacle', 'riferimento', 'stato', 'risultato', 'prob_chiusura', 'valore_vs_chiusura_pct', 'chiuso_il', 'modello', 'n_bookmaker', 'n_vicini_alla_migliore', 'quota_pinnacle', 'quota_mediana', 'clv_source', 'minuti_prima_chiusura', 'quota_leovegas', 'edge_leovegas_pct', 'clv_leovegas_pct', 'mercato', 'quote_json'];
   const esc = x => { const s = x === null || x === undefined ? '' : x instanceof Date ? x.toISOString() : String(x); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const line = r => [r.id, r.created_at, r.kickoff, r.league_code, (LEAGUES[r.league_code] || {}).name || r.league_code, r.home, r.away, r.selection, pick(r), r.bookmaker_odd, r.bookmaker_name,
     r.edge_pct, r.estimated_probability, r.sharp_source, r.status, r.result_score, r.closing_fair_prob, r.clv_pct, r.settled_at, r.model_version,
-    r.n_books, r.n_near_best, r.sharp_odd, medianOf(r.quotes), r.clv_source, r.close_lag_min, ...leoCols(r), r.quotes ? JSON.stringify(r.quotes) : ''].map(esc).join(',');
+    r.n_books, r.n_near_best, r.sharp_odd, medianOf(r.quotes), r.clv_source, r.close_lag_min, ...leoCols(r), r.market || '1X2', r.quotes ? JSON.stringify(r.quotes) : ''].map(esc).join(',');
   return [cols.join(','), ...rows.map(line)].join('\n');
 }
 
