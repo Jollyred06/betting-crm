@@ -27,6 +27,7 @@ require('dotenv').config();
 const COMPETITIONS = (process.env.COMPETITIONS || DEFAULT_COMPETITIONS).split(',').map(s => s.trim()).filter(c => LEAGUES[c]);
 const MIN_EDGE = parseFloat(process.env.MIN_EDGE || '0.02'), MAX_EDGE = parseFloat(process.env.MAX_EDGE || '0.25');   // edge = quota_book * p_pinnacle_pre - 1, tra 2% e 25% (modificabili da Render)
 const MAX_DAILY_SIGNALS = parseInt(process.env.MAX_DAILY_SIGNALS || '40', 10);
+const OU_LINES = (process.env.OU_LINES || '2.5').split(',').map(s => parseFloat(s.trim())).filter(n => Number.isFinite(n) && n % 1 === 0.5);   // solo linee .5 (niente rimborsi)
 const MAX_DAILY_SIGNALS_OU = parseInt(process.env.MAX_DAILY_SIGNALS_OU || '20', 10);   // limite separato per l'Over/Under (attivo solo con TOTALS_ENABLED=1)
 const TRACK_STAKE = parseFloat(process.env.TRACK_STAKE || '2');   // puntata fissa di carta in euro (2 = la puntata minima), niente Kelly: tutti i segnali pesano uguale
 const WINDOW_HOURS = 24;
@@ -175,8 +176,12 @@ async function runDailyAnalysisInner() {
     for (const c of a.candidates) candidates.push({ ...c, code, fixtureId, label, source: a.source, home: ev.home_team, away: ev.away_team, kickoff: ev.commence_time, eventId: ev.id });
     // Over/Under: solo se acceso (TOTALS_ENABLED=1); non tocca in nessun modo i segnali 1X2
     if (oddsApi.totalsEnabled && oddsApi.totalsEnabled()) {
-      const t = analyzeTotals(ev, { minEdge: MIN_EDGE, maxEdge: MAX_EDGE });
-      if (t.ok) for (const c of t.candidates) ouCandidates.push({ ...c, code, fixtureId, label, source: 'pinnacle', home: ev.home_team, away: ev.away_team, kickoff: ev.commence_time, eventId: ev.id });
+      try {   // un errore sull'Over/Under non deve mai fermare l'1X2
+        for (const line of OU_LINES) {   // OU_LINES su Render, es. "1.5,2.5,3.5": conta solo la linea che Pinnacle e i bookmaker hanno davvero
+          const t = analyzeTotals(ev, { minEdge: MIN_EDGE, maxEdge: MAX_EDGE, line });
+          if (t.ok) for (const c of t.candidates) ouCandidates.push({ ...c, code, fixtureId, label, source: 'pinnacle', home: ev.home_team, away: ev.away_team, kickoff: ev.commence_time, eventId: ev.id });
+        }
+      } catch (err) { log.push(`${label}: Over/Under non analizzato (${err.message}).`); }
     }
   }
 
@@ -258,15 +263,17 @@ async function runDailyAnalysisInner() {
   // Over/Under (solo se acceso): stesso criterio dell'1X2, limite e doppioni separati, nessuna notifica Telegram
   let ouSaved = 0;
   if (ouCandidates.length) {
-    ouCandidates.sort((x, y) => x.edge - y.edge);
-    for (const c of ouCandidates.slice(0, MAX_DAILY_SIGNALS_OU)) {
-      const dup = await pool.query(`SELECT 1 FROM value_bets WHERE fixture_id=$1 AND market=$2 AND selection=$3 AND strategy=$4`, [c.fixtureId, c.market, c.selection, c.strategy]);
-      if (dup.rows.length) continue;
-      await insertSignal(c);
-      log.push(`SEGNALE ${c.market} ${c.label}: ${c.selection === 'over' ? 'Over' : 'Under'} a ${c.odd.toFixed(2)} (${c.bookmaker}), probabilità Pinnacle ${(c.fair * 100).toFixed(1)}%, vantaggio +${(c.edge * 100).toFixed(1)}%.`);
-      ouSaved++;
-    }
-    log.push(`Over/Under: ${ouCandidates.length} candidati, ${ouSaved} salvati.`);
+    try {   // idem: un errore nel salvataggio dell'Over/Under non deve fermare il resto del giro
+      ouCandidates.sort((x, y) => x.edge - y.edge);
+      for (const c of ouCandidates.slice(0, MAX_DAILY_SIGNALS_OU)) {
+        const dup = await pool.query(`SELECT 1 FROM value_bets WHERE fixture_id=$1 AND market=$2 AND selection=$3 AND strategy=$4`, [c.fixtureId, c.market, c.selection, c.strategy]);
+        if (dup.rows.length) continue;
+        await insertSignal(c);
+        log.push(`SEGNALE ${c.market} ${c.label}: ${c.selection === 'over' ? 'Over' : 'Under'} a ${c.odd.toFixed(2)} (${c.bookmaker}), probabilità Pinnacle ${(c.fair * 100).toFixed(1)}%, vantaggio +${(c.edge * 100).toFixed(1)}%.`);
+        ouSaved++;
+      }
+      log.push(`Over/Under: ${ouCandidates.length} candidati, ${ouSaved} salvati.`);
+    } catch (err) { log.push(`Over/Under: salvataggio non riuscito (${err.message}).`); }
   }
   if (saved.length) {
     // un solo messaggio Telegram per giro, con i segnali NUOVI (quelli già salvati nei giri precedenti non si ripetono)
