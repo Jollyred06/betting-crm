@@ -21,7 +21,7 @@ const FULL_NAME_ALIASES = {
   'urawa red diamonds': 'Urawa Reds', 'urawa reds': 'Urawa Reds',
   'austria wien': 'Austria Vienna', 'blau weiss linz': 'BW Linz', 'fc blau weiss linz': 'BW Linz', 'austria lustenau': 'A. Lustenau', 'sc austria lustenau': 'A. Lustenau',
   'flamengo': 'Flamengo RJ', 'cr flamengo': 'Flamengo RJ', 'botafogo': 'Botafogo RJ', 'botafogo fr': 'Botafogo RJ',
-  'atletico mineiro': 'Atletico-MG', 'clube atletico mineiro': 'Atletico-MG', 'athletico paranaense': 'Athletico-PR', 'athletico pr': 'Athletico-PR', 'atletico paranaense': 'Athletico-PR', 'atletico pr': 'Athletico-PR',
+  'atletico mineiro': 'Atletico-MG', 'clube atletico mineiro': 'Atletico-MG', 'athletico paranaense': 'Athletico-PR', 'athletico pr': 'Athletico-PR', 'atletico paranaense': 'Athletico-PR', 'sarpsborg fk': 'Sarpsborg 08', 'sarpsborg': 'Sarpsborg 08', 'kfum': 'KFUM Oslo', 'kfum oslo': 'KFUM Oslo', 'rapid wien': 'SK Rapid', 'sk rapid wien': 'SK Rapid', 'atletico pr': 'Athletico-PR',
   'chapecoense': 'Chapecoense-SC', 'associacao chapecoense': 'Chapecoense-SC',
   'la galaxy': 'Los Angeles Galaxy', 'los angeles galaxy': 'Los Angeles Galaxy', 'dc united': 'DC United', 'd c united': 'DC United',
   'inter milan': 'Inter',
