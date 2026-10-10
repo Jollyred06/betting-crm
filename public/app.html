@@ -387,7 +387,7 @@
       <polygon class="area ${k}" points="${area}"/><polyline class="line ${k}" points="${pts.join(' ')}" vector-effect="non-scaling-stroke"/>
       ${mini ? '' : `<circle class="dot ${k}" cx="${X(series.length - 1).toFixed(1)}" cy="${Y(series[series.length - 1].b).toFixed(1)}" r="4"/>`}</svg>`;
   }
-  const bankHead = b => { const d = Math.round((b.balance - b.start) * 100) / 100; return `<div class="money num">${money(b.balance)}</div><div class="delta ${cls(d)}">${signedMoney(d)} dal punto di partenza (${money(b.start)})</div>`; };
+  const bankHead = b => { const d = Number(b.signalsProfit) || 0, dep = Number(b.netManual) || 0; return `<div class="money num">${money(b.balance)}</div><div class="delta ${cls(d)}">${signedMoney(d)} dai segnali (${b.signalsCount})</div><p class="muted">Partenza ${money(b.start)}${dep ? `, depositi e prelievi ${signedMoney(dep)}` : ''}: non contano come guadagno.</p>`; };
   function renderBankMini(b) {
     if (!b) { $('bankMini').innerHTML = '<div class="empty">Non disponibile.</div>'; return; }
     $('bankMini').innerHTML = bankHead(b) + (b.series.length > 1 ? chartSvg(b.series, b.start, true) : '<p class="muted">Il saldo si muove quando un segnale si chiude: 2€ in più se vince, 2€ in meno se perde.</p>') + '<button class="linkbtn" onclick="show(\'bankroll\')">Apri il bankroll</button>';
