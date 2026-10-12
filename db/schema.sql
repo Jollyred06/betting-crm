@@ -219,3 +219,18 @@ ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS close_pin_a NUMERIC(8,3);
 ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS clv_source TEXT;            -- 'pinnacle' (chiusura catturata) oppure 'avg' (ripiego sulla media di chiusura)
 ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS close_lag_min INTEGER;      -- minuti tra la cattura e il calcio d'inizio
 ALTER TABLE value_bets ADD COLUMN IF NOT EXISTS close_captured_at TIMESTAMP;
+
+-- Fotografie delle quote di tutte le partite viste (studio del movimento di Pinnacle e dei book italiani); la tabella si crea anche da sola
+CREATE TABLE IF NOT EXISTS pin_snapshots (
+  id SERIAL PRIMARY KEY,
+  odds_event_id TEXT NOT NULL,
+  league_code TEXT,
+  home TEXT,
+  away TEXT,
+  commence_time TIMESTAMPTZ,
+  captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  source TEXT,
+  pin_h NUMERIC(8,3), pin_d NUMERIC(8,3), pin_a NUMERIC(8,3),
+  quotes JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_pin_snapshots_event ON pin_snapshots(odds_event_id, captured_at);
