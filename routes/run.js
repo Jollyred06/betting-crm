@@ -70,11 +70,21 @@ router.post('/run-daily-if-missing', async (req, res) => {
 
 // Cattura la quota di chiusura Pinnacle dei segnali che stanno per iniziare (da chiamare ogni 30 minuti, vedi .github/workflows/chiusura.yml).
 // Senza segnali in finestra non spende nessun credito. Risposta minuscola.
-let closingRunning = false;
+let closingRunning = false, italiaRunning = false;
 router.post('/capture-closing', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
   if (closingRunning) return res.json({ success: true, giaInCorso: true });
   closingRunning = true;
+  // Strategia I (quote italiane, odss-api.com): parte DOPO la risposta, in background, cosi' cron-job.org non aspetta mai
+  // la richiesta al feed. Non usa i crediti di The Odds API, non tocca la strategia A e gira anche se la parte A va in errore.
+  const italiaInBackground = () => {
+    if (italiaRunning) return;
+    italiaRunning = true;
+    require('../services/italia').tick(pool, { notify: sendTelegramNotification })
+      .then(r => { if (r && (r.erroreScansione || r.erroreChiusura || r.errore)) console.error('Strategia I:', JSON.stringify(r)); })
+      .catch(e => console.error('Strategia I:', e.message))
+      .finally(() => { italiaRunning = false; });
+  };
   try {
     const cc = require('../services/closingCapture'), odds = require('../services/oddsApi');
     const r = await cc.captureClosing(pool, odds);
@@ -82,7 +92,7 @@ router.post('/capture-closing', async (req, res) => {
     try { const o = await cc.captureClosingOU(pool, odds); if (o.segnaliInFinestra) ouRes = o; } catch (e) { ouRes = { errori: [e.message] }; }   // Over/Under: non deve mai bloccare l'1X2
     res.json({ success: true, ...r, ...(ouRes ? { overUnder: ouRes } : {}) });
   } catch (err) { res.status(500).json({ error: err.message }); }
-  finally { closingRunning = false; }
+  finally { closingRunning = false; italiaInBackground(); }
 });
 
 // Controllo di sistema: database, tabelle, chiavi, servizi esterni, Telegram e giro giornaliero in un solo colpo.

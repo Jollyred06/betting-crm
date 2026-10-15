@@ -234,3 +234,19 @@ CREATE TABLE IF NOT EXISTS pin_snapshots (
   quotes JSONB
 );
 CREATE INDEX IF NOT EXISTS idx_pin_snapshots_event ON pin_snapshots(odds_event_id, captured_at);
+
+-- Strategia I: quote italiane contro Pinnacle (fonte odss-api.com); le tabelle si creano anche da sole
+CREATE TABLE IF NOT EXISTS italia_signals (
+  id SERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  event_id TEXT NOT NULL, league TEXT, home TEXT, away TEXT, commence_time TIMESTAMPTZ,
+  selection TEXT NOT NULL, book TEXT, odd NUMERIC(8,3), fair_prob NUMERIC(8,5), edge_pct NUMERIC(8,3),
+  pin_h NUMERIC(8,3), pin_d NUMERIC(8,3), pin_a NUMERIC(8,3),
+  netwin_odd NUMERIC(8,3), netwin_edge_pct NUMERIC(8,3), quotes JSONB,
+  close_pin_h NUMERIC(8,3), close_pin_d NUMERIC(8,3), close_pin_a NUMERIC(8,3), closing_fair_prob NUMERIC(8,5),
+  clv_pct NUMERIC(8,3), netwin_clv_pct NUMERIC(8,3), close_lag_min INT, close_captured_at TIMESTAMPTZ,
+  UNIQUE (event_id, selection)
+);
+CREATE TABLE IF NOT EXISTS italia_requests (
+  id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), kind TEXT, ok BOOLEAN, records INT, quota_remaining INT, note TEXT
+);

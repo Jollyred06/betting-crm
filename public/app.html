@@ -192,7 +192,8 @@
   <main id="pane-strategies" style="display:none;">
     <section class="block">
       <h3>Strategie</h3>
-      <p class="muted" style="font-size:15px;margin:0 0 14px;">Una sola strategia è in prova dal vivo. Le altre sono state provate sul passato e scartate perché non battevano il mercato. Se ne aggiungeremo altre, compariranno qui.</p>
+      <p class="muted" style="font-size:15px;margin:0 0 14px;">In prova dal vivo, senza soldi veri: la strategia A (migliore quota tra tutti i bookmaker) e la strategia I (solo bookmaker italiani). Le altre sono state provate sul passato e scartate perché non battevano il mercato.</p>
+      <div id="italia"></div>
       <div id="strategies"></div>
     </section>
     <section class="block"><h3>Provate e scartate</h3><div id="discarded"></div></section>
@@ -429,7 +430,24 @@
 
   // ------------------------------------------------------------------ STRATEGIE
   const variantLine = r => `<div><dt>${esc(r.name)}</dt><dd>${r.signals ? r.signals + ' segnali' + (r.settled >= 5 ? ', ' + pct(r.avgClvPct) + ' vs chiusura' : ', pochi chiusi') : 'nessuno'}</dd></div>`;
+  const itStat = t => t.measured >= 5 ? pct(t.avgClvPct, 2) + (t.clvCi95 ? ` (da ${pct(t.clvCi95[0])} a ${pct(t.clvCi95[1])})` : '') + `, positivi ${num(t.positivePct, 0)}%` : (t.measured ? t.measured + ' misurati, pochi dati' : 'nessuno misurato');
+  async function loadItalia() {
+    try {
+      const d = await getJson('/api/tracker/italia');
+      const t = d.total;
+      const rows = (d.recent || []).map(r => `<div class="move"><div>${esc(r.home)} – ${esc(r.away)}<small>${esc(r.league || '')} · ${fmtDate(r.commence_time)}</small><small>Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)} (${pct(r.edge_pct)})${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</small></div><div class="${cls(r.clv_pct)}" style="font-weight:700;white-space:nowrap;">${r.clv_pct === null ? 'in attesa' : pct(r.clv_pct)}</div></div>`).join('');
+      $('italia').innerHTML = `<div class="strat"><div class="sh"><div class="letter">I</div><div><b>Quote italiane contro Pinnacle</b><span>${d.active ? 'In prova dal vivo, senza soldi veri' : 'Spenta: manca la variabile ODSS_API_KEY su Render'}</span></div></div>
+        <p class="muted" style="margin:0 0 6px;">Ogni ${d.rules.scanEveryMin} minuti guarda le partite delle prossime ${d.rules.windowHours} ore e segnala dove ${esc(d.books.join(', '))} pagano più del prezzo giusto di Pinnacle (vantaggio dal ${d.rules.minEdge}% al ${d.rules.maxEdge}%, quota sotto ${num(d.rules.maxOdd, 0)}). Alla chiusura misura il valore.</p>
+        <dl class="facts"><div><dt>Segnali</dt><dd>${t.signals} (${t.measured} con chiusura)</dd></div>
+          <div><dt>Valore vs chiusura</dt><dd class="${t.measured >= 5 ? cls(t.avgClvPct) : ''}">${itStat(t)}</dd></div>
+          <div><dt>Giocando sempre su Netwin</dt><dd class="${d.netwin.measured >= 5 ? cls(d.netwin.avgClvPct) : ''}">${itStat(d.netwin)}</dd></div>
+          <div><dt>Richieste odss</dt><dd>${d.requestsThisMonth} usate dal CRM questo mese${d.quotaRemaining !== null && d.quotaRemaining !== undefined ? ', ' + d.quotaRemaining + ' rimaste sull\'account' : ''}</dd></div></dl>
+        ${d.byBook.length ? `<details><summary>Per bookmaker ed esito</summary><h4>Per bookmaker</h4><dl class="facts">${d.byBook.map(b => `<div><dt>${esc(b.book)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl><h4>Per esito</h4><dl class="facts">${d.bySelection.map(b => `<div><dt>${esc(b.name)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
+        ${rows ? `<details><summary>Ultimi segnali</summary>${rows}</details>` : ''}</div>`;
+    } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare la strategia I: ' + esc(e.message) + '</div>'; }
+  }
   async function loadStrategies() {
+    loadItalia();
     try {
       const d = await getJson('/api/tracker/strategies');
       $('strategies').innerHTML = d.strategies.map(s => {
