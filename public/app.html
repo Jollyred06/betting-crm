@@ -82,6 +82,8 @@
   .card2 { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
   .move { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); font-size:14.5px; } .move:last-child { border-bottom:0; } .move small { display:block; color:var(--muted); font-size:12.5px; }
 
+  .advisor .list > div.first b { font-size:17px; } .advisor .list > div.first { padding-top:6px; }
+  .scope { display:flex; gap:8px; margin:0 0 12px; } .scope button { flex:1; min-height:40px; border-radius:999px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font:600 14px var(--body); } .scope button.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
   .sechead { margin:18px 0 10px; font-size:16px; } .sechead small { font-weight:400; font-size:13px; }
   .chip.it { background:#1f6f43; border-color:#1f6f43; color:#fff; }
   .chip.inband { border-color:var(--ok); color:var(--ok); }
@@ -162,6 +164,7 @@
   <!-- HOME -->
   <main id="pane-home">
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
+    <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted" style="margin:-4px 0 6px;font-size:14px;">Consigli automatici sui risultati, aggiornati a ogni apertura. Niente giudizi su pochi dati.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
     <section id="verdict" class="hero"><div class="sk l1"></div><div class="sk l2"></div><div class="sk l3"></div><div class="sk box"></div></section>
     <div class="upd" id="updLine"></div>
     <section class="block">
@@ -183,6 +186,10 @@
   <main id="pane-signals" style="display:none;">
     <section class="block">
       <h3>Segnali</h3>
+      <div class="scope" role="group" aria-label="Quali segnali">
+        <button id="scope-it" class="on" onclick="setScope('it')">🇮🇹 Giocabili in Italia</button>
+        <button id="scope-all" onclick="setScope('all')">Tutte le strategie</button>
+      </div>
       <div class="seg" role="tablist">
         <button class="tab on" data-s="" onclick="setTab(this)">Tutti</button>
         <button class="tab" data-s="pending" onclick="setTab(this)">In attesa</button>
@@ -435,21 +442,28 @@
   // ------------------------------------------------------------------ STRATEGIE
   const variantLine = r => `<div><dt>${esc(r.name)}</dt><dd>${r.signals ? r.signals + ' segnali' + (r.settled >= 5 ? ', ' + pct(r.avgClvPct) + ' vs chiusura' : ', pochi chiusi') : 'nessuno'}</dd></div>`;
   const itStat = t => t.measured >= 5 ? pct(t.avgClvPct, 2) + (t.clvCi95 ? ` (da ${pct(t.clvCi95[0])} a ${pct(t.clvCi95[1])})` : '') + `, positivi ${num(t.positivePct, 0)}%` : (t.measured ? t.measured + ' misurati, pochi dati' : 'nessuno misurato');
-  async function loadItalia() {
-    try {
-      const d = await getJson('/api/tracker/italia');
-      const t = d.total;
-      const rows = (d.recent || []).map(r => `<div class="move"><div>${esc(r.home)} – ${esc(r.away)}<small>${esc(r.league || '')} · ${fmtDate(r.commence_time)}</small><small>Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)} (${pct(r.edge_pct)})${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</small></div><div class="${cls(r.clv_pct)}" style="font-weight:700;white-space:nowrap;">${r.clv_pct === null ? 'in attesa' : pct(r.clv_pct)}</div></div>`).join('');
-      $('italia').innerHTML = `<div class="strat"><div class="sh"><div class="letter">I</div><div><b>Quote italiane contro Pinnacle</b><span>${d.active ? 'In prova dal vivo, senza soldi veri' : 'Spenta: manca la variabile ODSS_API_KEY su Render'}</span></div></div>
-        <p class="muted" style="margin:0 0 6px;">Ogni ${d.rules.scanEveryMin} minuti guarda le partite delle prossime ${d.rules.windowHours} ore e segnala dove ${esc(d.books.join(', '))} pagano più del prezzo giusto di Pinnacle (vantaggio dal ${d.rules.minEdge}% al ${d.rules.maxEdge}%, quota sotto ${num(d.rules.maxOdd, 0)}). Alla chiusura misura il valore.</p>
+  // Card delle strategie che leggono odss-api.com: I (libri italiani, giocabili) e B (selezione B sui libri esteri, solo misura).
+  function oddsCard(d) {
+    const t = d.total, isI = d.strategy !== 'B';
+    const rows = (d.recent || []).map(r => `<div class="move"><div>${esc(r.home)} – ${esc(r.away)}<small>${esc(r.league || '')} · ${fmtDate(r.commence_time)}</small><small>Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)} (${pct(r.edge_pct)})${isI && r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</small></div><div class="${cls(r.clv_pct)}" style="font-weight:700;white-space:nowrap;">${r.clv_pct === null ? 'in attesa' : pct(r.clv_pct)}</div></div>`).join('');
+    const desc = isI
+      ? `Ogni ${d.rules.scanEveryMin} minuti guarda le partite delle prossime ${d.rules.windowHours} ore e segnala dove ${esc(d.books.join(', '))} pagano più del prezzo giusto di Pinnacle (vantaggio dal ${d.rules.minEdge}% al ${d.rules.maxEdge}%, quota sotto ${num(d.rules.maxOdd, 0)}). Alla chiusura misura il valore.`
+      : `La prova della selezione B su partite nuove, con la stessa richiesta della strategia I (nessun credito in più): libri esteri ${esc(d.books.join(', '))}, vantaggio dal ${d.rules.minEdge}% al ${d.rules.maxEdge}%, quota sotto ${num(d.rules.maxOdd, 0)}, partite delle prossime ${d.rules.windowHours} ore. Solo misura: questi libri non si giocano dall'Italia.`;
+    return `<div class="strat"><div class="sh"><div class="letter">${esc(d.letter || (isI ? 'I' : 'B'))}</div><div><b>${esc(d.title || '')}</b><span>${d.active ? 'In prova dal vivo, senza soldi veri' : 'Spenta: manca la variabile ODSS_API_KEY su Render'}</span></div></div>
+        <p class="muted" style="margin:0 0 6px;">${desc}</p>
         <dl class="facts"><div><dt>Segnali</dt><dd>${t.signals} (${t.measured} con chiusura)</dd></div>
           <div><dt>Valore vs chiusura</dt><dd class="${t.measured >= 5 ? cls(t.avgClvPct) : ''}">${itStat(t)}</dd></div>
-          <div><dt>Giocando sempre su Netwin</dt><dd class="${d.netwin.measured >= 5 ? cls(d.netwin.avgClvPct) : ''}">${itStat(d.netwin)}</dd></div>
-          <div><dt>Richieste odss</dt><dd>${d.requestsThisMonth} usate dal CRM questo mese${d.quotaRemaining !== null && d.quotaRemaining !== undefined ? ', ' + d.quotaRemaining + ' rimaste sull\'account' : ''}</dd></div></dl>
+          ${isI ? `<div><dt>Giocando sempre su Netwin</dt><dd class="${d.netwin.measured >= 5 ? cls(d.netwin.avgClvPct) : ''}">${itStat(d.netwin)}</dd></div>
+          <div><dt>Richieste odss</dt><dd>${d.requestsThisMonth} usate dal CRM questo mese${d.quotaRemaining !== null && d.quotaRemaining !== undefined ? ', ' + d.quotaRemaining + ' rimaste sull\'account' : ''}</dd></div>` : ''}</dl>
         ${d.byBook.length ? `<details><summary>Per bookmaker ed esito</summary><h4>Per bookmaker</h4><dl class="facts">${d.byBook.map(b => `<div><dt>${esc(b.book)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl><h4>Per esito</h4><dl class="facts">${d.bySelection.map(b => `<div><dt>${esc(b.name)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
-        ${d.byOdds && d.total.signals ? `<details open><summary>Per fascia di quota</summary><dl class="facts">${d.byOdds.map(b => `<div><dt>${b.recommended ? '⭐ ' : ''}${esc(b.name)}</dt><dd>${b.signals} segnali${b.expectedWinsOf10 !== null ? ', attese ' + num(b.expectedWinsOf10, 1) + ' su 10' : ''}, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
+        ${d.byOdds && d.total.signals ? `<details${isI ? ' open' : ''}><summary>Per fascia di quota</summary><dl class="facts">${d.byOdds.map(b => `<div><dt>${b.recommended ? '⭐ ' : ''}${esc(b.name)}</dt><dd>${b.signals} segnali${b.expectedWinsOf10 !== null ? ', attese ' + num(b.expectedWinsOf10, 1) + ' su 10' : ''}, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
         ${rows ? `<details><summary>Ultimi segnali</summary>${rows}</details>` : ''}</div>`;
-    } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare la strategia I: ' + esc(e.message) + '</div>'; }
+  }
+  async function loadItalia() {
+    try {
+      const [i, b] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null)]);
+      $('italia').innerHTML = oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
+    } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
   async function loadStrategies() {
     loadItalia();
@@ -468,7 +482,15 @@
     } catch (e) { $('strategies').innerHTML = '<div class="empty">Non riesco a caricare le strategie: ' + esc(e.message) + '</div>'; }
   }
 
+  async function loadAdvice() {
+    try {
+      const d = await getJson('/api/tracker/advice');
+      const lv = { good: 'ok', bad: 'bad', info: 'info' };
+      $('advice').innerHTML = d.advice.map((x, i) => `<div class="${i === 0 ? 'first' : ''}">${marker(lv[x.level] || 'info')}<div><b>${esc(x.title)}</b><span class="muted">${esc(x.text)}</span></div></div>`).join('');
+    } catch (e) { $('advice').innerHTML = '<div class="empty">Il Consigliere non è disponibile: ' + esc(e.message) + '</div>'; }
+  }
   async function loadHome() {
+    loadAdvice();
     try {
       const [o, h, m, b] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health'), getJson('/api/tracker/milestones').catch(() => null), getJson('/api/tracker/bankroll').catch(() => null)]);
       bankData = b; renderMilestones(m); renderBankMini(b);
@@ -507,28 +529,44 @@
   }
 
   // ------------------------------------------------------------------ SEGNALI
+  let sigScope = 'it';
+  try { sigScope = localStorage.getItem('sigScope') || 'it'; } catch (e) { /* senza memoria del browser: giocabili */ }
+  function setScope(v) {
+    sigScope = v; try { localStorage.setItem('sigScope', v); } catch (e) { /* facoltativo */ }
+    $('scope-it').classList.toggle('on', v === 'it'); $('scope-all').classList.toggle('on', v === 'all'); loadSignals();
+  }
   function setTab(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('on')); el.classList.add('on'); sigTab = el.dataset.s; loadSignals(); }
   // Segnali della strategia I (solo bookmaker italiani): stessa scheda, con l'etichetta IT e la quota minima da accettare sul sito.
-  function italiaTickets(d) {
+  function italiaTickets(d, head, chip, tail) {
     const now = Date.now();
     const list = (d && d.recent || []).filter(r => sigTab === 'pending' ? Date.parse(r.commence_time) > now : sigTab === 'settled' || sigTab === 'closed' ? r.clv_pct !== null : true).slice(0, 15);
     if (!list.length) return '';
-    return `<h4 class="sechead">🇮🇹 Bookmaker italiani <small class="muted">· strategia I, prova senza soldi</small></h4>` + list.map(r => `
+    return head + list.map(r => `
         <article class="ticket">
           <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { day: 'numeric' })}</b><span>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span></div>
           <div class="tmain">
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.clv_pct !== null ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
-            ${r.min_odd ? `<div class="avail">Gioca solo se sul sito la quota è almeno <b>${num(r.min_odd, 2)}</b>${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</div>` : ''}
-            <div class="foot"><span class="chip it">IT</span>${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
+            ${r.min_odd && chip.includes('chip it') ? `<div class="avail">Gioca solo se sul sito la quota è almeno <b>${num(r.min_odd, 2)}</b>${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</div>` : ''}
+            <div class="foot">${chip}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
-        </article>`).join('') + `<h4 class="sechead">Tutti i bookmaker <small class="muted">· strategia A, il test in corso</small></h4>`;
+        </article>`).join('') + tail;
   }
   async function loadSignals() {
     const el = $('signals');
     try {
-      const [rows, it] = await Promise.all([getJson('/api/tracker/signals' + (sigTab ? '?status=' + sigTab : '')), getJson('/api/tracker/italia').catch(() => null)]);
-      const itHtml = italiaTickets(it);
+      const [rows, it, bs] = await Promise.all([getJson('/api/tracker/signals' + (sigTab ? '?status=' + sigTab : '')), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/italia?s=B').catch(() => null)]);
+      const aHead = `<h4 class="sechead">Tutti i bookmaker <small class="muted">· strategia A, il test in corso</small></h4>`;
+      $('scope-it').classList.toggle('on', sigScope === 'it'); $('scope-all').classList.toggle('on', sigScope === 'all');
+      const itPart = italiaTickets(it, `<h4 class="sechead">🇮🇹 Bookmaker italiani <small class="muted">· strategia I, prova senza soldi</small></h4>`, '<span class="chip it">IT</span>', '');
+      if (sigScope === 'it') {
+        el.innerHTML = itPart ? '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + itPart
+          : '<div class="empty">Nessun segnale sui bookmaker italiani in questa lista. Il CRM controlla le partite ogni 3 ore, dalle 9 alle 22. Per vedere anche le strategie di sola misura tocca “Tutte le strategie”.</div>';
+        paintDots(); return;
+      }
+      const itHtml = itPart
+        + italiaTickets(bs && bs.strategy === 'B' ? bs : null, `<h4 class="sechead">Selezione B <small class="muted">· libri esteri, solo misura (non giocabili dall'Italia)</small></h4>`, '<span class="chip">B</span>', '')
+        + (rows.length ? aHead : '');
       if (!rows.length && !itHtml) { el.innerHTML = '<div class="empty">Nessun segnale in questa lista. Compaiono quando ci sono partite con una quota sopra la soglia.</div>'; return; }
       el.innerHTML = '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + itHtml + rows.map(r => `
         <article class="ticket">

@@ -89,6 +89,18 @@ assert.ok(it.inBand(1.6) && it.inBand(2.6) && it.inBand(2.0) && !it.inBand(1.59)
 const os = it.oddsStats([{ odd: 2, fair_prob: 0.5, clv_pct: '1' }, { odd: 2.2, fair_prob: 0.4, clv_pct: null }]);
 assert.ok(Math.abs(os.expectedWinsOf10 - 4.5) < 1e-9); assert.strictEqual(os.measured, 1);
 
+// 11e) strategia B: libri esteri della selezione B, edge 2-5%, stessa richiesta
+const cB = it.cfgFor(c, 'B');
+assert.deepStrictEqual(cB.books, it.DEFAULT_B_BOOKS); assert.strictEqual(cB.maxEdge, 5); assert.ok(!cB.books.includes('betsson') && !cB.books.includes('leovegas_se'));
+s = it.findSignals([rec('b1', 2, [pin, bk('onexbet', 2.0, 3.65, 3.6), bk('netwin', 2.0, 3.8, 3.6)])], cB, NOW);
+assert.strictEqual(s.length, 1); assert.strictEqual(s[0].book, 'onexbet');   // la quota Netwin non conta per B
+assert.ok(s[0].edge_pct >= 2 && s[0].edge_pct <= 5);
+assert.strictEqual(it.findSignals([rec('b2', 2, [pin, bk('onexbet', 2.0, 3.8, 3.6)])], cB, NOW).length, 0, 'B: edge sopra il 5% escluso');
+assert.strictEqual(it.findSignals([rec('b3', 2, [pin, bk('betsson', 2.0, 3.65, 3.6)])], cB, NOW).length, 0, 'B: Betsson escluso');
+
+assert.strictEqual(it.findSignals([{ ...rec('y1', 2, [pin, bk('netwin', 2.0, 3.8, 3.6)]), league: 'U21 Liga MX' }], c, NOW).length, 0, 'campionato giovanile escluso');
+assert.strictEqual(it.findSignals([{ ...rec('y2', 2, [pin, bk('netwin', 2.0, 3.8, 3.6)]), league: 'Serie C, Gruppo B' }], c, NOW).length, 1, 'la B del girone non e\' una squadra B');
+
 // 12) senza chiave non fa niente (nessuna rete, nessun database)
 (async () => {
   const r = await it.tick({ query: () => { throw new Error('non deve toccare il database'); } }, { env: {} });

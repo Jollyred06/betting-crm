@@ -245,8 +245,11 @@ CREATE TABLE IF NOT EXISTS italia_signals (
   netwin_odd NUMERIC(8,3), netwin_edge_pct NUMERIC(8,3), quotes JSONB,
   close_pin_h NUMERIC(8,3), close_pin_d NUMERIC(8,3), close_pin_a NUMERIC(8,3), closing_fair_prob NUMERIC(8,5),
   clv_pct NUMERIC(8,3), netwin_clv_pct NUMERIC(8,3), close_lag_min INT, close_captured_at TIMESTAMPTZ,
-  UNIQUE (event_id, selection)
+  strategy TEXT NOT NULL DEFAULT 'I'          -- 'I' libri italiani, 'B' selezione B sui libri esteri
 );
+ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS strategy TEXT NOT NULL DEFAULT 'I';
+ALTER TABLE italia_signals DROP CONSTRAINT IF EXISTS italia_signals_event_id_selection_key;
+CREATE UNIQUE INDEX IF NOT EXISTS italia_signals_uniq ON italia_signals (event_id, selection, strategy);
 CREATE TABLE IF NOT EXISTS italia_requests (
   id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), kind TEXT, ok BOOLEAN, records INT, quota_remaining INT, note TEXT
 );

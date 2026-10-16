@@ -24,7 +24,10 @@ router.get('/strategies', async (req, res) => {
   try { res.json(await view.getStrategies(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 router.get('/italia', async (req, res) => {
-  try { res.json(await require('../services/italia').getItalia(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+  try { res.json(await require('../services/italia').getItalia(pool, process.env, req.query.s === 'B' ? 'B' : 'I')); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+router.get('/advice', async (req, res) => {
+  try { res.json(await require('../services/advisor').getAdvice(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 router.get('/milestones', async (req, res) => {
   try { res.json(await require('../services/milestones').getMilestones(pool)); } catch (err) { res.status(500).json({ error: err.message }); }

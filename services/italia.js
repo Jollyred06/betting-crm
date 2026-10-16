@@ -16,7 +16,14 @@ const { noVigPower } = require('./sharpSignals');
 
 const BASE = 'https://odss-api.com/api/v1';
 const DEFAULT_BOOKS = ['netwin', '888sport_it', 'sisal', 'snai', 'goldbet', 'eurobet'];
-const BOOK_NAMES = { netwin: 'Netwin', '888sport_it': '888sport', sisal: 'Sisal', snai: 'Snai', goldbet: 'Goldbet', eurobet: 'Eurobet', lottomatica: 'Lottomatica', pokerstars: 'PokerStars', leovegas: 'LeoVegas', betsson: 'Betsson', bet365: 'bet365', planetwin365: 'Planetwin365' };
+// Strategia B (selezione B dai dati della A, fonte odss): stessi libri esteri della A tranne quelli peggiori (LeoVegas, Coolbet, GTbets, Betsson).
+const DEFAULT_B_BOOKS = ['onexbet', 'unibet_se', 'unibet_nl', 'williamhill', 'marathonbet', '888sport', 'bet365'];
+const BOOK_NAMES = { netwin: 'Netwin', '888sport_it': '888sport', sisal: 'Sisal', snai: 'Snai', goldbet: 'Goldbet', eurobet: 'Eurobet', lottomatica: 'Lottomatica', pokerstars: 'PokerStars', leovegas: 'LeoVegas', betsson: 'Betsson', bet365: 'bet365', planetwin365: 'Planetwin365',
+  onexbet: '1xBet', unibet_se: 'Unibet (SE)', unibet_nl: 'Unibet (NL)', williamhill: 'William Hill', marathonbet: 'Marathonbet', '888sport': '888sport (estero)' };
+const STRATEGIES = {
+  I: { letter: 'I', title: 'Quote italiane contro Pinnacle', playable: true },
+  B: { letter: 'B', title: 'Selezione B – libri esteri (da odss)', playable: false }
+};
 const OUT = { home: 'HOME', draw: 'DRAW', away: 'AWAY' };
 const SEL_NAME = { home: '1', draw: 'X', away: '2' };
 
@@ -36,8 +43,17 @@ function cfg(env = process.env) {
     monthlyCap: n('ITALIA_MONTHLY_CAP', 400),
     closeReserve: n('ITALIA_CLOSE_RESERVE', 60),
     closeWindowMin: n('ITALIA_CLOSE_WINDOW_MIN', 40),
-    maxStaleMin: n('ITALIA_MAX_STALE_MIN', 30)
+    maxStaleMin: n('ITALIA_MAX_STALE_MIN', 30),
+    // Strategia B: stessa richiesta della I (zero richieste in piu'), libri esteri, edge 2-5%, quota sotto 5, entro 6 ore
+    bBooks: (env.B_BOOKS ? env.B_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_B_BOOKS),
+    bMinEdge: n('B_MIN_EDGE', 2), bMaxEdge: n('B_MAX_EDGE', 5), bMaxOdd: n('B_MAX_ODD', 5),
+    bEnabled: env.B_ENABLED !== 'false'
   };
+}
+
+/** Config della strategia richiesta (I o B) nella stessa forma usata da findSignals. */
+function cfgFor(c, strategy) {
+  return strategy === 'B' ? { ...c, books: c.bBooks, minEdge: c.bMinEdge, maxEdge: c.bMaxEdge, maxOdd: c.bMaxOdd } : c;
 }
 
 // ------------------------------------------------------------------------------------------- parte pura (testata)
@@ -58,6 +74,7 @@ const fresh = (b, nowMs, maxStaleMin) => !b.last_update || (nowMs - Date.parse(b
 // Abbinamento tra righe della stessa partita scritte in modo diverso dai bookmaker ("Benfica - Celtic" e "Benfica - Celtic Glasgow").
 const GENERIC = new Set(['fc', 'cf', 'ac', 'sc', 'afc', 'cd', 'ud', 'sd', 'club', 'de', 'the', 'calcio', 'fk', 'sk', 'if', 'bk', 'cp', 'sv', 'vfb', 'vfl', 'tsg', 'as', 'ss', 'us', 'rc', 'rcd', 'ca', 'ad', 'sl', 'fsv', 'spvgg', 'sporting', 'real', 'united', 'city', 'town', 'athletic', 'atletico']);
 const FLAGS = ['u17', 'u18', 'u19', 'u20', 'u21', 'u23', 'women', 'w', 'femminile', 'riserve', 'reserves', 'ii', 'b'];
+const LEAGUE_FLAGS = ['u17', 'u18', 'u19', 'u20', 'u21', 'u23', 'women', 'femminile', 'reserves', 'riserve', 'youth', 'primavera'];
 const FRIENDLY = /friendl|amichev|club friendly|test match/i;
 // Fascia di quota consigliata: 4-6 vinte su 10 (saldo piu' regolare a parita' di vantaggio)
 const BAND = { min: 1.6, max: 2.6 };
@@ -102,7 +119,8 @@ function findSignals(records, c, nowMs = Date.now()) {
     const start = Date.parse(r.commence_time);
     if (!(start > nowMs + c.minLeadMin * 60000) || start > nowMs + c.windowHours * 3600000) continue;
     if (FLAGS.some(f => words(r.home_team).includes(f) || words(r.away_team).includes(f))) continue;   // giovanili, donne, riserve: quote poco affidabili
-    if (FRIENDLY.test(r.league || '')) continue;                                                       // amichevoli: formazioni e motivazioni ignote, quote poco affidabili
+    if (FRIENDLY.test(r.league || '')) continue;
+    if (LEAGUE_FLAGS.some(f => words(r.league).includes(f))) continue;                                // campionati giovanili, femminili, riserve                                                       // amichevoli: formazioni e motivazioni ignote, quote poco affidabili
     const books = r.bookmakers || [];
     const pinB = books.find(b => b.key === 'pinnacle');
     const pin = pinB && trio(pinB.outcomes);
@@ -179,7 +197,11 @@ async function ensureTables(pool) {
     netwin_odd NUMERIC(8,3), netwin_edge_pct NUMERIC(8,3), quotes JSONB,
     close_pin_h NUMERIC(8,3), close_pin_d NUMERIC(8,3), close_pin_a NUMERIC(8,3), closing_fair_prob NUMERIC(8,5),
     clv_pct NUMERIC(8,3), netwin_clv_pct NUMERIC(8,3), close_lag_min INT, close_captured_at TIMESTAMPTZ,
-    UNIQUE (event_id, selection))`);
+    strategy TEXT NOT NULL DEFAULT 'I')`);
+  // tabelle create prima della strategia B: colonna nuova e unicita' per (partita, esito, strategia)
+  await pool.query(`ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS strategy TEXT NOT NULL DEFAULT 'I'`);
+  await pool.query(`ALTER TABLE italia_signals DROP CONSTRAINT IF EXISTS italia_signals_event_id_selection_key`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS italia_signals_uniq ON italia_signals (event_id, selection, strategy)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS italia_requests (
     id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), kind TEXT, ok BOOLEAN, records INT, quota_remaining INT, note TEXT)`);
   ready = true;
@@ -225,23 +247,27 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   const rem = await lastRemaining(pool);
   if (rem !== null && rem <= c.closeReserve) return { scan: 'quota odss quasi finita' };
   const records = await fetchOdds(pool, c, {
-    bookmakers: ['pinnacle', ...c.books].join(','),
+    bookmakers: [...new Set(['pinnacle', ...c.books, ...(c.bEnabled ? c.bBooks : [])])].join(','),
     commence_from: new Date(nowMs + c.minLeadMin * 60000).toISOString(),
     commence_to: new Date(nowMs + c.windowHours * 3600000).toISOString()
   }, 'scan', http);
   const found = findSignals(records, c, nowMs);
+  const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
   const fresh = [];
-  for (const s of found) {
-    const r = await pool.query(
-      `INSERT INTO italia_signals (event_id, league, home, away, commence_time, selection, book, odd, fair_prob, edge_pct, pin_h, pin_d, pin_a, netwin_odd, netwin_edge_pct, quotes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT (event_id, selection) DO NOTHING RETURNING id`,
-      [s.event_id, s.league, s.home, s.away, s.commence_time, s.selection, s.book, s.odd, s.fair_prob, s.edge_pct, s.pin[0], s.pin[1], s.pin[2], s.netwin_odd, s.netwin_edge_pct, JSON.stringify(s.quotes)]);
-    if (r.rowCount) fresh.push(s);
+  let nuoviB = 0;
+  for (const [strategy, list] of [['I', found], ['B', foundB]]) {
+    for (const s of list) {
+      const r = await pool.query(
+        `INSERT INTO italia_signals (event_id, league, home, away, commence_time, selection, book, odd, fair_prob, edge_pct, pin_h, pin_d, pin_a, netwin_odd, netwin_edge_pct, quotes, strategy)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) ON CONFLICT (event_id, selection, strategy) DO NOTHING RETURNING id`,
+        [s.event_id, s.league, s.home, s.away, s.commence_time, s.selection, s.book, s.odd, s.fair_prob, s.edge_pct, s.pin[0], s.pin[1], s.pin[2], s.netwin_odd, s.netwin_edge_pct, JSON.stringify(s.quotes), strategy]);
+      if (r.rowCount) { if (strategy === 'I') fresh.push(s); else nuoviB++; }
+    }
   }
   if (fresh.length && notify) {
     try { await notify(`<b>Quote italiane – prova senza soldi</b>\n\n${fresh.map(x => signalText(x, c.minEdge)).join('\n\n')}\n\n<i>La quota cambia in fretta: controlla sul sito prima di giocare.</i>`); } catch (e) { /* avviso facoltativo */ }
   }
-  return { scan: 'fatta', righe: records.length, candidati: found.length, nuovi: fresh.length };
+  return { scan: 'fatta', righe: records.length, candidati: found.length, nuovi: fresh.length, nuoviB };
 }
 
 async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
@@ -300,11 +326,12 @@ function stats(list) {
   };
 }
 
-async function getItalia(pool, env = process.env) {
-  const c = cfg(env);
-  const base = { active: !!c.key, books: c.books.map(b => BOOK_NAMES[b] || b), rules: { minEdge: c.minEdge, maxEdge: c.maxEdge, maxOdd: c.maxOdd, windowHours: c.windowHours, scanEveryMin: c.scanEveryMin, monthlyCap: c.monthlyCap } };
-  try { await ensureTables(pool); } catch (e) { return { ...base, error: e.message, total: stats([]), byBook: [], recent: [], requestsThisMonth: 0 }; }
-  const { rows } = await pool.query(`SELECT * FROM italia_signals ORDER BY commence_time DESC, id DESC LIMIT 500`);
+async function getItalia(pool, env = process.env, strategy = 'I') {
+  strategy = STRATEGIES[strategy] ? strategy : 'I';
+  const c = cfgFor(cfg(env), strategy);
+  const base = { strategy, ...STRATEGIES[strategy], active: !!c.key && (strategy !== 'B' || c.bEnabled), books: c.books.map(b => BOOK_NAMES[b] || b), rules: { minEdge: c.minEdge, maxEdge: c.maxEdge, maxOdd: c.maxOdd, windowHours: c.windowHours, scanEveryMin: c.scanEveryMin, monthlyCap: c.monthlyCap } };
+  try { await ensureTables(pool); } catch (e) { return { ...base, error: e.message, total: stats([]), netwin: stats([]), byBook: [], bySelection: [], byOdds: [], recent: [], requestsThisMonth: 0 }; }
+  const { rows } = await pool.query(`SELECT * FROM italia_signals WHERE strategy = $1 ORDER BY commence_time DESC, id DESC LIMIT 500`, [strategy]);
   const used = await usedThisMonth(pool);
   const last = (await pool.query(`SELECT at, ok, kind, records, quota_remaining, note FROM italia_requests ORDER BY id DESC LIMIT 1`)).rows[0] || null;
   const byBook = [...new Set(rows.map(r => r.book))].map(b => ({ book: BOOK_NAMES[b] || b, ...stats(rows.filter(r => r.book === b)) })).sort((a, b) => b.signals - a.signals);
@@ -328,4 +355,4 @@ async function getItalia(pool, env = process.env) {
   };
 }
 
-module.exports = { inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

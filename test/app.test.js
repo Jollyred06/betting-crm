@@ -61,7 +61,7 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
     '/api/tracker/strategies': await view.getStrategies(pool), '/api/tracker/milestones': { settledNow: 34, rule: ms.RULE, targets: [100, 200, 300].map(x => ({ target: x, reached: false, progress: 34 })) } };
   const script = /<script>([\s\S]*)<\/script>/.exec(fs.readFileSync(path.join(__dirname, '..', 'public', 'app.html'), 'utf8'))[1];
   const els = {}, calls = [], store = {}; let downloads = 0, confirmAnswer = true, status401 = false, moreOn = 'actions';
-  const el = id => els[id] || (els[id] = { id, innerHTML: '', textContent: '', className: '', style: {}, dataset: {}, value: '', disabled: false, classList: { remove() {}, add() {} } });
+  const el = id => els[id] || (els[id] = { id, innerHTML: '', textContent: '', className: '', style: {}, dataset: {}, value: '', disabled: false, classList: { remove() {}, add() {}, toggle() {} } });
   const listeners = {};
   const ctx = { console, navigator: {}, document: { addEventListener: (ev, fn) => { listeners[ev] = fn; }, visibilityState: 'visible', getElementById: el, querySelectorAll: () => [{ disabled: false, classList: { remove() {}, add() {} } }], querySelector: sel => (/moreTabs button\.on/.test(sel) ? { dataset: { t: moreOn } } : null), createElement: () => ({ click() { downloads++; } }) },
     URL: { createObjectURL: () => 'blob:x' }, Blob: function () {},
@@ -100,6 +100,8 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
 
   // SEGNALI, STRATEGIE, BANKROLL
   vm.runInContext("show('signals')", ctx); await tick();
+  assert.ok(/Giocabili|bookmaker italiani/i.test(els.signals.innerHTML), 'di base la scheda mostra i segnali giocabili in Italia');
+  vm.runInContext("setScope('all')", ctx); await tick();
   assert.ok(/Punta su <b>Fenerbahçe<\/b>/.test(els.signals.innerHTML) && />4,20</.test(els.signals.innerHTML) && /&lt;b&gt;X&lt;\/b&gt;/.test(els.signals.innerHTML) && !/<b>X<\/b>/.test(els.signals.innerHTML));
   vm.runInContext("show('strategies')", ctx); await tick();
   assert.ok(/Migliore quota contro Pinnacle/.test(els.strategies.innerHTML) && /In prova dal vivo/.test(els.strategies.innerHTML) && /Da 2% a 3%/.test(els.strategies.innerHTML) && /Serie minori/.test(els.strategies.innerHTML));
