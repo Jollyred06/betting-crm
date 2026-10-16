@@ -91,6 +91,8 @@ assert.strictEqual(it.cfg({ ODSS_API_KEY: ' \n ' }).key, '');
   assert.strictEqual(it.romeHour(Date.parse('2026-10-17T07:30:00Z')), 9);
   assert.strictEqual(it.romeHour(Date.parse('2026-12-17T07:30:00Z')), 8);
   const txt = it.signalText({ ...it.findSignals([rec('e11', 2, [pin, bk('netwin', 2.0, 3.65, 3.6), bk('888sport_it', 2.0, 3.85, 3.6)])], c, NOW)[0] });
-  assert.ok(/X \(pareggio\)/.test(txt) && /888sport/.test(txt) && /Netwin: 3,65/.test(txt), txt);
+  assert.ok(/X \(pareggio\)/.test(txt) && /888sport/.test(txt) && /Netwin: 3,65/.test(txt) && /almeno <b>3,\d\d<\/b>/.test(txt), txt);
+  // quota minima: prezzo giusto + 2%, arrotondato per eccesso
+  assert.strictEqual(it.minOdd(0.5, 2), 2.04); assert.strictEqual(it.minOdd(0.25, 2), 4.08);
   console.log('italia.test.js: tutti i controlli passati');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -82,6 +82,9 @@
   .card2 { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
   .move { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--line); font-size:14.5px; } .move:last-child { border-bottom:0; } .move small { display:block; color:var(--muted); font-size:12.5px; }
 
+  .sechead { margin:18px 0 10px; font-size:16px; } .sechead small { font-weight:400; font-size:13px; }
+  .chip.it { background:#1f6f43; border-color:#1f6f43; color:#fff; }
+
   /* strategie */
   .strat { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
   .sh { display:flex; gap:14px; align-items:center; margin-bottom:8px; } .letter { font:800 44px/1 var(--display); color:var(--bg); background:var(--ink); border-radius:12px; width:54px; height:54px; display:grid; place-items:center; flex:none; }
@@ -503,12 +506,29 @@
 
   // ------------------------------------------------------------------ SEGNALI
   function setTab(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('on')); el.classList.add('on'); sigTab = el.dataset.s; loadSignals(); }
+  // Segnali della strategia I (solo bookmaker italiani): stessa scheda, con l'etichetta IT e la quota minima da accettare sul sito.
+  function italiaTickets(d) {
+    const now = Date.now();
+    const list = (d && d.recent || []).filter(r => sigTab === 'pending' ? Date.parse(r.commence_time) > now : sigTab === 'settled' || sigTab === 'closed' ? r.clv_pct !== null : true).slice(0, 15);
+    if (!list.length) return '';
+    return `<h4 class="sechead">🇮🇹 Bookmaker italiani <small class="muted">· strategia I, prova senza soldi</small></h4>` + list.map(r => `
+        <article class="ticket">
+          <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { day: 'numeric' })}</b><span>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span></div>
+          <div class="tmain">
+            <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.clv_pct !== null ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div>
+            <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
+            ${r.min_odd ? `<div class="avail">Gioca solo se sul sito la quota è almeno <b>${num(r.min_odd, 2)}</b>${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</div>` : ''}
+            <div class="foot"><span class="chip it">IT</span><span>vantaggio ${pct(r.edge_pct)}</span>${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
+          </div>
+        </article>`).join('') + `<h4 class="sechead">Tutti i bookmaker <small class="muted">· strategia A, il test in corso</small></h4>`;
+  }
   async function loadSignals() {
     const el = $('signals');
     try {
-      const rows = await getJson('/api/tracker/signals' + (sigTab ? '?status=' + sigTab : ''));
-      if (!rows.length) { el.innerHTML = '<div class="empty">Nessun segnale in questa lista. Compaiono quando ci sono partite con una quota sopra la soglia.</div>'; return; }
-      el.innerHTML = '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + rows.map(r => `
+      const [rows, it] = await Promise.all([getJson('/api/tracker/signals' + (sigTab ? '?status=' + sigTab : '')), getJson('/api/tracker/italia').catch(() => null)]);
+      const itHtml = italiaTickets(it);
+      if (!rows.length && !itHtml) { el.innerHTML = '<div class="empty">Nessun segnale in questa lista. Compaiono quando ci sono partite con una quota sopra la soglia.</div>'; return; }
+      el.innerHTML = '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + itHtml + rows.map(r => `
         <article class="ticket">
           <div class="stub"><span>${dt(r.kickoff, { weekday: 'short' })}</span><b>${dt(r.kickoff, { day: 'numeric' })}</b><span>${dt(r.kickoff, { hour: '2-digit', minute: '2-digit' })}</span></div>
           <div class="tmain">

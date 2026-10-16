@@ -149,12 +149,15 @@ function romeHour(nowMs) {
   return Number(new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(new Date(nowMs))) % 24;
 }
 
-function signalText(s) {
+/** Quota minima da accettare sul sito: sotto questa il vantaggio sul prezzo giusto di Pinnacle scende sotto la soglia. */
+function minOdd(fairProb, minEdgePct) { return Math.ceil((1 + minEdgePct / 100) / fairProb * 100) / 100; }
+
+function signalText(s, minEdgePct = 2) {
   const when = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(s.commence_time));
   const n = (v, d = 2) => Number(v).toFixed(d).replace('.', ',');
   const pick = s.selection === 'home' ? `1 (${s.home})` : s.selection === 'away' ? `2 (${s.away})` : 'X (pareggio)';
   const nw = s.netwin_odd && s.book !== 'netwin' ? `\nNetwin: ${n(s.netwin_odd)} (${s.netwin_edge_pct >= 0 ? '+' : ''}${n(s.netwin_edge_pct, 1)}%)` : '';
-  return `🇮🇹 <b>${s.home} – ${s.away}</b>\n${s.league}, ${when}\nPunta <b>${pick}</b> a <b>${n(s.odd)}</b> su ${BOOK_NAMES[s.book] || s.book} (+${n(s.edge_pct, 1)}% su Pinnacle)${nw}`;
+  return `🇮🇹 <b>${s.home} – ${s.away}</b>\n${s.league}, ${when}\nPunta <b>${pick}</b> a <b>${n(s.odd)}</b> su ${BOOK_NAMES[s.book] || s.book} (+${n(s.edge_pct, 1)}% su Pinnacle)\nGioca solo se la quota è almeno <b>${n(minOdd(s.fair_prob, minEdgePct))}</b>${nw}`;
 }
 
 // ------------------------------------------------------------------------------------------- database e rete
@@ -231,7 +234,7 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
     if (r.rowCount) fresh.push(s);
   }
   if (fresh.length && notify) {
-    try { await notify(`<b>Quote italiane – prova senza soldi</b>\n\n${fresh.map(signalText).join('\n\n')}\n\n<i>La quota cambia in fretta: controlla sul sito prima di giocare.</i>`); } catch (e) { /* avviso facoltativo */ }
+    try { await notify(`<b>Quote italiane – prova senza soldi</b>\n\n${fresh.map(x => signalText(x, c.minEdge)).join('\n\n')}\n\n<i>La quota cambia in fretta: controlla sul sito prima di giocare.</i>`); } catch (e) { /* avviso facoltativo */ }
   }
   return { scan: 'fatta', righe: records.length, candidati: found.length, nuovi: fresh.length };
 }
@@ -302,9 +305,10 @@ async function getItalia(pool, env = process.env) {
     recent: rows.slice(0, 30).map(r => ({
       id: r.id, created_at: r.created_at, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away,
       selection: r.selection, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book, odd: Number(r.odd), edge_pct: Number(r.edge_pct),
-      netwin_odd: r.netwin_odd !== null ? Number(r.netwin_odd) : null, clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null
+      netwin_odd: r.netwin_odd !== null ? Number(r.netwin_odd) : null, clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null,
+      min_odd: r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null
     }))
   };
 }
 
-module.exports = { cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
