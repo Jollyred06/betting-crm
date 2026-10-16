@@ -23,7 +23,7 @@ const SEL_NAME = { home: '1', draw: 'X', away: '2' };
 function cfg(env = process.env) {
   const n = (k, d) => (env[k] !== undefined && env[k] !== '' && !isNaN(Number(env[k])) ? Number(env[k]) : d);
   return {
-    key: env.ODSS_API_KEY || '',
+    key: String(env.ODSS_API_KEY || '').trim().replace(/^['"]+|['"]+$/g, '').trim(),   // spazi, a capo o virgolette copiati per sbaglio
     books: (env.ITALIA_BOOKS ? env.ITALIA_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_BOOKS),
     minEdge: n('ITALIA_MIN_EDGE', 2),          // %
     maxEdge: n('ITALIA_MAX_EDGE', 15),         // % (sopra e' quasi sempre un errore del feed)

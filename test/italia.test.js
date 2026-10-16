@@ -78,6 +78,10 @@ assert.strictEqual(s.length, 1); assert.strictEqual(s[0].event_id, 'p1'); assert
 s = it.findSignals([{ ...rec('p2', 2, [pin]), home_team: 'Inter', away_team: 'Roma' }, { ...rec('n2', 2, [bk('netwin', 2.0, 3.8, 3.6)]), home_team: 'Inter U23', away_team: 'Roma U23' }], c, NOW);
 assert.strictEqual(s.length, 0, 'U23 non si abbina alla prima squadra');
 
+// 11c) chiave copiata con spazi, a capo o virgolette: viene ripulita
+assert.strictEqual(it.cfg({ ODSS_API_KEY: '  "odss_live_abc"\n' }).key, 'odss_live_abc');
+assert.strictEqual(it.cfg({ ODSS_API_KEY: ' \n ' }).key, '');
+
 // 12) senza chiave non fa niente (nessuna rete, nessun database)
 (async () => {
   const r = await it.tick({ query: () => { throw new Error('non deve toccare il database'); } }, { env: {} });

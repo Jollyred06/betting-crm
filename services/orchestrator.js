@@ -4,7 +4,6 @@ const footballData = require('./footballData');
 const oddsApi = require('./oddsApi');
 const history = require('./history');
 const { LEAGUES, DEFAULT_COMPETITIONS } = require('./leagues');
-const { saveSnapshot } = require('./pinSnapshots');
 const { sameTeam, resolveHistoryTeam } = require('./teamNames');
 const { analyzeEvent, sharpReference, analyzeTotals } = require('./sharpSignals');
 const { settlePending } = require('./settler');
@@ -214,7 +213,6 @@ async function runDailyAnalysisInner() {
         && Math.abs(new Date(e.commence_time) - new Date(match.utcDate)) < 12 * 3600 * 1000);
       if (!ev) { log.push(`${label}: nessuna quota corrispondente.`); continue; }
       matched++; fixturesAnalyzed++;
-      await saveSnapshot(pool, ev, code, 'giro');   // lettura quote per lo studio del movimento (non tocca i segnali)
       analyze(ev, code, match.id, label, stats);
     }
     log.push(`${code}: ${matches.length} partite, ${matched} con quote, ${stats.withSharp} con riferimento Pinnacle/exchange.`);
@@ -247,7 +245,6 @@ async function runDailyAnalysisInner() {
       if (bad.length) { noteUnresolved(code, ...bad); log.push(`${label}: nome squadra non riconosciuto nello storico, salto.`); continue; }
       const fid = await upsertEventFixture(ev, code);
       analyzed++; fixturesAnalyzed++;
-      await saveSnapshot(pool, ev, code, 'giro');   // lettura quote per lo studio del movimento (non tocca i segnali)
       analyze(ev, code, fid, label, stats);
     }
     log.push(`${code}: ${events.length} partite con quote (${sharpAll} con riferimento: ${pinAll} Pinnacle, ${sharpAll - pinAll} solo exchange), ${upcoming.length} nelle prossime ${WINDOW_HOURS} ore, ${analyzed} riconosciute, ${stats.withSharp} con riferimento nelle prossime ore.`);
