@@ -8,6 +8,7 @@
  * vale l'ultima, la piu' vicina al calcio d'inizio (close_lag_min dice quanti minuti mancavano).
  */
 const { h2h, noVigPower, ou, noVigPower2 } = require('./sharpSignals');
+const { saveSnapshot } = require('./pinSnapshots');
 
 const WINDOW_MIN = 45;      // segnali con calcio d'inizio entro 45 minuti
 const MIN_GAP_MIN = 20;     // non ricatturare lo stesso segnale se l'ultima cattura e' recente (ritardi del cron)
@@ -29,6 +30,8 @@ async function captureClosing(pool, oddsApi, { windowMin = WINDOW_MIN, minGapMin
     let events;
     try { events = await oddsApi.getOddsForCompetition(code); out.chiamate++; }
     catch (err) { out.errori.push(`${code}: ${err.message}`); out.saltate += sigs.length; continue; }
+    // lettura gratuita delle quote di tutte le partite del campionato che iniziano entro 3 ore (stessa chiamata gia' pagata)
+    for (const e of events) { const t = Date.parse(e.commence_time); if (t > now && t < now + 180 * 60000) await saveSnapshot(pool, e, code, 'chiusura'); }
     for (const s of sigs) {
       const ev = events.find(e => e.id === s.odds_event_id);
       const pin = ev && (ev.bookmakers || []).find(b => b.key === 'pinnacle');
