@@ -58,6 +58,10 @@ const fresh = (b, nowMs, maxStaleMin) => !b.last_update || (nowMs - Date.parse(b
 // Abbinamento tra righe della stessa partita scritte in modo diverso dai bookmaker ("Benfica - Celtic" e "Benfica - Celtic Glasgow").
 const GENERIC = new Set(['fc', 'cf', 'ac', 'sc', 'afc', 'cd', 'ud', 'sd', 'club', 'de', 'the', 'calcio', 'fk', 'sk', 'if', 'bk', 'cp', 'sv', 'vfb', 'vfl', 'tsg', 'as', 'ss', 'us', 'rc', 'rcd', 'ca', 'ad', 'sl', 'fsv', 'spvgg', 'sporting', 'real', 'united', 'city', 'town', 'athletic', 'atletico']);
 const FLAGS = ['u17', 'u18', 'u19', 'u20', 'u21', 'u23', 'women', 'w', 'femminile', 'riserve', 'reserves', 'ii', 'b'];
+const FRIENDLY = /friendl|amichev|club friendly|test match/i;
+// Fascia di quota consigliata: 4-6 vinte su 10 (saldo piu' regolare a parita' di vantaggio)
+const BAND = { min: 1.6, max: 2.6 };
+const inBand = odd => Number(odd) >= BAND.min && Number(odd) <= BAND.max;
 const words = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
 function sameTeam(a, b) {
   const wa = words(a), wb = words(b);
@@ -98,6 +102,7 @@ function findSignals(records, c, nowMs = Date.now()) {
     const start = Date.parse(r.commence_time);
     if (!(start > nowMs + c.minLeadMin * 60000) || start > nowMs + c.windowHours * 3600000) continue;
     if (FLAGS.some(f => words(r.home_team).includes(f) || words(r.away_team).includes(f))) continue;   // giovanili, donne, riserve: quote poco affidabili
+    if (FRIENDLY.test(r.league || '')) continue;                                                       // amichevoli: formazioni e motivazioni ignote, quote poco affidabili
     const books = r.bookmakers || [];
     const pinB = books.find(b => b.key === 'pinnacle');
     const pin = pinB && trio(pinB.outcomes);
@@ -278,6 +283,12 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify 
 
 // ------------------------------------------------------------------------------------------- riepilogo per l'app
 
+/** Come stats, piu' le vinte attese su 10 secondo Pinnacle (probabilita' giusta media). */
+function oddsStats(list) {
+  const p = list.map(r => Number(r.fair_prob)).filter(v => v > 0);
+  return { ...stats(list), expectedWinsOf10: p.length ? 10 * p.reduce((a, b) => a + b, 0) / p.length : null };
+}
+
 function stats(list) {
   const cl = list.filter(r => r.clv_pct !== null && r.clv_pct !== undefined && r.clv_pct !== '').map(r => Number(r.clv_pct)).filter(Number.isFinite);
   const n = cl.length, mean = n ? cl.reduce((a, b) => a + b, 0) / n : null;
@@ -301,14 +312,20 @@ async function getItalia(pool, env = process.env) {
   return {
     ...base, total: stats(rows), netwin: stats(nwRows), byBook,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
+    byOdds: [
+      { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
+      { name: '1,60–2,60 (4–6 vinte su 10)', recommended: true, ...oddsStats(rows.filter(r => inBand(r.odd))) },
+      { name: 'Sopra 2,60 (meno di 4 su 10)', ...oddsStats(rows.filter(r => Number(r.odd) > BAND.max)) }
+    ],
     requestsThisMonth: used, quotaRemaining: last && last.quota_remaining !== null ? Number(last.quota_remaining) : null, lastRequest: last,
     recent: rows.slice(0, 30).map(r => ({
       id: r.id, created_at: r.created_at, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away,
       selection: r.selection, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book, odd: Number(r.odd), edge_pct: Number(r.edge_pct),
       netwin_odd: r.netwin_odd !== null ? Number(r.netwin_odd) : null, clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null,
-      min_odd: r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null
+      min_odd: r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null, in_band: inBand(r.odd),
+      win_prob: r.fair_prob ? Number(r.fair_prob) : null
     }))
   };
 }
 
-module.exports = { minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

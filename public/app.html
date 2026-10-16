@@ -84,6 +84,7 @@
 
   .sechead { margin:18px 0 10px; font-size:16px; } .sechead small { font-weight:400; font-size:13px; }
   .chip.it { background:#1f6f43; border-color:#1f6f43; color:#fff; }
+  .chip.inband { border-color:var(--ok); color:var(--ok); }
 
   /* strategie */
   .strat { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
@@ -446,6 +447,7 @@
           <div><dt>Giocando sempre su Netwin</dt><dd class="${d.netwin.measured >= 5 ? cls(d.netwin.avgClvPct) : ''}">${itStat(d.netwin)}</dd></div>
           <div><dt>Richieste odss</dt><dd>${d.requestsThisMonth} usate dal CRM questo mese${d.quotaRemaining !== null && d.quotaRemaining !== undefined ? ', ' + d.quotaRemaining + ' rimaste sull\'account' : ''}</dd></div></dl>
         ${d.byBook.length ? `<details><summary>Per bookmaker ed esito</summary><h4>Per bookmaker</h4><dl class="facts">${d.byBook.map(b => `<div><dt>${esc(b.book)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl><h4>Per esito</h4><dl class="facts">${d.bySelection.map(b => `<div><dt>${esc(b.name)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
+        ${d.byOdds && d.total.signals ? `<details open><summary>Per fascia di quota</summary><dl class="facts">${d.byOdds.map(b => `<div><dt>${b.recommended ? '⭐ ' : ''}${esc(b.name)}</dt><dd>${b.signals} segnali${b.expectedWinsOf10 !== null ? ', attese ' + num(b.expectedWinsOf10, 1) + ' su 10' : ''}, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
         ${rows ? `<details><summary>Ultimi segnali</summary>${rows}</details>` : ''}</div>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare la strategia I: ' + esc(e.message) + '</div>'; }
   }
@@ -518,7 +520,7 @@
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.clv_pct !== null ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
             ${r.min_odd ? `<div class="avail">Gioca solo se sul sito la quota è almeno <b>${num(r.min_odd, 2)}</b>${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</div>` : ''}
-            <div class="foot"><span class="chip it">IT</span><span>vantaggio ${pct(r.edge_pct)}</span>${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
+            <div class="foot"><span class="chip it">IT</span>${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
         </article>`).join('') + `<h4 class="sechead">Tutti i bookmaker <small class="muted">· strategia A, il test in corso</small></h4>`;
   }

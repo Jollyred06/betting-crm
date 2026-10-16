@@ -82,6 +82,13 @@ assert.strictEqual(s.length, 0, 'U23 non si abbina alla prima squadra');
 assert.strictEqual(it.cfg({ ODSS_API_KEY: '  "odss_live_abc"\n' }).key, 'odss_live_abc');
 assert.strictEqual(it.cfg({ ODSS_API_KEY: ' \n ' }).key, '');
 
+// 11d) amichevoli escluse; fascia di quota consigliata
+assert.strictEqual(it.findSignals([{ ...rec('f1', 2, [pin, bk('netwin', 2.0, 3.8, 3.6)]), league: 'Club Friendly Games' }], c, NOW).length, 0, 'amichevole esclusa');
+assert.strictEqual(it.findSignals([{ ...rec('f2', 2, [pin, bk('netwin', 2.0, 3.8, 3.6)]), league: 'Amichevoli Internazionali' }], c, NOW).length, 0);
+assert.ok(it.inBand(1.6) && it.inBand(2.6) && it.inBand(2.0) && !it.inBand(1.59) && !it.inBand(2.61));
+const os = it.oddsStats([{ odd: 2, fair_prob: 0.5, clv_pct: '1' }, { odd: 2.2, fair_prob: 0.4, clv_pct: null }]);
+assert.ok(Math.abs(os.expectedWinsOf10 - 4.5) < 1e-9); assert.strictEqual(os.measured, 1);
+
 // 12) senza chiave non fa niente (nessuna rete, nessun database)
 (async () => {
   const r = await it.tick({ query: () => { throw new Error('non deve toccare il database'); } }, { env: {} });
