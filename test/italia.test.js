@@ -118,6 +118,8 @@ assert.strictEqual(it.findSignals([{ ...rec('y2', 2, [pin, bk('netwin', 2.0, 3.8
   assert.strictEqual(m2.get(99).final, true); assert.ok(!m2.get(100).final && /bookmaker/.test(m2.get(100).reasons.join()));
 }
 
+assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pct: null }]) - 0.04) < 1e-9, 'guadagno atteso 2 € x (3% - 1%)');
+
 // 12) senza chiave non fa niente (nessuna rete, nessun database)
 (async () => {
   const r = await it.tick({ query: () => { throw new Error('non deve toccare il database'); } }, { env: {} });

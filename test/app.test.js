@@ -34,7 +34,10 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
   h = await view.getHealth(mkPool({ run: { ...okRun, run_at: '2026-10-05T07:30:00Z' } }), NOW); assert.strictEqual(h.todo.level, 'bad');
   h = await view.getHealth(mkPool({ run: { ...okRun, run_at: '2026-10-05T08:55:00Z' } }), NOW); assert.strictEqual(h.todo.level, 'ok');
   h = await view.getHealth(mkPool({ run: { ...okRun, success: false, error_message: 'HTTP 401' } }), NOW); assert.strictEqual(h.todo.level, 'bad'); assert.ok(/401/.test(h.todo.text));
-  h = await view.getHealth(mkPool({ run: { ...okRun, log_text: 'x (crediti usati nel mese: 470, rimasti: 30).' } }), NOW); assert.ok(h.items.some(i => i.title === 'Crediti delle quote' && i.level === 'bad'));
+  h = await view.getHealth(mkPool({ run: { ...okRun, log_text: 'x (crediti usati nel mese: 470, rimasti: 30).' } }), NOW); assert.ok(h.items.some(i => i.title === 'Crediti delle quote' && i.level === 'info' && /1° del mese/.test(i.text)));   // crediti quasi finiti: pausa voluta, non un errore
+  h = await view.getHealth(mkPool({ run: { ...okRun, run_at: '2026-10-04T09:00:00Z', log_text: 'x (crediti usati nel mese: 440, rimasti: 60).' } }), NOW);
+  assert.ok(h.todo.level !== 'bad' && h.items.some(i => i.title === 'Strategia A in pausa' && i.level === 'info'));                          // niente allarme rosso per il giro saltato
+  h = await view.getHealth(mkPool({ run: { ...okRun, run_at: '2026-10-04T09:00:00Z' } }), NOW, { A_PAUSED: 'true' }); assert.ok(h.items.some(i => i.title === 'Strategia A in pausa'));
   h = await view.getHealth(mkPool({ run: { ...okRun, log_text: 'NOMI SQUADRA NON RICONOSCIUTI (mandami questa riga per aggiungerli): T1: Amed SK | G1: Volos FC' } }), NOW);
   const nm = h.items.find(i => i.title.startsWith('Nomi')); assert.ok(nm && nm.level === 'warn' && /T1: Amed SK/.test(nm.text) && !/mandami questa riga/.test(nm.text));
   h = await view.getHealth(mkPool({ run: okRun, oldPending: 3 }), NOW); assert.ok(h.items.some(i => i.title === 'Segnali senza risultato'));

@@ -318,6 +318,12 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify 
  */
 const FINAL = { since: '2026-10-17T08:00:00Z', minEdge: 2, maxEdge: 6, minOdd: 1.6, maxOdd: 3.5, bookMinN: 15 };
 
+/** Guadagno atteso sulla carta: puntata fissa per il valore contro la chiusura di ogni segnale misurato (non dipende dalla fortuna dei risultati). */
+const STAKE = 2;
+function expectedEur(rows, stake = STAKE) {
+  return rows.filter(r => r.clv_pct !== null && r.clv_pct !== undefined && r.clv_pct !== '').reduce((a, r) => a + stake * Number(r.clv_pct) / 100, 0);
+}
+
 /** Segna con final=true le righe I che rispettano le condizioni F; il controllo sul bookmaker usa solo le chiusure gia' note al momento del segnale. */
 function markFinal(rows) {
   const since = Date.parse(FINAL.since);
@@ -369,7 +375,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const nwRows = rows.filter(r => r.netwin_clv_pct !== null).map(r => ({ clv_pct: r.netwin_clv_pct }));
   return {
     ...base, total: stats(rows), netwin: stats(nwRows), byBook,
-    final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL } : null,
+    final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows) } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
     byOdds: [
       { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
@@ -388,4 +394,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   };
 }
 
-module.exports = { FINAL, markFinal, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { expectedEur, FINAL, markFinal, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

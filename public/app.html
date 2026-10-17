@@ -483,9 +483,10 @@
     const f = i && i.final; if (!f) return '';
     const r = f.rules;
     return `<div class="strat final"><div class="sh"><div class="letter">F</div><div><b>Selezione finale (candidata)</b><span>Regole fissate il 17 ottobre, misurate solo da quel giorno</span></div></div>
-      <ul class="rules"><li>Bookmaker italiano (strategia I)</li><li>Entro ${i.rules.windowHours} ore dal calcio d'inizio</li><li>Vantaggio dal ${r.minEdge}% al ${r.maxEdge}%</li><li>Quota tra ${num(r.minOdd, 2)} e ${num(r.maxOdd, 2)}</li><li>Niente amichevoli, giovanili o riserve</li><li>Fuori i bookmaker con valore negativo dopo ${r.bookMinN} segnali</li></ul>
+      <p class="muted" style="margin:0 0 4px;font-size:14px;">Il guadagno atteso si calcola dal valore alla chiusura: è quanto renderebbe in media, senza la fortuna dei risultati.</p><ul class="rules"><li>Bookmaker italiano (strategia I)</li><li>Entro ${i.rules.windowHours} ore dal calcio d'inizio</li><li>Vantaggio dal ${r.minEdge}% al ${r.maxEdge}%</li><li>Quota tra ${num(r.minOdd, 2)} e ${num(r.maxOdd, 2)}</li><li>Niente amichevoli, giovanili o riserve</li><li>Fuori i bookmaker con valore negativo dopo ${r.bookMinN} segnali</li></ul>
       <dl class="facts"><div><dt>Segnali ✅ F</dt><dd>${f.signals} (${f.measured} con chiusura)</dd></div>
         <div><dt>Valore vs chiusura</dt><dd class="${f.measured >= 5 ? cls(f.avgClvPct) : ''}">${itStat(f)}</dd></div>
+        <div><dt>Guadagno atteso (${num(f.stake || 2, 0)} € a segnale)</dt><dd class="${f.measured ? cls(f.expectedEur) : ''}">${f.measured ? signedMoney(f.expectedEur) : '—'}</dd></div>
         <div><dt>Vinte attese su 10</dt><dd>${f.expectedWinsOf10 !== null ? num(f.expectedWinsOf10, 1) : '—'}</dd></div>
         <div><dt>Obiettivo</dt><dd>9 segnali su 10 sopra la chiusura, su almeno 20</dd></div></dl></div>`;
   }
