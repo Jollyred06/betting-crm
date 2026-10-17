@@ -27,4 +27,13 @@ const st = R.resultStats([{ result: 'won', odd: '2.5' }, { result: 'lost', odd: 
 assert.strictEqual(st.settled, 2); assert.strictEqual(st.won, 1); assert.ok(Math.abs(st.pnlEur - 1) < 1e-9);
 // chiave copiata con spazi o virgolette
 assert.strictEqual(R.rcfg({ APIFOOTBALL_KEY: ' "abc" ' }).key, 'abc');
+// riserva football-data.org: risultato dei 90 minuti, nome breve, stati
+const fdm = R.fromFootballData({ id: 77, utcDate: '2026-10-17T19:00:00Z', status: 'FINISHED', homeTeam: { name: 'FC Internazionale Milano', shortName: 'Inter' }, awayTeam: { name: 'AS Roma', shortName: 'Roma' },
+  score: { duration: 'EXTRA_TIME', fullTime: { home: 2, away: 1 }, regularTime: { home: 1, away: 1 } } });
+const sInter = { ...sig, home: 'Inter', away: 'Roma', selection: 'draw' };
+assert.strictEqual(R.matchFixture(sInter, [fdm], sameTeam).fixture.id, -77);
+assert.deepStrictEqual(R.settle(sInter, fdm), { result: 'won', score: '1-1' });
+assert.strictEqual(R.settle(sig, R.fromFootballData({ id: 1, utcDate: sig.commence_time, status: 'POSTPONED', homeTeam: {}, awayTeam: {}, score: { fullTime: {} } })).result, 'void');
+assert.strictEqual(R.settle(sig, R.fromFootballData({ id: 1, utcDate: sig.commence_time, status: 'IN_PLAY', homeTeam: {}, awayTeam: {}, score: { fullTime: { home: 1, away: 0 } } })), null);
+assert.strictEqual(R.rcfg({ FOOTBALL_DATA_KEY: 'k' }).fdKey, 'k'); assert.strictEqual(R.rcfg({ FOOTBALL_DATA_KEY: 'k', RESULTS_FD: 'false' }).fdKey, '');
 console.log('results.test.js: tutti i controlli passati');
