@@ -34,6 +34,12 @@ assert.ok(adv.some(x => /Strategia A/.test(x.title)));
 adv = buildAdvice({ it: rows(20, 3).map(r => ({ ...r, netwin_clv_pct: '-4' })) });
 assert.ok(adv.some(x => x.key === 'netwin' && /non basta/.test(x.title)));
 
+// selezione F con abbastanza dati decide il consiglio principale
+adv = buildAdvice({ it: rows(10, 1), final: rows(25, 4) });
+assert.ok(/✅ F/.test(adv[0].title), adv[0].title); assert.ok(adv.some(x => /Selezione F/.test(x.title) && x.level === 'good'));
+adv = buildAdvice({ it: rows(10, 1), final: rows(25, -5) });
+assert.ok(/selezione F non regge/.test(adv[0].title));
+
 const s = summary(['1', '2', '3', null].filter(v => v !== null)); assert.strictEqual(s.n, 3); assert.strictEqual(s.mean, 2);
 assert.strictEqual(MIN_N, 20);
 console.log('advisor.test.js: tutti i controlli passati');

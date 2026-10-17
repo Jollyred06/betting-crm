@@ -274,7 +274,7 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   const { rows } = await pool.query(
     `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min FROM italia_signals
      WHERE commence_time > to_timestamp($1::double precision / 1000) AND commence_time <= to_timestamp($1::double precision / 1000) + make_interval(mins => $2::int)
-       AND (close_captured_at IS NULL OR (close_lag_min > 20 AND commence_time <= to_timestamp($1::double precision / 1000) + INTERVAL '15 minutes'))`,
+       AND (close_captured_at IS NULL OR (close_lag_min > 20 AND commence_time <= to_timestamp($1::double precision / 1000) + INTERVAL '22 minutes'))`,
     [nowMs, c.closeWindowMin]);
   if (!rows.length) return { chiusure: 0 };
   if (await usedThisMonth(pool) >= c.monthlyCap) return { chiusure: 0, nota: 'tetto mensile' };
@@ -307,6 +307,35 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify 
   return out;
 }
 
+// ------------------------------------------------------------------------------------------- selezione F (finale candidata)
+/**
+ * Condizioni fissate il 17 ottobre 2026, PRIMA di vedere i risultati successivi: valgono solo i segnali I creati da quel momento
+ * (prova fuori campione, nessun ritocco a posteriori).
+ *  1. bookmaker italiano (strategia I)          2. entro 6 ore dal calcio d'inizio (gia' garantito dalla scansione)
+ *  3. vantaggio dal 2% al 6%                     4. quota tra 1,60 e 3,50
+ *  5. niente amichevoli/giovanili/riserve (gia' escluse alla fonte)
+ *  6. bookmaker escluso se, PRIMA del segnale, aveva almeno 15 segnali misurati con valore medio negativo
+ */
+const FINAL = { since: '2026-10-17T08:00:00Z', minEdge: 2, maxEdge: 6, minOdd: 1.6, maxOdd: 3.5, bookMinN: 15 };
+
+/** Segna con final=true le righe I che rispettano le condizioni F; il controllo sul bookmaker usa solo le chiusure gia' note al momento del segnale. */
+function markFinal(rows) {
+  const since = Date.parse(FINAL.since);
+  const sorted = [...rows].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+  const out = new Map();
+  for (const r of sorted) {
+    const t = Date.parse(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
+    const reasons = [];
+    if (t < since) reasons.push('prima delle regole');
+    if (!(edge >= FINAL.minEdge && edge <= FINAL.maxEdge)) reasons.push('vantaggio fuori 2–6%');
+    if (!(odd >= FINAL.minOdd && odd <= FINAL.maxOdd)) reasons.push('quota fuori 1,60–3,50');
+    const past = rows.filter(x => x.book === r.book && x.clv_pct !== null && x.clv_pct !== undefined && x.close_captured_at && Date.parse(x.close_captured_at) < t).map(x => Number(x.clv_pct));
+    if (past.length >= FINAL.bookMinN && past.reduce((a, b) => a + b, 0) / past.length < 0) reasons.push('bookmaker con valore negativo');
+    out.set(r.id, { final: reasons.length === 0, reasons });
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------------------------------- riepilogo per l'app
 
 /** Come stats, piu' le vinte attese su 10 secondo Pinnacle (probabilita' giusta media). */
@@ -335,9 +364,12 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const used = await usedThisMonth(pool);
   const last = (await pool.query(`SELECT at, ok, kind, records, quota_remaining, note FROM italia_requests ORDER BY id DESC LIMIT 1`)).rows[0] || null;
   const byBook = [...new Set(rows.map(r => r.book))].map(b => ({ book: BOOK_NAMES[b] || b, ...stats(rows.filter(r => r.book === b)) })).sort((a, b) => b.signals - a.signals);
+  const fin = strategy === 'I' ? markFinal(rows) : new Map();
+  const finRows = rows.filter(r => fin.get(r.id) && fin.get(r.id).final);
   const nwRows = rows.filter(r => r.netwin_clv_pct !== null).map(r => ({ clv_pct: r.netwin_clv_pct }));
   return {
     ...base, total: stats(rows), netwin: stats(nwRows), byBook,
+    final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
     byOdds: [
       { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
@@ -350,9 +382,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       selection: r.selection, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book, odd: Number(r.odd), edge_pct: Number(r.edge_pct),
       netwin_odd: r.netwin_odd !== null ? Number(r.netwin_odd) : null, clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null,
       min_odd: r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null, in_band: inBand(r.odd),
-      win_prob: r.fair_prob ? Number(r.fair_prob) : null
+      win_prob: r.fair_prob ? Number(r.fair_prob) : null,
+      final: fin.get(r.id) ? fin.get(r.id).final : false
     }))
   };
 }
 
-module.exports = { cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { FINAL, markFinal, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

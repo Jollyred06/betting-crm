@@ -40,20 +40,23 @@ function bestWorst(groups) {
  * Costruisce i consigli a partire dalle righe gia' lette (funzione pura, testabile).
  * a: segnali A chiusi con clv; it: righe italia_signals (strategy I e B).
  */
-function buildAdvice({ a = [], it = [] } = {}) {
+function buildAdvice({ a = [], it = [], final = [] } = {}) {
   const out = [];
   const iRows = it.filter(r => (r.strategy || 'I') === 'I'), bRows = it.filter(r => r.strategy === 'B');
   const clv = rows => rows.map(r => r.clv_pct).filter(v => v !== null && v !== undefined && v !== '');
 
-  const sI = summary(clv(iRows)), sB = summary(clv(bRows)), sA = summary(clv(a));
+  const sI = summary(clv(iRows)), sB = summary(clv(bRows)), sA = summary(clv(a)), sF = summary(clv(final));
   const nw = summary(iRows.map(r => r.netwin_clv_pct).filter(v => v !== null && v !== undefined && v !== ''));
 
-  // 1) La cosa piu' importante: si puo' giocare?
-  if (sI.n >= MIN_N && sI.lo > 0) out.push({ level: 'good', key: 'azione', title: 'Si può valutare di giocare, con puntate piccole', text: `I segnali sui bookmaker italiani battono la chiusura (${f1(sI.mean)} su ${sI.n}). Parti con puntate fisse piccole e gioca solo se la quota sul sito è almeno quella minima.` });
+  // 1) La cosa piu' importante: si puo' giocare? Decide la selezione F (regole fissate prima), se ha abbastanza dati.
+  if (sF.n >= MIN_N && sF.lo > 0) out.push({ level: 'good', key: 'azione', title: 'Si può valutare di giocare i segnali ✅ F, con puntate piccole', text: `La selezione F batte la chiusura (${f1(sF.mean)} su ${sF.n}, ${f0(sF.pos)} sopra). Gioca solo i segnali con ✅ F, a puntata fissa piccola, e solo se la quota sul sito è almeno quella minima.` });
+  else if (sF.n >= MIN_N && sF.hi < 0) out.push({ level: 'bad', key: 'azione', title: 'Non giocare: la selezione F non regge', text: `Selezione F ${f1(sF.mean)} su ${sF.n} segnali. Rivediamo le condizioni prima di rischiare.` });
+  else if (sI.n >= MIN_N && sI.lo > 0) out.push({ level: 'good', key: 'azione', title: 'Si può valutare di giocare, con puntate piccole', text: `I segnali sui bookmaker italiani battono la chiusura (${f1(sI.mean)} su ${sI.n}). Parti con puntate fisse piccole e gioca solo se la quota sul sito è almeno quella minima.` });
   else if (sI.n >= MIN_N && sI.hi < 0) out.push({ level: 'bad', key: 'azione', title: 'Non giocare soldi veri', text: `I segnali sui bookmaker italiani non battono la chiusura (${f1(sI.mean)} su ${sI.n}). Cambiamo regole prima di rischiare.` });
   else out.push({ level: 'info', key: 'azione', title: 'Per ora non giocare soldi veri', text: `La prova sui bookmaker italiani è ancora in corso: ${sI.n} segnali misurati su ${MIN_N}. Il CRM raccoglie da solo, tu non devi fare niente.` });
 
   // 2) Le strategie
+  out.push(judge('Selezione F (finale candidata)', sF, ' Regole fissate il 17 ottobre, misurate solo sui segnali successivi.'));
   out.push(judge('Strategia I (libri italiani)', sI));
   out.push(judge('Strategia B (selezione B, libri esteri)', sB, ' È la prova delle regole B su partite nuove.'));
   if (sA.n) out.push(judge('Strategia A (test di ottobre)', sA, ' Libri esteri: misura il metodo, non si gioca dall\'Italia.'));
@@ -88,12 +91,14 @@ async function getAdvice(pool) {
     a = (await pool.query(`SELECT clv_pct, COALESCE(presa_book, bookmaker_name) AS book FROM value_bets WHERE strategy = 'A_sharp' AND status IN ('won','lost') AND clv_pct IS NOT NULL`)).rows;
   } catch (e) { /* tabella o colonne mancanti: niente consigli su A */ }
   try {
-    it = (await pool.query(`SELECT strategy, book, odd, selection, clv_pct, netwin_clv_pct FROM italia_signals`)).rows;
+    it = (await pool.query(`SELECT id, created_at, close_captured_at, edge_pct, strategy, book, odd, selection, clv_pct, netwin_clv_pct FROM italia_signals`)).rows;
   } catch (e) { /* strategia I non ancora attiva */ }
-  // nomi leggibili dei libri della I (stessi dell'app)
-  const names = require('./italia').BOOK_NAMES;
+  // nomi leggibili dei libri della I (stessi dell'app) e selezione F
+  const { BOOK_NAMES: names, markFinal } = require('./italia');
+  const iOnly = it.filter(r => (r.strategy || 'I') === 'I'), fin = markFinal(iOnly);
+  const final = iOnly.filter(r => fin.get(r.id) && fin.get(r.id).final);
   it = it.map(r => ({ ...r, book: names[r.book] || r.book }));
-  return { advice: buildAdvice({ a, it }), minN: MIN_N, updatedAt: new Date().toISOString() };
+  return { advice: buildAdvice({ a, it, final }), minN: MIN_N, updatedAt: new Date().toISOString() };
 }
 
 module.exports = { buildAdvice, getAdvice, summary, MIN_N, MIN_GROUP, BAD_BOOKS };

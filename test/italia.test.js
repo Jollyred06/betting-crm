@@ -101,6 +101,23 @@ assert.strictEqual(it.findSignals([rec('b3', 2, [pin, bk('betsson', 2.0, 3.65, 3
 assert.strictEqual(it.findSignals([{ ...rec('y1', 2, [pin, bk('netwin', 2.0, 3.8, 3.6)]), league: 'U21 Liga MX' }], c, NOW).length, 0, 'campionato giovanile escluso');
 assert.strictEqual(it.findSignals([{ ...rec('y2', 2, [pin, bk('netwin', 2.0, 3.8, 3.6)]), league: 'Serie C, Gruppo B' }], c, NOW).length, 1, 'la B del girone non e\' una squadra B');
 
+// 11f) selezione F: regole fissate il 17/10, solo segnali successivi; bookmaker escluso con lo storico negativo PRIMA del segnale
+{
+  const T = h => new Date(Date.parse('2026-10-18T10:00:00Z') + h * 3600000).toISOString();
+  const r = (id, h, book, edge, odd, clv, closedH) => ({ id, created_at: T(h), book, edge_pct: String(edge), odd: String(odd), clv_pct: clv === null ? null : String(clv), close_captured_at: closedH === undefined ? null : T(closedH) });
+  const base = [r(1, 0, 'netwin', 3, 2.0, null), r(2, 0, 'snai', 8, 2.0, null), r(3, 0, 'snai', 3, 4.2, null), r(4, 0, 'snai', 3, 1.5, null),
+    { ...r(5, 0, 'goldbet', 3, 2.0, null), created_at: '2026-10-16T10:00:00Z' }];
+  const m = it.markFinal(base);
+  assert.strictEqual(m.get(1).final, true);
+  assert.ok(!m.get(2).final && /vantaggio/.test(m.get(2).reasons[0]));
+  assert.ok(!m.get(3).final && !m.get(4).final, 'quota fuori 1,60-3,50');
+  assert.ok(!m.get(5).final && /prima delle regole/.test(m.get(5).reasons[0]));
+  // 15 chiusure negative di Netwin prima del segnale 100: escluso; il segnale 99, precedente alle chiusure, resta valido
+  const hist = Array.from({ length: 15 }, (_, i) => r(200 + i, -10, 'netwin', 3, 2.0, -3, 1));
+  const m2 = it.markFinal([...hist, r(99, 0.5, 'netwin', 3, 2.0, null), r(100, 2, 'netwin', 3, 2.0, null)]);
+  assert.strictEqual(m2.get(99).final, true); assert.ok(!m2.get(100).final && /bookmaker/.test(m2.get(100).reasons.join()));
+}
+
 // 12) senza chiave non fa niente (nessuna rete, nessun database)
 (async () => {
   const r = await it.tick({ query: () => { throw new Error('non deve toccare il database'); } }, { env: {} });

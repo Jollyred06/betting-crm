@@ -84,8 +84,22 @@
 
   .advisor .list > div.first b { font-size:17px; } .advisor .list > div.first { padding-top:6px; }
   .scope { display:flex; gap:8px; margin:0 0 12px; } .scope button { flex:1; min-height:40px; border-radius:999px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font:600 14px var(--body); } .scope button.on { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+  .sub { margin:-4px 0 10px; font-size:14px; }
+  details.fold { border:1px solid var(--line); border-radius:16px; padding:0 16px; margin-bottom:16px; background:var(--surface); }
+  details.fold > summary { list-style:none; display:flex; flex-direction:column; gap:2px; padding:14px 0; cursor:pointer; }
+  details.fold > summary::-webkit-details-marker { display:none; }
+  details.fold > summary span { font:700 19px/1.15 var(--display); color:var(--ink); } details.fold > summary span::after { content:' ▾'; color:var(--muted); font-size:14px; }
+  details.fold[open] > summary span::after { content:' ▴'; } details.fold > summary small { color:var(--muted); font-size:13px; }
+  details.fold[open] { padding-bottom:6px; }
+  .today .trow { display:flex; gap:12px; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); } .today .trow:last-of-type { border-bottom:0; }
+  .today .t { width:52px; flex:none; text-align:center; } .today .t b { display:block; font:800 22px/1 var(--display); color:var(--ink); } .today .t span { font-size:12px; color:var(--muted); }
+  .today .w { flex:1; min-width:0; } .today .w b { display:block; font-weight:700; } .today .w small { display:block; color:var(--muted); font-size:13.5px; }
+  .today .q { font:800 24px/1 var(--display); color:var(--ink); }
+  button.ghost { margin-top:10px; width:100%; min-height:44px; border-radius:12px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font:600 15px var(--body); }
   .sechead { margin:18px 0 10px; font-size:16px; } .sechead small { font-weight:400; font-size:13px; }
   .chip.it { background:#1f6f43; border-color:#1f6f43; color:#fff; }
+  .chip.fin { background:var(--ok); border-color:var(--ok); color:#fff; }
+  .strat.final { border-color:var(--ok); } .rules { margin:6px 0 4px; padding-left:18px; color:var(--muted); font-size:14.5px; } .rules li { margin:4px 0; }
   .chip.inband { border-color:var(--ok); color:var(--ok); }
 
   /* strategie */
@@ -164,7 +178,11 @@
   <!-- HOME -->
   <main id="pane-home">
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
-    <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted" style="margin:-4px 0 6px;font-size:14px;">Consigli automatici sui risultati, aggiornati a ogni apertura. Niente giudizi su pochi dati.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
+    <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Consigli automatici sui risultati, aggiornati a ogni apertura. Niente giudizi su pochi dati.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
+    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani. In alto quelli ✅ F, la selezione finale.</p><div id="today"><div class="sk box"></div></div>
+      <button class="ghost" onclick="show('signals')">Tutti i segnali →</button></section>
+    <section class="block"><h3>Bankroll di carta</h3><div id="bankMini"></div></section>
+    <details class="fold"><summary><span>Strategia A · test di ottobre</span><small>verdetto, numeri e tappe</small></summary>
     <section id="verdict" class="hero"><div class="sk l1"></div><div class="sk l2"></div><div class="sk l3"></div><div class="sk box"></div></section>
     <div class="upd" id="updLine"></div>
     <section class="block">
@@ -176,10 +194,12 @@
       <p class="muted">Con circa 66 segnali chiusi si riconosce un vantaggio del 3% sulla chiusura, con 150 uno del 2%.</p>
       <p id="strongLine" class="muted"></p>
     </section>
-    <section class="block"><h3>Bankroll di carta</h3><div id="bankMini"></div></section>
     <section class="block"><h3>Tappe</h3><div id="milestones"></div></section>
+    </details>
+    <details class="fold"><summary><span>Stato del sistema</span><small>controlli e prossime partite</small></summary>
     <section class="block"><h3>Controlli</h3><div id="checks" class="list"></div></section>
     <section class="block"><h3>Prossime partite</h3><div id="schedule"></div></section>
+    </details>
   </main>
 
   <!-- SEGNALI -->
@@ -203,11 +223,11 @@
   <main id="pane-strategies" style="display:none;">
     <section class="block">
       <h3>Strategie</h3>
-      <p class="muted" style="font-size:15px;margin:0 0 14px;">In prova dal vivo, senza soldi veri: la strategia A (migliore quota tra tutti i bookmaker) e la strategia I (solo bookmaker italiani). Le altre sono state provate sul passato e scartate perché non battevano il mercato.</p>
+      <p class="muted sub">Tutte in prova sulla carta, senza soldi veri. <b>F</b> è la selezione finale candidata, <b>I</b> i bookmaker italiani, <b>B</b> la prova delle regole B sui libri esteri, <b>A</b> il test di ottobre.</p>
       <div id="italia"></div>
       <div id="strategies"></div>
     </section>
-    <section class="block"><h3>Provate e scartate</h3><div id="discarded"></div></section>
+    <details class="fold"><summary><span>Provate e scartate</span><small>idee che non battevano il mercato</small></summary><div id="discarded"></div></details>
   </main>
 
   <!-- BANKROLL -->
@@ -459,10 +479,20 @@
         ${d.byOdds && d.total.signals ? `<details${isI ? ' open' : ''}><summary>Per fascia di quota</summary><dl class="facts">${d.byOdds.map(b => `<div><dt>${b.recommended ? '⭐ ' : ''}${esc(b.name)}</dt><dd>${b.signals} segnali${b.expectedWinsOf10 !== null ? ', attese ' + num(b.expectedWinsOf10, 1) + ' su 10' : ''}, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
         ${rows ? `<details><summary>Ultimi segnali</summary>${rows}</details>` : ''}</div>`;
   }
+  function finalCard(i) {
+    const f = i && i.final; if (!f) return '';
+    const r = f.rules;
+    return `<div class="strat final"><div class="sh"><div class="letter">F</div><div><b>Selezione finale (candidata)</b><span>Regole fissate il 17 ottobre, misurate solo da quel giorno</span></div></div>
+      <ul class="rules"><li>Bookmaker italiano (strategia I)</li><li>Entro ${i.rules.windowHours} ore dal calcio d'inizio</li><li>Vantaggio dal ${r.minEdge}% al ${r.maxEdge}%</li><li>Quota tra ${num(r.minOdd, 2)} e ${num(r.maxOdd, 2)}</li><li>Niente amichevoli, giovanili o riserve</li><li>Fuori i bookmaker con valore negativo dopo ${r.bookMinN} segnali</li></ul>
+      <dl class="facts"><div><dt>Segnali ✅ F</dt><dd>${f.signals} (${f.measured} con chiusura)</dd></div>
+        <div><dt>Valore vs chiusura</dt><dd class="${f.measured >= 5 ? cls(f.avgClvPct) : ''}">${itStat(f)}</dd></div>
+        <div><dt>Vinte attese su 10</dt><dd>${f.expectedWinsOf10 !== null ? num(f.expectedWinsOf10, 1) : '—'}</dd></div>
+        <div><dt>Obiettivo</dt><dd>9 segnali su 10 sopra la chiusura, su almeno 20</dd></div></dl></div>`;
+  }
   async function loadItalia() {
     try {
       const [i, b] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null)]);
-      $('italia').innerHTML = oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
+      $('italia').innerHTML = finalCard(i) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
   async function loadStrategies() {
@@ -489,8 +519,18 @@
       $('advice').innerHTML = d.advice.map((x, i) => `<div class="${i === 0 ? 'first' : ''}">${marker(lv[x.level] || 'info')}<div><b>${esc(x.title)}</b><span class="muted">${esc(x.text)}</span></div></div>`).join('');
     } catch (e) { $('advice').innerHTML = '<div class="empty">Il Consigliere non è disponibile: ' + esc(e.message) + '</div>'; }
   }
+  async function loadToday() {
+    try {
+      const d = await getJson('/api/tracker/italia'), now = Date.now();
+      const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now).sort((a, b) => (b.final - a.final) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
+      $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
+        <div class="w"><b>${esc(r.home)} – ${esc(r.away)}</b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.book)}${r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}</small></div>
+        <div class="q">${num(r.odd, 2)}</div></div>`).join('')
+        : '<div class="empty">Nessun segnale italiano in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
+    } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
+  }
   async function loadHome() {
-    loadAdvice();
+    loadAdvice(); loadToday();
     try {
       const [o, h, m, b] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health'), getJson('/api/tracker/milestones').catch(() => null), getJson('/api/tracker/bankroll').catch(() => null)]);
       bankData = b; renderMilestones(m); renderBankMini(b);
@@ -548,7 +588,7 @@
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.clv_pct !== null ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
             ${r.min_odd && chip.includes('chip it') ? `<div class="avail">Gioca solo se sul sito la quota è almeno <b>${num(r.min_odd, 2)}</b>${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</div>` : ''}
-            <div class="foot">${chip}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
+            <div class="foot">${chip}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
         </article>`).join('') + tail;
   }
