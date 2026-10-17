@@ -6,6 +6,7 @@ const SOURCES = [
   ['league_schedule', 'SELECT * FROM league_schedule ORDER BY league_code'],
   ['pin_snapshots', 'SELECT * FROM pin_snapshots ORDER BY id DESC LIMIT 3000'],
   ['italia_signals', 'SELECT * FROM italia_signals ORDER BY id'],
+  ['results_requests', 'SELECT * FROM results_requests ORDER BY id DESC LIMIT 500'],
   ['italia_requests', 'SELECT * FROM italia_requests ORDER BY id DESC LIMIT 1000'],
   ['run_logs', 'SELECT * FROM run_logs ORDER BY run_at DESC LIMIT 120'],
   ['fixtures', 'SELECT * FROM fixtures WHERE id IN (SELECT fixture_id FROM value_bets) ORDER BY id'],

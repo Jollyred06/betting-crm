@@ -297,13 +297,14 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
 }
 
 /** Un passo: prima le chiusure (hanno la precedenza sul tetto), poi l'eventuale scansione. Non lancia mai. */
-async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify } = {}) {
+async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify, resultsHttp } = {}) {
   const c = cfg(env);
   if (!c.key) return { attiva: false, motivo: 'ODSS_API_KEY non impostata' };
   const out = { attiva: true };
   try { await ensureTables(pool); } catch (e) { return { attiva: true, errore: e.message }; }
   try { Object.assign(out, await captureClosing(pool, c, { nowMs, http })); } catch (e) { out.erroreChiusura = e.message; }
   try { Object.assign(out, await scan(pool, c, { nowMs, http, notify })); } catch (e) { out.erroreScansione = e.message; }
+  try { Object.assign(out, await require('./results').settleSignals(pool, { env, nowMs, http: resultsHttp, sameTeam })); } catch (e) { out.erroreRisultati = e.message; }
   return out;
 }
 
@@ -366,6 +367,9 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const c = cfgFor(cfg(env), strategy);
   const base = { strategy, ...STRATEGIES[strategy], active: !!c.key && (strategy !== 'B' || c.bEnabled), books: c.books.map(b => BOOK_NAMES[b] || b), rules: { minEdge: c.minEdge, maxEdge: c.maxEdge, maxOdd: c.maxOdd, windowHours: c.windowHours, scanEveryMin: c.scanEveryMin, monthlyCap: c.monthlyCap } };
   try { await ensureTables(pool); } catch (e) { return { ...base, error: e.message, total: stats([]), netwin: stats([]), byBook: [], bySelection: [], byOdds: [], recent: [], requestsThisMonth: 0 }; }
+  const R = require('./results');
+  try { await R.ensureResults(pool); } catch (e) { /* risultati facoltativi */ }
+  const resultsStatus = await R.resultsStatus(pool, env).catch(() => null);
   const { rows } = await pool.query(`SELECT * FROM italia_signals WHERE strategy = $1 ORDER BY commence_time DESC, id DESC LIMIT 500`, [strategy]);
   const used = await usedThisMonth(pool);
   const last = (await pool.query(`SELECT at, ok, kind, records, quota_remaining, note FROM italia_requests ORDER BY id DESC LIMIT 1`)).rows[0] || null;
@@ -374,8 +378,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const finRows = rows.filter(r => fin.get(r.id) && fin.get(r.id).final);
   const nwRows = rows.filter(r => r.netwin_clv_pct !== null).map(r => ({ clv_pct: r.netwin_clv_pct }));
   return {
-    ...base, total: stats(rows), netwin: stats(nwRows), byBook,
-    final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows) } : null,
+    ...base, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
+    final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows), results: R.resultStats(finRows) } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
     byOdds: [
       { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
@@ -389,7 +393,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       netwin_odd: r.netwin_odd !== null ? Number(r.netwin_odd) : null, clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null,
       min_odd: r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null, in_band: inBand(r.odd),
       win_prob: r.fair_prob ? Number(r.fair_prob) : null,
-      final: fin.get(r.id) ? fin.get(r.id).final : false
+      final: fin.get(r.id) ? fin.get(r.id).final : false,
+      result: r.result || null, result_score: r.result_score || null
     }))
   };
 }

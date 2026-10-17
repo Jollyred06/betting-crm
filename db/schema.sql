@@ -253,3 +253,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS italia_signals_uniq ON italia_signals (event_i
 CREATE TABLE IF NOT EXISTS italia_requests (
   id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), kind TEXT, ok BOOLEAN, records INT, quota_remaining INT, note TEXT
 );
+
+-- Risultati dei segnali I/B/F (API-Football): le colonne e la tabella si creano anche da sole
+ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS result TEXT;            -- won, lost, void, notfound
+ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS result_score TEXT;
+ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;
+ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS af_fixture_id BIGINT;
+CREATE TABLE IF NOT EXISTS results_requests (id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), day TEXT, ok BOOLEAN, fixtures INT, note TEXT);

@@ -463,6 +463,7 @@
   const variantLine = r => `<div><dt>${esc(r.name)}</dt><dd>${r.signals ? r.signals + ' segnali' + (r.settled >= 5 ? ', ' + pct(r.avgClvPct) + ' vs chiusura' : ', pochi chiusi') : 'nessuno'}</dd></div>`;
   const itStat = t => t.measured >= 5 ? pct(t.avgClvPct, 2) + (t.clvCi95 ? ` (da ${pct(t.clvCi95[0])} a ${pct(t.clvCi95[1])})` : '') + `, positivi ${num(t.positivePct, 0)}%` : (t.measured ? t.measured + ' misurati, pochi dati' : 'nessuno misurato');
   // Card delle strategie che leggono odss-api.com: I (libri italiani, giocabili) e B (selezione B sui libri esteri, solo misura).
+  const resLine = r => !r || !r.settled ? 'ancora nessuno' : `${r.won} vinte, ${r.lost} perse · saldo carta <span class="${cls(r.pnlEur)}">${signedMoney(r.pnlEur)}</span>`;
   function oddsCard(d) {
     const t = d.total, isI = d.strategy !== 'B';
     const rows = (d.recent || []).map(r => `<div class="move"><div>${esc(r.home)} – ${esc(r.away)}<small>${esc(r.league || '')} · ${fmtDate(r.commence_time)}</small><small>Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)} (${pct(r.edge_pct)})${isI && r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</small></div><div class="${cls(r.clv_pct)}" style="font-weight:700;white-space:nowrap;">${r.clv_pct === null ? 'in attesa' : pct(r.clv_pct)}</div></div>`).join('');
@@ -470,9 +471,10 @@
       ? `Ogni ${d.rules.scanEveryMin} minuti guarda le partite delle prossime ${d.rules.windowHours} ore e segnala dove ${esc(d.books.join(', '))} pagano più del prezzo giusto di Pinnacle (vantaggio dal ${d.rules.minEdge}% al ${d.rules.maxEdge}%, quota sotto ${num(d.rules.maxOdd, 0)}). Alla chiusura misura il valore.`
       : `La prova della selezione B su partite nuove, con la stessa richiesta della strategia I (nessun credito in più): libri esteri ${esc(d.books.join(', '))}, vantaggio dal ${d.rules.minEdge}% al ${d.rules.maxEdge}%, quota sotto ${num(d.rules.maxOdd, 0)}, partite delle prossime ${d.rules.windowHours} ore. Solo misura: questi libri non si giocano dall'Italia.`;
     return `<div class="strat"><div class="sh"><div class="letter">${esc(d.letter || (isI ? 'I' : 'B'))}</div><div><b>${esc(d.title || '')}</b><span>${d.active ? 'In prova dal vivo, senza soldi veri' : 'Spenta: manca la variabile ODSS_API_KEY su Render'}</span></div></div>
-        <p class="muted" style="margin:0 0 6px;">${desc}</p>
+        <p class="muted" style="margin:0 0 6px;">${desc}</p>${isI && d.resultsStatus ? `<p class="muted" style="margin:0 0 6px;font-size:13.5px;">${esc(d.resultsStatus.text)}</p>` : ''}
         <dl class="facts"><div><dt>Segnali</dt><dd>${t.signals} (${t.measured} con chiusura)</dd></div>
           <div><dt>Valore vs chiusura</dt><dd class="${t.measured >= 5 ? cls(t.avgClvPct) : ''}">${itStat(t)}</dd></div>
+          <div><dt>Risultati veri</dt><dd>${resLine(d.results)}</dd></div>
           ${isI ? `<div><dt>Giocando sempre su Netwin</dt><dd class="${d.netwin.measured >= 5 ? cls(d.netwin.avgClvPct) : ''}">${itStat(d.netwin)}</dd></div>
           <div><dt>Richieste odss</dt><dd>${d.requestsThisMonth} usate dal CRM questo mese${d.quotaRemaining !== null && d.quotaRemaining !== undefined ? ', ' + d.quotaRemaining + ' rimaste sull\'account' : ''}</dd></div>` : ''}</dl>
         ${d.byBook.length ? `<details><summary>Per bookmaker ed esito</summary><h4>Per bookmaker</h4><dl class="facts">${d.byBook.map(b => `<div><dt>${esc(b.book)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl><h4>Per esito</h4><dl class="facts">${d.bySelection.map(b => `<div><dt>${esc(b.name)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
@@ -488,6 +490,7 @@
         <div><dt>Valore vs chiusura</dt><dd class="${f.measured >= 5 ? cls(f.avgClvPct) : ''}">${itStat(f)}</dd></div>
         <div><dt>Guadagno atteso (${num(f.stake || 2, 0)} € a segnale)</dt><dd class="${f.measured ? cls(f.expectedEur) : ''}">${f.measured ? signedMoney(f.expectedEur) : '—'}</dd></div>
         <div><dt>Vinte attese su 10</dt><dd>${f.expectedWinsOf10 !== null ? num(f.expectedWinsOf10, 1) : '—'}</dd></div>
+        <div><dt>Risultati veri</dt><dd>${resLine(f.results)}</dd></div>
         <div><dt>Obiettivo</dt><dd>9 segnali su 10 sopra la chiusura, su almeno 20</dd></div></dl></div>`;
   }
   async function loadItalia() {
@@ -589,7 +592,7 @@
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.clv_pct !== null ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
             ${r.min_odd && chip.includes('chip it') ? `<div class="avail">Gioca solo se sul sito la quota è almeno <b>${num(r.min_odd, 2)}</b>${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</div>` : ''}
-            <div class="foot">${chip}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
+            <div class="foot">${chip}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
         </article>`).join('') + tail;
   }
