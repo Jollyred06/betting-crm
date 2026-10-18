@@ -42,7 +42,10 @@ function cfg(env = process.env) {
     fromHour: n('ITALIA_FROM_HOUR', 9), toHour: n('ITALIA_TO_HOUR', 22),
     monthlyCap: n('ITALIA_MONTHLY_CAP', 400),
     closeReserve: n('ITALIA_CLOSE_RESERVE', 60),
-    closeWindowMin: n('ITALIA_CLOSE_WINDOW_MIN', 40),
+    // chiusura: si chiede Pinnacle quando una partita segnalata parte entro 15 minuti, e nella stessa richiesta
+    // si prendono tutte quelle che partono entro 45 minuti (una richiesta per gruppo di partite, nessuna ripetizione)
+    closeTriggerMin: n('ITALIA_CLOSE_TRIGGER_MIN', 15),
+    closeWindowMin: n('ITALIA_CLOSE_WINDOW_MIN', 45),
     maxStaleMin: n('ITALIA_MAX_STALE_MIN', 30),
     // Strategia B: stessa richiesta della I (zero richieste in piu'), libri esteri, edge 2-5%, quota sotto 5, entro 6 ore
     bBooks: (env.B_BOOKS ? env.B_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_B_BOOKS),
@@ -274,9 +277,11 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   const { rows } = await pool.query(
     `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min FROM italia_signals
      WHERE commence_time > to_timestamp($1::double precision / 1000) AND commence_time <= to_timestamp($1::double precision / 1000) + make_interval(mins => $2::int)
-       AND (close_captured_at IS NULL OR (close_lag_min > 20 AND commence_time <= to_timestamp($1::double precision / 1000) + INTERVAL '22 minutes'))`,
+       AND close_captured_at IS NULL`,
     [nowMs, c.closeWindowMin]);
   if (!rows.length) return { chiusure: 0 };
+  // si aspetta che almeno una partita sia vicina: cosi' una sola richiesta copre il gruppo e la chiusura e' piu' fedele
+  if (!rows.some(r => Date.parse(r.commence_time) - nowMs <= c.closeTriggerMin * 60000)) return { chiusure: 0, nota: 'non ancora' };
   if (await usedThisMonth(pool) >= c.monthlyCap) return { chiusure: 0, nota: 'tetto mensile' };
   const rem = await lastRemaining(pool);
   if (rem !== null && rem <= 3) return { chiusure: 0, nota: 'quota odss finita' };

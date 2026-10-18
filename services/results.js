@@ -13,6 +13,7 @@ const axios = require('axios');
 
 const BASE = 'https://v3.football.api-sports.io';
 const FD_BASE = 'https://api.football-data.org/v4';
+const RAPID_HOST = 'api-football-v1.p.rapidapi.com';
 const FINISHED = new Set(['FT', 'AET', 'PEN']);
 const VOID = new Set(['PST', 'CANC', 'ABD', 'AWD', 'WO']);
 const FD_STATUS = { FINISHED: 'FT', POSTPONED: 'PST', CANCELLED: 'CANC', SUSPENDED: 'ABD', AWARDED: 'AWD' };
@@ -22,7 +23,9 @@ const STAKE = 2;
 function rcfg(env = process.env) {
   const n = (k, d) => (env[k] !== undefined && env[k] !== '' && !isNaN(Number(env[k])) ? Number(env[k]) : d);
   return {
-    key: clean(env.APIFOOTBALL_KEY),
+    // con RAPIDAPI_KEY si passa da RapidAPI (stesso servizio API-Football, ma la richiesta non parte dall'indirizzo condiviso di Render)
+    key: clean(env.RAPIDAPI_KEY) || clean(env.APIFOOTBALL_KEY),
+    rapid: !!clean(env.RAPIDAPI_KEY),
     fdKey: env.RESULTS_FD === 'false' ? '' : clean(env.FOOTBALL_DATA_KEY),
     dailyCap: n('RESULTS_DAILY_CAP', 80),
     everyMin: n('RESULTS_EVERY_MIN', 60),
@@ -118,14 +121,16 @@ async function fetchFD(pool, c, from, to, http = axios) {
 async function fetchDay(pool, c, day, http = axios) {
   let ok = false, n = 0, note = null;
   try {
-    const res = await http.get(`${BASE}/fixtures`, { params: { date: day, timezone: 'UTC' }, headers: { 'x-apisports-key': c.key }, timeout: 45000 });
+    const url = c.rapid ? `https://${RAPID_HOST}/v3/fixtures` : `${BASE}/fixtures`;
+    const headers = c.rapid ? { 'x-rapidapi-key': c.key, 'x-rapidapi-host': RAPID_HOST } : { 'x-apisports-key': c.key };
+    const res = await http.get(url, { params: { date: day, timezone: 'UTC' }, headers, timeout: 45000 });
     const err = apiError(res.data);
     if (err) { note = err; return null; }
     const list = (res.data && res.data.response) || [];
     n = list.length; ok = true;
     return list;
   } catch (e) {
-    note = (e.response && e.response.data && apiError(e.response.data)) || e.message;
+    note = (e.response && e.response.data && (apiError(e.response.data) || e.response.data.message)) || e.message;
     return null;
   } finally {
     await logRequest(pool, day, ok, n, note, 'af');

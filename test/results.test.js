@@ -36,4 +36,6 @@ assert.deepStrictEqual(R.settle(sInter, fdm), { result: 'won', score: '1-1' });
 assert.strictEqual(R.settle(sig, R.fromFootballData({ id: 1, utcDate: sig.commence_time, status: 'POSTPONED', homeTeam: {}, awayTeam: {}, score: { fullTime: {} } })).result, 'void');
 assert.strictEqual(R.settle(sig, R.fromFootballData({ id: 1, utcDate: sig.commence_time, status: 'IN_PLAY', homeTeam: {}, awayTeam: {}, score: { fullTime: { home: 1, away: 0 } } })), null);
 assert.strictEqual(R.rcfg({ FOOTBALL_DATA_KEY: 'k' }).fdKey, 'k'); assert.strictEqual(R.rcfg({ FOOTBALL_DATA_KEY: 'k', RESULTS_FD: 'false' }).fdKey, '');
+// RapidAPI: la chiave RapidAPI ha la precedenza
+assert.deepStrictEqual([R.rcfg({ RAPIDAPI_KEY: 'r', APIFOOTBALL_KEY: 'a' }).key, R.rcfg({ RAPIDAPI_KEY: 'r' }).rapid, R.rcfg({ APIFOOTBALL_KEY: 'a' }).rapid], ['r', true, false]);
 console.log('results.test.js: tutti i controlli passati');
