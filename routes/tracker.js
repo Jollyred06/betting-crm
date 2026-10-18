@@ -40,7 +40,11 @@ router.post('/auth-check', (req, res) => authorized(req) ? res.json({ ok: true }
 // Risultato a mano di un segnale ancora in attesa (protetto dalla chiave): chiude il segnale e muove il bankroll come l'esito automatico.
 router.post('/signals/:id/result', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
-  try { res.json({ success: true, ...(await require('../services/settler').settleManual(pool, Number(req.params.id), req.body && req.body.homeGoals, req.body && req.body.awayGoals)) }); }
+  try {
+    const out = await require('../services/settler').settleManual(pool, Number(req.params.id), req.body && req.body.homeGoals, req.body && req.body.awayGoals);
+    let tappe = []; try { tappe = await require('../services/milestones').checkMilestones(pool); } catch (e) { /* tabella non ancora creata */ }
+    res.json({ success: true, ...out, tappe });
+  }
   catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 

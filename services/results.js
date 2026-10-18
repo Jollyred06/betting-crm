@@ -167,26 +167,29 @@ async function settleSignals(pool, { env = process.env, nowMs = Date.now(), http
       chiusi++;
     }
   };
-  // 1) API-Football: tutti i campionati, una richiesta per giorno (al massimo 3 giorni per passo)
+  // 1) API-Football: tutti i campionati, una richiesta per giorno. Il piano gratuito legge solo ieri, oggi e domani:
+  //    i giorni piu' vecchi si saltano (li copre la riserva), cosi' un giorno vecchio non blocca quelli recenti.
+  const fonti = [];
   if (useAF) {
-    let failed = false;
-    for (const day of [...new Set(rows.map(dayOf))].slice(0, 3)) {
+    const minDay = new Date(nowMs - 86400000).toISOString().slice(0, 10);
+    for (const day of [...new Set(rows.map(dayOf))].filter(d => d >= minDay).slice(0, 3)) {
       const fx = await fetchDay(pool, c, day, http);
-      if (!fx) { failed = true; break; }
+      if (!fx) break;
       await apply(fx, rows.filter(r => dayOf(r) === day));
+      if (!fonti.includes('API-Football')) fonti.push('API-Football');
     }
-    if (!failed) return { risultati: 'fatto', fonte: 'API-Football', partiteLette: letti, chiusi };
   }
-  // 2) Riserva football-data.org: campionati principali, una richiesta per tutti i giorni in attesa (massimo 10 giorni)
-  if (!c.fdKey) return { risultati: 'errore', chiusi };
+  // 2) Riserva football-data.org per quello che resta (campionati principali): una richiesta per tutti i giorni (massimo 10)
+  if (!c.fdKey) return { risultati: fonti.length ? 'fatto' : 'errore', fonte: fonti.join(' + '), partiteLette: letti, chiusi };
   const left = (await pool.query(`SELECT id FROM italia_signals WHERE result IS NULL AND id = ANY($1::int[])`, [rows.map(r => r.id)])).rows.map(r => r.id);
   const todo = rows.filter(r => left.includes(r.id));
-  if (!todo.length) return { risultati: 'fatto', chiusi };
+  if (!todo.length) return { risultati: 'fatto', fonte: fonti.join(' + '), partiteLette: letti, chiusi };
   const from = dayOf(todo[0]), to = new Date(Math.min(Date.parse(from) + 9 * 86400000, Date.parse(dayOf(todo[todo.length - 1])))).toISOString().slice(0, 10);
   const fd = await fetchFD(pool, c, from, to, http);
-  if (!fd) return { risultati: 'errore', chiusi };
+  if (!fd) return { risultati: fonti.length ? 'fatto' : 'errore', fonte: fonti.join(' + '), partiteLette: letti, chiusi };
   await apply(fd, todo);
-  return { risultati: 'fatto', fonte: 'football-data.org', partiteLette: letti, chiusi };
+  fonti.push('football-data.org');
+  return { risultati: 'fatto', fonte: fonti.join(' + '), partiteLette: letti, chiusi };
 }
 
 /** Stato per l'app: attivo, ultimo esito, eventuale messaggio del piano. */
@@ -199,7 +202,7 @@ async function resultsStatus(pool, env = process.env) {
     const r = c.key ? await last('af') : null, f = c.fdKey ? await last('fd') : null;
     if (!r && !f) return { active: true, ok: null, text: 'Risultati automatici: in attesa della prima partita finita.' };
     if (r && r.ok) return { active: true, ok: true, text: `✅ Risultati automatici attivi (ultima lettura: ${r.fixtures} partite).` };
-    const why = !c.key ? 'manca APIFOOTBALL_KEY' : /suspend/i.test(r.note || '') ? 'account sospeso' : (r.note || 'non risponde');
+    const why = !c.key ? 'manca APIFOOTBALL_KEY' : /suspend/i.test(r.note || '') ? 'account sospeso' : /access to this date/i.test(r.note || '') ? 'il piano gratuito legge solo ieri e oggi' : (r.note || 'non risponde');
     if (f && f.ok) return { active: true, ok: true, text: `✅ Risultati dei campionati principali da football-data.org (ultima lettura: ${f.fixtures} partite). API-Football: ${why}; gli altri campionati restano in attesa fino a 7 giorni.` };
     if (!r) return { active: true, ok: false, text: `⚠️ Risultati non letti: ${f.note}` };
     const plan = /season|plan/i.test(r.note || '');

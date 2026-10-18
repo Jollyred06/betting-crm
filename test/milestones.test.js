@@ -71,7 +71,9 @@ console.log('decisione: ok');
   assert.strictEqual(g.targets.length, 3); assert.ok(g.targets.every(t => t.reached && /^[0-9a-f]{10}$/.test(t.hash))); assert.strictEqual(g.targets[2].decision.level === undefined, false);
   db.saved = []; db.settled = 34; const g2 = await ms.getMilestones(pool);
   assert.deepStrictEqual(g2.targets.map(t => [t.reached, t.progress]), [[false, 34], [false, 34], [false, 34]]);   // "34 su 100" (al massimo il traguardo)
-  db.settled = 150; assert.strictEqual((await ms.getMilestones(pool)).targets[0].progress, 100);
+  // tappa superata senza giro automatico (risultati scritti a mano, A in pausa): la lettura la salva e la colora
+  db.settled = 150; const g3 = await ms.getMilestones(pool);
+  assert.strictEqual(g3.targets[0].reached, true); assert.strictEqual(db.saved.length, 1); assert.deepStrictEqual([g3.targets[1].reached, g3.targets[1].progress], [false, 150]);
   console.log('lettura per l\'app: ok');
 
   // --- CSV

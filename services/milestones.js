@@ -110,6 +110,8 @@ async function checkMilestones(pool) {
 }
 
 async function getMilestones(pool) {
+  // le tappe si salvano anche qui: i risultati scritti a mano (o con la strategia A in pausa) non passano dal giro automatico
+  try { await checkMilestones(pool); } catch (e) { /* tabella non ancora creata */ }
   const cnt = await pool.query(`SELECT COUNT(*)::int AS n FROM value_bets WHERE strategy = 'A_sharp' AND status IN ('won','lost')`);
   const settledNow = Number((cnt.rows[0] || {}).n || 0);
   let saved = [];
