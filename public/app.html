@@ -180,7 +180,7 @@
   <main id="pane-home">
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
     <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Consigli automatici sui risultati, aggiornati a ogni apertura. Niente giudizi su pochi dati.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
-    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani. In alto quelli ✅ F e ✅ F2, le selezioni candidate.</p><div id="today"><div class="sk box"></div></div>
+    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani. In alto quelli ✅ F, F2 e F3, le selezioni candidate.</p><div id="today"><div class="sk box"></div></div>
       <button class="ghost" onclick="show('signals')">Tutti i segnali →</button></section>
     <section class="block"><h3>Bankroll di carta</h3><p class="muted sub">Strategia A (libri esteri, 2 € a segnale). Il bankroll dei segnali italiani arriva con la prova di allenamento.</p><div id="bankMini"></div></section>
     <details class="fold"><summary><span>Strategia A · test di ottobre</span><small>verdetto, numeri e tappe</small></summary>
@@ -224,7 +224,7 @@
   <main id="pane-strategies" style="display:none;">
     <section class="block">
       <h3>Strategie</h3>
-      <p class="muted sub">Tutte in prova sulla carta, senza soldi veri. <b>F</b> e <b>F2</b> sono le selezioni candidate, <b>I</b> i bookmaker italiani, <b>B</b> la prova delle regole B sui libri esteri, <b>A</b> il test di ottobre.</p>
+      <p class="muted sub">Tutte in prova sulla carta, senza soldi veri. <b>F</b>, <b>F2</b> e <b>F3</b> sono le selezioni candidate, <b>I</b> i bookmaker italiani, <b>B</b> la prova delle regole B sui libri esteri, <b>A</b> il test di ottobre.</p>
       <div id="italia"></div>
       <div id="strategies"></div>
     </section>
@@ -506,10 +506,21 @@
         <div><dt>Vinte attese su 10</dt><dd>${f.expectedWinsOf10 !== null ? num(f.expectedWinsOf10, 1) : '—'}</dd></div>
         <div><dt>Risultati veri</dt><dd>${resLine(f.results)}</dd></div></dl></div>`;
   }
+  function final3Card(i) {
+    const f = i && i.final3; if (!f) return '';
+    const r = f.rules;
+    return `<div class="strat final"><div class="sh"><div class="letter" style="font-size:30px">F3</div><div><b>Favoriti con valore</b><span>Regole fissate il 18 ottobre sera, misurate solo da quel momento</span></div></div>
+      <p class="muted" style="margin:0 0 4px;font-size:14px;">Quote basse, si vince più spesso (6–7 volte su 10), ma solo quando la quota ha comunque valore.</p><ul class="rules"><li>Bookmaker italiano (strategia I)</li><li>Vantaggio dal ${r.minEdge}% all'${r.maxEdge}%</li><li>Quota tra ${num(r.minOdd, 2)} e ${num(r.maxOdd, 2)}</li><li>Niente amichevoli, giovanili o riserve</li></ul>
+      <dl class="facts"><div><dt>Segnali ✅ F3</dt><dd>${f.signals} (${f.measured} con chiusura)</dd></div>
+        <div><dt>Valore vs chiusura</dt><dd class="${f.measured >= 5 ? cls(f.avgClvPct) : ''}">${itStat(f)}</dd></div>
+        <div><dt>Guadagno atteso (${num(f.stake || 2, 0)} € a segnale)</dt><dd class="${f.measured ? cls(f.expectedEur) : ''}">${f.measured ? signedMoney(f.expectedEur) : '—'}</dd></div>
+        <div><dt>Vinte attese su 10</dt><dd>${f.expectedWinsOf10 !== null ? num(f.expectedWinsOf10, 1) : '—'}</dd></div>
+        <div><dt>Risultati veri</dt><dd>${resLine(f.results)}</dd></div></dl></div>`;
+  }
   async function loadItalia() {
     try {
       const [i, b] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null)]);
-      $('italia').innerHTML = finalCard(i) + final2Card(i) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
+      $('italia').innerHTML = finalCard(i) + final2Card(i) + final3Card(i) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
   async function loadStrategies() {
@@ -541,9 +552,9 @@
   async function loadToday() {
     try {
       const d = await getJson('/api/tracker/italia'), now = Date.now();
-      const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now).sort((a, b) => ((b.final || b.final2) - (a.final || a.final2)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
+      const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now).sort((a, b) => ((b.final || b.final2 || b.final3) - (a.final || a.final2 || a.final3)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
       $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
-        <div class="w"><b>${esc(r.home)} – ${esc(r.away)}</b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.book)}${r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}</small></div>
+        <div class="w"><b>${esc(r.home)} – ${esc(r.away)}</b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.book)}${r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
         <div class="q">${num(r.odd, 2)}</div></div>`).join('')
         : '<div class="empty">Nessun segnale italiano in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
@@ -607,7 +618,7 @@
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.clv_pct !== null ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
             ${r.min_odd && chip.includes('chip it') ? `<div class="avail">Gioca solo se sul sito la quota è almeno <b>${num(r.min_odd, 2)}</b>${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</div>` : ''}
-            <div class="foot">${chip}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
+            <div class="foot">${chip}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.final3 ? '<span class="chip fin">✅ F3</span>' : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
         </article>`).join('') + tail;
   }

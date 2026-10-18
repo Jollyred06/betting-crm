@@ -373,6 +373,28 @@ function markFinal2(rows) {
   return out;
 }
 
+// ------------------------------------------------------------------------------------------- selezione F3 (favoriti con valore)
+/**
+ * Condizioni fissate il 18 ottobre 2026 alle 20:45 (ora italiana), PRIMA di vedere i segnali successivi.
+ * Obiettivo: vincere piu' spesso (6-7 partite su 10) senza rinunciare al valore.
+ *  1. bookmaker italiano (strategia I)      2. quota tra 1,30 e 1,60
+ *  3. vantaggio dal 2% all'8%               4. niente amichevoli/giovanili/riserve (gia' escluse alla fonte)
+ */
+const FINAL3 = { since: '2026-10-18T18:45:00Z', minEdge: 2, maxEdge: 8, minOdd: 1.3, maxOdd: 1.6 };
+
+function markFinal3(rows) {
+  const since = Date.parse(FINAL3.since), out = new Map();
+  for (const r of rows) {
+    const t = Date.parse(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
+    const reasons = [];
+    if (t < since) reasons.push('prima delle regole');
+    if (!(edge >= FINAL3.minEdge && edge <= FINAL3.maxEdge)) reasons.push('vantaggio fuori 2–8%');
+    if (!(odd >= FINAL3.minOdd && odd < FINAL3.maxOdd)) reasons.push('quota fuori 1,30–1,60');
+    out.set(r.id, { final: reasons.length === 0, reasons });
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------------------------------- riepilogo per l'app
 
 /** Come stats, piu' le vinte attese su 10 secondo Pinnacle (probabilita' giusta media). */
@@ -408,11 +430,14 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const finRows = rows.filter(r => fin.get(r.id) && fin.get(r.id).final);
   const fin2 = strategy === 'I' ? markFinal2(rows) : new Map();
   const fin2Rows = rows.filter(r => fin2.get(r.id) && fin2.get(r.id).final);
+  const fin3 = strategy === 'I' ? markFinal3(rows) : new Map();
+  const fin3Rows = rows.filter(r => fin3.get(r.id) && fin3.get(r.id).final);
   const nwRows = rows.filter(r => r.netwin_clv_pct !== null).map(r => ({ clv_pct: r.netwin_clv_pct }));
   return {
     ...base, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
     final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows), results: R.resultStats(finRows) } : null,
     final2: strategy === 'I' ? { ...oddsStats(fin2Rows), rules: FINAL2, stake: STAKE, expectedEur: expectedEur(fin2Rows), results: R.resultStats(fin2Rows) } : null,
+    final3: strategy === 'I' ? { ...oddsStats(fin3Rows), rules: FINAL3, stake: STAKE, expectedEur: expectedEur(fin3Rows), results: R.resultStats(fin3Rows) } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
     byOdds: [
       { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
@@ -428,9 +453,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       win_prob: r.fair_prob ? Number(r.fair_prob) : null,
       final: fin.get(r.id) ? fin.get(r.id).final : false,
       final2: fin2.get(r.id) ? fin2.get(r.id).final : false,
+      final3: fin3.get(r.id) ? fin3.get(r.id).final : false,
       result: r.result || null, result_score: r.result_score || null
     }))
   };
 }
 
-module.exports = { expectedEur, FINAL, markFinal, FINAL2, markFinal2, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

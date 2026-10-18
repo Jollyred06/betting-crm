@@ -40,7 +40,7 @@ function bestWorst(groups) {
  * Costruisce i consigli a partire dalle righe gia' lette (funzione pura, testabile).
  * a: segnali A chiusi con clv; it: righe italia_signals (strategy I e B).
  */
-function buildAdvice({ a = [], it = [], final = [], final2 = [] } = {}) {
+function buildAdvice({ a = [], it = [], final = [], final2 = [], final3 = [] } = {}) {
   const out = [];
   const iRows = it.filter(r => (r.strategy || 'I') === 'I'), bRows = it.filter(r => r.strategy === 'B');
   const clv = rows => rows.map(r => r.clv_pct).filter(v => v !== null && v !== undefined && v !== '');
@@ -59,6 +59,7 @@ function buildAdvice({ a = [], it = [], final = [], final2 = [] } = {}) {
   // 2) Le strategie
   out.push(judge('Selezione F (finale candidata)', sF, ' Regole fissate il 17 ottobre, misurate solo sui segnali successivi.'));
   out.push(judge('Selezione F2 (seconda candidata)', summary(clv(final2)), ' Entro 3 ore, vantaggio 4–8%: regole fissate il 18 ottobre.'));
+  out.push(judge('Selezione F3 (favoriti con valore)', summary(clv(final3)), ' Quote 1,30–1,60: si vince 6–7 volte su 10. Regole fissate il 18 ottobre sera.'));
   out.push(judge('Strategia I (libri italiani)', sI));
   out.push(judge('Strategia B (selezione B, libri esteri)', sB, ' È la prova delle regole B su partite nuove.'));
   if (sA.n) out.push(judge('Strategia A (test di ottobre)', sA, ' Libri esteri: misura il metodo, non si gioca dall\'Italia.'));
@@ -96,12 +97,13 @@ async function getAdvice(pool) {
     it = (await pool.query(`SELECT id, created_at, commence_time, close_captured_at, edge_pct, strategy, book, odd, selection, clv_pct, netwin_clv_pct FROM italia_signals`)).rows;
   } catch (e) { /* strategia I non ancora attiva */ }
   // nomi leggibili dei libri della I (stessi dell'app) e selezione F
-  const { BOOK_NAMES: names, markFinal, markFinal2 } = require('./italia');
+  const { BOOK_NAMES: names, markFinal, markFinal2, markFinal3 } = require('./italia');
   const iOnly = it.filter(r => (r.strategy || 'I') === 'I'), fin = markFinal(iOnly), fin2 = markFinal2(iOnly);
   const final = iOnly.filter(r => fin.get(r.id) && fin.get(r.id).final);
   const final2 = iOnly.filter(r => fin2.get(r.id) && fin2.get(r.id).final);
+  const fin3 = markFinal3(iOnly), final3 = iOnly.filter(r => fin3.get(r.id) && fin3.get(r.id).final);
   it = it.map(r => ({ ...r, book: names[r.book] || r.book }));
-  return { advice: buildAdvice({ a, it, final, final2 }), minN: MIN_N, updatedAt: new Date().toISOString() };
+  return { advice: buildAdvice({ a, it, final, final2, final3 }), minN: MIN_N, updatedAt: new Date().toISOString() };
 }
 
 module.exports = { buildAdvice, getAdvice, summary, MIN_N, MIN_GROUP, BAD_BOOKS };

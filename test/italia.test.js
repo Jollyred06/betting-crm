@@ -142,5 +142,12 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   assert.ok(/3 ore/.test(m.get(2).reasons[0])); assert.ok(!m.get(3).final && !m.get(4).final); assert.ok(!m.get(5).final);
   assert.ok(/prima delle regole/.test(m.get(6).reasons[0]));
 }
+// --- selezione F3: favoriti con valore, quota 1,30-1,60, vantaggio 2-8%, solo dopo il 18/10 18:45Z
+{
+  const base = { book: 'snai', created_at: '2026-10-18T19:00:00Z', commence_time: '2026-10-18T23:00:00Z', edge_pct: 3, odd: 1.45 };
+  const m = it.markFinal3([{ id: 1, ...base }, { id: 2, ...base, odd: 1.6 }, { id: 3, ...base, odd: 1.25 }, { id: 4, ...base, edge_pct: 1.5 }, { id: 5, ...base, created_at: '2026-10-18T18:00:00Z' }]);
+  assert.strictEqual(m.get(1).final, true); assert.ok(!m.get(2).final && !m.get(3).final && !m.get(4).final);
+  assert.ok(/prima delle regole/.test(m.get(5).reasons[0]));
+}
 console.log('italia.test.js: tutti i controlli passati');
 })().catch(e => { console.error(e); process.exit(1); });
