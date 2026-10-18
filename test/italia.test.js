@@ -132,5 +132,15 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   assert.ok(/X \(pareggio\)/.test(txt) && /888sport/.test(txt) && /Netwin: 3,65/.test(txt) && /almeno <b>3,\d\d<\/b>/.test(txt), txt);
   // quota minima: prezzo giusto + 2%, arrotondato per eccesso
   assert.strictEqual(it.minOdd(0.5, 2), 2.04); assert.strictEqual(it.minOdd(0.25, 2), 4.08);
-  console.log('italia.test.js: tutti i controlli passati');
+  // --- selezione F2: entro 3 ore, vantaggio 4-8%, quota 1,60-3,50, solo dopo il 18/10 07:30Z
+{
+  const base = { book: 'snai', created_at: '2026-10-18T10:00:00Z', commence_time: '2026-10-18T12:30:00Z', edge_pct: 5, odd: 2.2 };
+  const rows = [{ id: 1, ...base }, { id: 2, ...base, commence_time: '2026-10-18T14:00:00Z' }, { id: 3, ...base, edge_pct: 3 }, { id: 4, ...base, edge_pct: 9 },
+    { id: 5, ...base, odd: 4 }, { id: 6, ...base, created_at: '2026-10-18T07:00:00Z', commence_time: '2026-10-18T09:00:00Z' }];
+  const m = it.markFinal2(rows);
+  assert.strictEqual(m.get(1).final, true);
+  assert.ok(/3 ore/.test(m.get(2).reasons[0])); assert.ok(!m.get(3).final && !m.get(4).final); assert.ok(!m.get(5).final);
+  assert.ok(/prima delle regole/.test(m.get(6).reasons[0]));
+}
+console.log('italia.test.js: tutti i controlli passati');
 })().catch(e => { console.error(e); process.exit(1); });

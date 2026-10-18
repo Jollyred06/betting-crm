@@ -343,6 +343,31 @@ function markFinal(rows) {
   return out;
 }
 
+// ------------------------------------------------------------------------------------------- selezione F2 (seconda candidata)
+/**
+ * Condizioni fissate il 18 ottobre 2026 alle 9:30 (ora italiana), PRIMA di vedere i segnali successivi.
+ * Usa solo le due cose che si sono ripetute in piu' backup: vicinanza al calcio d'inizio e vantaggio medio-alto.
+ *  1. bookmaker italiano (strategia I)      2. segnale uscito entro 3 ore dal calcio d'inizio
+ *  3. vantaggio dal 4% all'8%               4. quota tra 1,60 e 3,50
+ *  5. niente amichevoli/giovanili/riserve (gia' escluse alla fonte)
+ */
+const FINAL2 = { since: '2026-10-18T07:30:00Z', minEdge: 4, maxEdge: 8, minOdd: 1.6, maxOdd: 3.5, maxLeadHours: 3 };
+
+function markFinal2(rows) {
+  const since = Date.parse(FINAL2.since), out = new Map();
+  for (const r of rows) {
+    const t = Date.parse(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
+    const lead = (Date.parse(r.commence_time) - t) / 3600000;
+    const reasons = [];
+    if (t < since) reasons.push('prima delle regole');
+    if (!(lead <= FINAL2.maxLeadHours)) reasons.push('oltre 3 ore dal calcio d\'inizio');
+    if (!(edge >= FINAL2.minEdge && edge <= FINAL2.maxEdge)) reasons.push('vantaggio fuori 4–8%');
+    if (!(odd >= FINAL2.minOdd && odd <= FINAL2.maxOdd)) reasons.push('quota fuori 1,60–3,50');
+    out.set(r.id, { final: reasons.length === 0, reasons });
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------------------------------- riepilogo per l'app
 
 /** Come stats, piu' le vinte attese su 10 secondo Pinnacle (probabilita' giusta media). */
@@ -376,10 +401,13 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const byBook = [...new Set(rows.map(r => r.book))].map(b => ({ book: BOOK_NAMES[b] || b, ...stats(rows.filter(r => r.book === b)) })).sort((a, b) => b.signals - a.signals);
   const fin = strategy === 'I' ? markFinal(rows) : new Map();
   const finRows = rows.filter(r => fin.get(r.id) && fin.get(r.id).final);
+  const fin2 = strategy === 'I' ? markFinal2(rows) : new Map();
+  const fin2Rows = rows.filter(r => fin2.get(r.id) && fin2.get(r.id).final);
   const nwRows = rows.filter(r => r.netwin_clv_pct !== null).map(r => ({ clv_pct: r.netwin_clv_pct }));
   return {
     ...base, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
     final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows), results: R.resultStats(finRows) } : null,
+    final2: strategy === 'I' ? { ...oddsStats(fin2Rows), rules: FINAL2, stake: STAKE, expectedEur: expectedEur(fin2Rows), results: R.resultStats(fin2Rows) } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
     byOdds: [
       { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
@@ -394,9 +422,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       min_odd: r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null, in_band: inBand(r.odd),
       win_prob: r.fair_prob ? Number(r.fair_prob) : null,
       final: fin.get(r.id) ? fin.get(r.id).final : false,
+      final2: fin2.get(r.id) ? fin2.get(r.id).final : false,
       result: r.result || null, result_score: r.result_score || null
     }))
   };
 }
 
-module.exports = { expectedEur, FINAL, markFinal, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { expectedEur, FINAL, markFinal, FINAL2, markFinal2, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
