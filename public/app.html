@@ -127,6 +127,7 @@
   .pick { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:8px 0; } .odd { font:800 26px/1 var(--display); color:var(--ink); background:var(--tint); padding:5px 10px; border-radius:8px; }
   .foot { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; font-size:13px; color:var(--muted); }
   details.more-advice > summary { cursor:pointer; font-weight:700; padding:10px 0 2px; color:var(--ink); list-style:none; } details.more-advice > summary::before { content:'▸ '; } details.more-advice[open] > summary::before { content:'▾ '; }
+  .livebox { font-size:13.5px; margin:2px 0 4px; } a.live { color:var(--ink); font-weight:600; text-decoration:none; white-space:nowrap; } a.live.on { color:var(--bad); } a.tlink { color:inherit; text-decoration:none; }
   .todo-line { margin-top:6px; font-size:14.5px; font-weight:600; color:var(--ok); } .todo-line.no { color:var(--muted); font-weight:500; }
   .okq { color:var(--ok); font-weight:600; } .noq { text-decoration:line-through; }
   .alt { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:13px; margin-top:4px; } .alt .ok { color:var(--ok); } .alt .no { color:var(--muted); text-decoration:line-through; }
@@ -596,7 +597,7 @@
       const d = await getJson('/api/tracker/italia'), now = Date.now();
       const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now && (r.play || r.played)).sort((a, b) => ((b.final || b.final2 || b.final3) - (a.final || a.final2 || a.final3)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
       $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
-        <div class="w"><b>${esc(r.home)} – ${esc(r.away)}</b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
+        <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" target="_blank" rel="noopener">${esc(r.home)} – ${esc(r.away)}</a></b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
         <div class="q">${num(r.played ? r.played.odd : r.play.odd, 2)}</div></div>`).join('')
         : '<div class="empty">Nessun segnale giocabile su 888sport o Snai in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
@@ -650,6 +651,9 @@
   function setTab(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('on')); el.classList.add('on'); sigTab = el.dataset.s; loadSignals(); }
   // Segnali della strategia I (solo bookmaker italiani): stessa scheda, con l'etichetta IT e la quota minima da accettare sul sito.
   const sigById = {};
+  const liveUrl = (h, a) => 'https://www.google.com/search?q=' + encodeURIComponent(`${h} - ${a}`);
+  // il testo e l'indirizzo li aggiorna paintDots ogni minuto (prima, durante e dopo la partita)
+  const liveLink = (h, a) => `<a class="live" data-q="${esc(h + ' - ' + a)}" href="${liveUrl(h, a)}" target="_blank" rel="noopener">🔎 Partita su Google</a>`;
   function italiaTickets(d, head, chip, tail) {
     const now = Date.now();
     (d && d.recent || []).forEach(r => { sigById[r.id] = r; });
@@ -660,7 +664,7 @@
         <article class="ticket">
           <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { day: 'numeric' })}</b><span>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span></div>
           <div class="tmain">
-            <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.clv_pct !== null ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div>
+            <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
             ${chip.includes('chip it') ? (r.play ? `<div class="todo-line">👉 Gioca su <b>${esc(r.play.book)}</b> a <b>${num(r.play.odd, 2)}</b></div>` : `<div class="todo-line no">⛔ Non giocabile su 888sport e Snai</div>`) : ''}
             ${chip.includes('chip it') && r.min_odd ? `<div class="avail">Prima di giocare controlla sul sito: quota almeno <b>${num(r.min_odd, 2)}</b>${r.alt && Object.keys(r.alt).length > 1 ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''}</div>` : ''}
@@ -778,7 +782,7 @@
         const rf = d.closest('.tmain').querySelector('.resform'); if (rf) rf.hidden = st !== 'end' || d.dataset.done === '1';   // i campi dei gol servono solo a partita finita e segnale ancora aperto
         // a partita finita il link porta al risultato; sul segnale gia' chiuso (che mostra il risultato) serve per notizie e dettagli
         const a = d.closest('.tmain').querySelector('a.live');   // a partita finita il link porta al risultato finale su Google
-        if (a) { a.textContent = d.dataset.done === '1' ? 'Vedi la partita' : st === 'end' ? 'Vedi il risultato' : 'Segui in diretta'; a.href = 'https://www.google.com/search?q=' + encodeURIComponent(a.dataset.q + (st === 'end' ? ' risultato' : ' diretta')); }
+        if (a && a.dataset.q) { a.textContent = st === 'end' ? '🔎 Risultato su Google' : st === 'on' ? '🔴 In diretta su Google' : '🔎 Partita su Google'; a.classList.toggle('on', st === 'on'); a.href = 'https://www.google.com/search?q=' + encodeURIComponent(a.dataset.q); }
       });
     } catch (e) { /* solo il colore del pallino */ }
   }
