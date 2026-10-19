@@ -433,6 +433,13 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const fin3 = strategy === 'I' ? markFinal3(rows) : new Map();
   const fin3Rows = rows.filter(r => fin3.get(r.id) && fin3.get(r.id).final);
   const nwRows = rows.filter(r => r.netwin_clv_pct !== null).map(r => ({ clv_pct: r.netwin_clv_pct }));
+  const played = strategy === 'I' ? await require('./played').playedSignalIds(pool) : new Map();
+  const SEL_IDX = { home: 0, draw: 1, away: 2 };
+  // quote dei due bookmaker consigliati (888sport e Snai) per l'esito del segnale, se il feed le aveva
+  const altOdds = r => { let q = r.quotes; try { if (typeof q === 'string') q = JSON.parse(q); } catch (e) { q = null; }
+    if (!q) return null; const out = {};
+    for (const [k, name] of [['888sport_it', '888sport'], ['snai', 'Snai']]) { const v = q[k] && Number(q[k][SEL_IDX[r.selection]]); if (v > 1) out[name] = v; }
+    return Object.keys(out).length ? out : null; };
   return {
     ...base, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
     final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows), results: R.resultStats(finRows) } : null,
@@ -454,6 +461,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final: fin.get(r.id) ? fin.get(r.id).final : false,
       final2: fin2.get(r.id) ? fin2.get(r.id).final : false,
       final3: fin3.get(r.id) ? fin3.get(r.id).final : false,
+      alt: strategy === 'I' ? altOdds(r) : null, played: played.get(Number(r.id)) || null,
       result: r.result || null, result_score: r.result_score || null
     }))
   };

@@ -127,6 +127,15 @@
   .pick { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:8px 0; } .odd { font:800 26px/1 var(--display); color:var(--ink); background:var(--tint); padding:5px 10px; border-radius:8px; }
   .foot { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; font-size:13px; color:var(--muted); }
   details.more-advice > summary { cursor:pointer; font-weight:700; padding:10px 0 2px; color:var(--ink); list-style:none; } details.more-advice > summary::before { content:'▸ '; } details.more-advice[open] > summary::before { content:'▾ '; }
+  .alt { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:13px; margin-top:4px; } .alt .ok { color:var(--ok); } .alt .no { color:var(--muted); text-decoration:line-through; }
+  .playbtn { margin-top:8px; border:1.5px solid var(--ink); background:none; color:var(--ink); border-radius:999px; padding:6px 14px; font-weight:700; font-size:13.5px; cursor:pointer; }
+  .played { margin-top:8px; font-size:13.5px; color:var(--ok); font-weight:600; }
+  .pf { display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:8px; margin-top:8px; } .pf label { display:flex; flex-direction:column; font-size:12.5px; color:var(--muted); gap:3px; min-width:0; }
+  .pf select, .pf input { width:100%; padding:8px; border:1.5px solid var(--line); border-radius:10px; background:var(--surface); color:var(--text); font-size:15px; } .pfb { grid-column:1/-1; display:flex; gap:12px; align-items:center; }
+  .tcash { border:1.5px solid var(--line); border-radius:16px; padding:12px 14px; margin-top:10px; } .tcash.best { border-color:var(--ok); }
+  .tcash .th { display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; } .tcash .th small { flex-basis:100%; }
+  .tnums { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:10px 0 4px; } .tnums > div { display:flex; flex-direction:column; gap:2px; min-width:0; }
+  .tnums span { font-size:12.5px; } .tnums b { font-size:19px; } .tnums small { font-size:12.5px; } #trainTabs { margin-top:6px; }
   .chip { white-space:nowrap; display:inline-block; padding:2px 9px; border-radius:999px; font-weight:700; font-size:12.5px; border:1.5px solid var(--muted); color:var(--muted); } .chip.won { background:var(--ok); border-color:var(--ok); color:#fff; } .chip.lost { background:var(--bad); border-color:var(--bad); color:#fff; }
 
   .panel { background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:16px; }
@@ -182,7 +191,7 @@
     <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Consigli automatici sui risultati, aggiornati a ogni apertura. Niente giudizi su pochi dati.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
     <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani. In alto quelli ✅ F, F2 e F3, le selezioni candidate.</p><div id="today"><div class="sk box"></div></div>
       <button class="ghost" onclick="show('signals')">Tutti i segnali →</button></section>
-    <section class="block"><h3>Bankroll di carta</h3><p class="muted sub">Strategia A (libri esteri, 2 € a segnale). Il bankroll dei segnali italiani arriva con la prova di allenamento.</p><div id="bankMini"></div></section>
+    <section class="block"><h3>Bankroll di carta</h3><p class="muted sub">Strategia A (libri esteri, 2 € a segnale). Il bankroll dei segnali italiani è nella scheda Bankroll, sotto "allenamento".</p><div id="bankMini"></div></section>
     <details class="fold"><summary><span>Strategia A · test di ottobre</span><small>verdetto, numeri e tappe</small></summary>
     <section id="verdict" class="hero"><div class="sk l1"></div><div class="sk l2"></div><div class="sk l3"></div><div class="sk box"></div></section>
     <div class="upd" id="updLine"></div>
@@ -234,8 +243,19 @@
   <!-- BANKROLL -->
   <main id="pane-bankroll" style="display:none;">
     <section class="block">
-      <h3>Bankroll di carta</h3>
-      <p class="muted sub">Strategia A (libri esteri, 2 € a segnale). Il bankroll dei segnali italiani arriva con la prova di allenamento.</p>
+      <h3>💶 Le mie giocate</h3>
+      <p class="muted sub">I segnali che hai giocato davvero, con la quota presa. Il CRM misura da solo se le tue quote battono la chiusura.</p>
+      <div id="playedBox"><div class="sk box"></div></div>
+    </section>
+    <section class="block train">
+      <h3>🏋️ Bankroll di allenamento</h3>
+      <p class="muted sub">Sulla carta, nessun soldo vero. Tre casse da 500 € per ogni selezione, con tre modi di puntare sugli stessi segnali. Si ferma da sola se perde il 25%.</p>
+      <div class="seg" id="trainTabs"><button class="on" data-k="F" onclick="setTrain(this)">✅ F</button><button data-k="F2" onclick="setTrain(this)">✅ F2</button><button data-k="F3" onclick="setTrain(this)">✅ F3</button></div>
+      <div id="trainBox"><div class="sk box"></div></div>
+    </section>
+    <section class="block">
+      <h3>Bankroll di carta · strategia A</h3>
+      <p class="muted sub">Il vecchio test sui libri esteri, 2 € a segnale. Non si gioca dall'Italia: resta solo come confronto.</p>
       <div id="bankFull"></div>
     </section>
     <section class="block">
@@ -437,7 +457,26 @@
       </dl>
       <h4>Ultimi movimenti</h4>` + (b.movements.length ? b.movements.map(m => `<div class="move"><span>${esc((m.note || (m.manual ? 'Movimento manuale' : 'Segnale chiuso')).replace(/: won\b/, ': vinta').replace(/: lost\b/, ': persa').replace(/: void\b/, ': annullata'))}<small>${fmtDate(m.at)}</small></span><b class="${cls(m.amount)}">${signedMoney(m.amount)}</b></div>`).join('') : '<div class="empty">Nessun movimento.</div>');
   }
+  let trainData = null, trainKey = 'F';
+  function setTrain(el) { document.querySelectorAll('#trainTabs button').forEach(b => b.classList.remove('on')); el.classList.add('on'); trainKey = el.dataset.k; renderTrain(); }
+  function renderTrain() {
+    const d = trainData; if (!d) return;
+    const s = d.selections.find(x => x.key === trainKey); if (!s) { $('trainBox').innerHTML = '<div class="empty">Non disponibile.</div>'; return; }
+    if (!s.measured) { $('trainBox').innerHTML = `<div class="empty">${esc(s.title)}: ancora nessun segnale misurato. Le casse partono da ${money(d.start)} appena arriva il primo.</div>`; return; }
+    const best = [...s.methods].sort((a, b) => b.expected.balance - a.expected.balance)[0];
+    $('trainBox').innerHTML = `<p class="muted" style="margin:10px 0 4px;">${s.measured} segnali misurati, ${s.settled} con risultato. Saldo <b>atteso</b> = valore alla chiusura, senza fortuna. Saldo <b>reale</b> = partite vinte e perse.</p>` +
+      s.methods.map(m => `<div class="tcash${m.key === best.key ? ' best' : ''}">
+        <div class="th"><b>${esc(m.label)}</b>${m.key === best.key ? '<span class="chip fin">migliore</span>' : ''}${m.expected.stopped ? '<span class="chip lost">fermata</span>' : ''}<small class="muted">${esc(m.desc)}</small></div>
+        <div class="tnums"><div><span class="muted">Atteso</span><b class="num ${cls(m.expected.pnl)}">${money(m.expected.balance)}</b><small class="${cls(m.expected.pnl)}">${signedMoney(m.expected.pnl)}</small></div>
+          <div><span class="muted">Reale</span><b class="num">${m.real.bets ? money(m.real.balance) : '—'}</b><small class="${m.real.bets ? cls(m.real.pnl) : 'muted'}">${m.real.bets ? signedMoney(m.real.pnl) + ' su ' + m.real.bets : 'nessun risultato'}</small></div>
+          <div><span class="muted">Calo massimo</span><b class="num">${num(m.expected.maxDrawdownPct, 1)}%</b><small class="muted">${m.expected.bets} puntate</small></div></div>
+        ${m.expected.curve.length > 2 ? chartSvg(m.expected.curve, d.start, true) : ''}</div>`).join('');
+  }
+  async function loadTraining() {
+    try { trainData = await getJson('/api/tracker/training'); renderTrain(); } catch (e) { $('trainBox').innerHTML = '<div class="empty">Allenamento non disponibile: ' + esc(e.message) + '</div>'; }
+  }
   async function loadBankroll() {
+    loadTraining(); loadPlayed();
     try { bankData = await getJson('/api/tracker/bankroll'); renderBankFull(bankData); } catch (e) { $('bankFull').innerHTML = '<div class="empty">Non riesco a caricare il bankroll: ' + esc(e.message) + '</div>'; }
   }
   function setBankMode(el) {
@@ -607,8 +646,10 @@
   }
   function setTab(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('on')); el.classList.add('on'); sigTab = el.dataset.s; loadSignals(); }
   // Segnali della strategia I (solo bookmaker italiani): stessa scheda, con l'etichetta IT e la quota minima da accettare sul sito.
+  const sigById = {};
   function italiaTickets(d, head, chip, tail) {
     const now = Date.now();
+    (d && d.recent || []).forEach(r => { sigById[r.id] = r; });
     const list = (d && d.recent || []).filter(r => sigTab === 'pending' ? Date.parse(r.commence_time) > now : sigTab === 'settled' || sigTab === 'closed' ? r.clv_pct !== null : true).slice(0, 15);
     if (!list.length) return '';
     return head + list.map(r => `
@@ -618,9 +659,54 @@
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.clv_pct !== null ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
             ${r.min_odd && chip.includes('chip it') ? `<div class="avail">Gioca solo se sul sito la quota è almeno <b>${num(r.min_odd, 2)}</b>${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</div>` : ''}
+            ${chip.includes('chip it') && r.alt ? `<div class="alt">${Object.entries(r.alt).map(([b, v]) => `<span class="${r.min_odd && v >= r.min_odd ? 'ok' : 'no'}">${esc(b)} <b>${num(v, 2)}</b> ${r.min_odd && v >= r.min_odd ? '✔' : '✗'}</span>`).join('')}</div>` : ''}
+            ${chip.includes('chip it') ? (r.played ? `<div class="played">✅ Giocata: <b>${num(r.played.odd, 2)}</b> su ${esc(r.played.book)}</div>` : `<button class="playbtn" onclick="openPlay(${Number(r.id)})">✍️ Ho giocato</button><div class="playform" id="pf-${Number(r.id)}"></div>`) : ''}
             <div class="foot">${chip}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.final3 ? '<span class="chip fin">✅ F3</span>' : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
         </article>`).join('') + tail;
+  }
+  const PLAY_BOOKS = ['888sport', 'Snai', 'Netwin', 'Goldbet', 'Eurobet', 'Sisal'];
+  function openPlay(id) {
+    const r = sigById[id], box = $('pf-' + id); if (!r || !box) return;
+    if (box.innerHTML) { box.innerHTML = ''; return; }
+    // proposta: il bookmaker consigliato con la quota piu' alta sopra la minima, altrimenti quello del segnale
+    const ok = Object.entries(r.alt || {}).filter(([, v]) => !r.min_odd || v >= r.min_odd).sort((a, b) => b[1] - a[1])[0];
+    const book = ok ? ok[0] : (PLAY_BOOKS.includes(r.book) ? r.book : '888sport'), odd = ok ? ok[1] : r.odd;
+    box.innerHTML = `<div class="pf"><label>Bookmaker<select id="pb-${id}">${PLAY_BOOKS.map(b => `<option${b === book ? ' selected' : ''}>${b}</option>`).join('')}</select></label>
+      <label>Quota presa<input id="po-${id}" type="number" inputmode="decimal" step="0.01" value="${odd}"></label>
+      <label>Puntata €<input id="ps-${id}" type="number" inputmode="decimal" step="0.5" value="2"></label>
+      <div class="pfb"><button class="primary" onclick="savePlay(${id})">Salva</button><button class="linkbtn" onclick="openPlay(${id})">Annulla</button></div><div class="muted" id="pm-${id}"></div></div>`;
+  }
+  async function savePlay(id) {
+    const r = sigById[id], odd = parseFloat(String($('po-' + id).value).replace(',', '.')), stake = parseFloat(String($('ps-' + id).value).replace(',', '.'));
+    if (r && r.min_odd && odd < r.min_odd && !confirm(`La quota ${num(odd, 2)} è sotto la minima ${num(r.min_odd, 2)}: il segnale non avrebbe valore. Salvo lo stesso?`)) return;
+    if (!(await ensureKey())) return;
+    try {
+      const res = await fetch('/api/tracker/played/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book: $('pb-' + id).value, odd, stake }) });
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 401) { lock(); $('pm-' + id).textContent = 'La chiave non è più valida: riprova.'; return; }
+      if (!res.ok) { $('pm-' + id).textContent = d.error || 'Errore ' + res.status; return; }
+      r.played = { book: $('pb-' + id).value, odd }; loadSignals();
+    } catch (e) { $('pm-' + id).textContent = 'Errore: ' + e.message; }
+  }
+  async function deletePlay(id) {
+    if (!confirm('Cancello questa giocata?')) return;
+    if (!(await ensureKey())) return;
+    const res = await fetch('/api/tracker/played/' + id, { method: 'DELETE', headers: { 'x-run-key': key } });
+    if (res.status === 401) { lock(); return; }
+    loadPlayed();
+  }
+  async function loadPlayed() {
+    let d; try { d = await getJson('/api/tracker/played'); } catch (e) { $('playedBox').innerHTML = '<div class="empty">Giocate non disponibili: ' + esc(e.message) + '</div>'; return; }
+    if (!d.count) { $('playedBox').innerHTML = '<div class="empty">Nessuna giocata ancora. Quando giochi un segnale, tocca <b>✍️ Ho giocato</b> sulla sua scheda (Segnali) e scrivi quota e bookmaker.</div>'; return; }
+    const sel = { home: '1', draw: 'X', away: '2' };
+    $('playedBox').innerHTML = `<dl class="facts">
+        <div><dt>Giocate</dt><dd>${d.count} · ${money(d.staked)} puntati</dd></div>
+        <div><dt>Saldo vero</dt><dd class="${d.settled ? cls(d.pnlEur) : ''}">${d.settled ? signedMoney(d.pnlEur) + ` (${d.won} vinte su ${d.settled})` : 'nessun risultato ancora'}</dd></div>
+        <div><dt>Valore delle tue quote vs chiusura</dt><dd class="${d.measured ? cls(d.avgClvPct) : ''}">${d.measured ? pct(d.avgClvPct) + `, positive ${num(d.positivePct, 0)}%` : 'da misurare'}</dd></div>
+        <div><dt>Guadagno atteso (senza fortuna)</dt><dd class="${d.measured ? cls(d.expectedEur) : ''}">${d.measured ? signedMoney(d.expectedEur) : '—'}</dd></div>
+        <div><dt>Quota presa rispetto al segnale</dt><dd>${d.avgSlipPct !== null ? pct(d.avgSlipPct) : '—'}${d.okMinPct !== null ? ` · sopra la minima ${num(d.okMinPct, 0)}%` : ''}</dd></div></dl>
+      <h4>Ultime giocate</h4>` + d.items.slice(0, 20).map(x => `<div class="move"><span>${esc(x.home)} – ${esc(x.away)} · <b>${sel[x.selection] || ''}</b><small>${esc(x.book)} ${num(x.odd, 2)} · ${money(x.stake)}${x.clvPct !== null ? ' · ' + pct(x.clvPct) + ' vs chiusura' : ''}${x.result === 'won' || x.result === 'lost' ? ' · ' + (x.result === 'won' ? 'vinta' : 'persa') : ''}</small></span><span style="display:flex;gap:10px;align-items:center;"><b class="${x.pnlEur !== null ? cls(x.pnlEur) : 'muted'}">${x.pnlEur !== null ? signedMoney(x.pnlEur) : 'in attesa'}</b><button class="linkbtn" aria-label="Cancella" onclick="deletePlay(${x.id})">✕</button></span></div>`).join('');
   }
   async function loadSignals() {
     const el = $('signals');
