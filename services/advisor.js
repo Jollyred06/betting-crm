@@ -69,8 +69,7 @@ function buildAdvice({ a = [], it = [], final = [], final2 = [], final3 = [] } =
   const bw = bestWorst(books);
   if (bw) out.push({ level: bw.best.s.mean > 0 ? 'good' : 'info', key: 'libri', title: `Bookmaker migliore: ${bw.best.name}`, text: `${bw.best.name} ${f1(bw.best.s.mean)} su ${bw.best.s.n} segnali; il peggiore è ${bw.worst.name} (${f1(bw.worst.s.mean)} su ${bw.worst.s.n}).` });
 
-  // 4) Netwin da solo
-  if (nw.n >= MIN_GROUP) out.push({ level: nw.mean > 0 ? 'good' : 'bad', key: 'netwin', title: nw.mean > 0 ? 'Netwin da solo funziona' : 'Netwin da solo non basta', text: `Giocando sempre la quota Netwin: ${f1(nw.mean)} contro la chiusura su ${nw.n} segnali.${nw.mean > 0 ? '' : ' Serve anche un secondo bookmaker.'}` });
+  // 4) Netwin da solo: tolto dal Consigliere (non si gioca su Netwin; il dato resta nel backup)
 
   // 5) Fascia di quota consigliata (1,60-2,60)
   const band = r => Number(r.odd) >= 1.6 && Number(r.odd) <= 2.6;

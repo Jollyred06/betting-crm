@@ -462,6 +462,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final2: fin2.get(r.id) ? fin2.get(r.id).final : false,
       final3: fin3.get(r.id) ? fin3.get(r.id).final : false,
       alt: strategy === 'I' ? altOdds(r) : null, played: played.get(Number(r.id)) || null,
+      // dove giocarlo: il bookmaker consigliato (888sport o Snai) con la quota piu' alta, solo se almeno la minima
+      play: (() => { const a = strategy === 'I' ? altOdds(r) : null, m = r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null;
+        const best = Object.entries(a || {}).filter(([, v]) => m && v >= m).sort((x, y) => y[1] - x[1])[0];
+        return best ? { book: best[0], odd: best[1] } : null; })(),
       result: r.result || null, result_score: r.result_score || null
     }))
   };

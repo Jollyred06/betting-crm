@@ -103,7 +103,7 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
 
   // SEGNALI, STRATEGIE, BANKROLL
   vm.runInContext("show('signals')", ctx); await tick();
-  assert.ok(/Giocabili|bookmaker italiani/i.test(els.signals.innerHTML), 'di base la scheda mostra i segnali giocabili in Italia');
+  assert.ok(/888sport o Snai|bookmaker italiani/i.test(els.signals.innerHTML), 'di base la scheda mostra i segnali giocabili su 888sport e Snai');
   vm.runInContext("setScope('all')", ctx); await tick();
   assert.ok(/Punta su <b>Fenerbahçe<\/b>/.test(els.signals.innerHTML) && />4,20</.test(els.signals.innerHTML) && /&lt;b&gt;X&lt;\/b&gt;/.test(els.signals.innerHTML) && !/<b>X<\/b>/.test(els.signals.innerHTML));
   vm.runInContext("show('strategies')", ctx); await tick();

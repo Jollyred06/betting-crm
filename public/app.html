@@ -127,6 +127,8 @@
   .pick { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:8px 0; } .odd { font:800 26px/1 var(--display); color:var(--ink); background:var(--tint); padding:5px 10px; border-radius:8px; }
   .foot { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; font-size:13px; color:var(--muted); }
   details.more-advice > summary { cursor:pointer; font-weight:700; padding:10px 0 2px; color:var(--ink); list-style:none; } details.more-advice > summary::before { content:'▸ '; } details.more-advice[open] > summary::before { content:'▾ '; }
+  .todo-line { margin-top:6px; font-size:14.5px; font-weight:600; color:var(--ok); } .todo-line.no { color:var(--muted); font-weight:500; }
+  .okq { color:var(--ok); font-weight:600; } .noq { text-decoration:line-through; }
   .alt { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:13px; margin-top:4px; } .alt .ok { color:var(--ok); } .alt .no { color:var(--muted); text-decoration:line-through; }
   .playbtn { margin-top:8px; border:1.5px solid var(--ink); background:none; color:var(--ink); border-radius:999px; padding:6px 14px; font-weight:700; font-size:13.5px; cursor:pointer; }
   .played { margin-top:8px; font-size:13.5px; color:var(--ok); font-weight:600; }
@@ -189,7 +191,7 @@
   <main id="pane-home">
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
     <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Consigli automatici sui risultati, aggiornati a ogni apertura. Niente giudizi su pochi dati.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
-    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani. In alto quelli ✅ F, F2 e F3, le selezioni candidate.</p><div id="today"><div class="sk box"></div></div>
+    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani. Solo quelli giocabili su 888sport o Snai, con il sito e la quota. In alto quelli ✅ F, F2 e F3.</p><div id="today"><div class="sk box"></div></div>
       <button class="ghost" onclick="show('signals')">Tutti i segnali →</button></section>
     <section class="block"><h3>Bankroll di carta</h3><p class="muted sub">Strategia A (libri esteri, 2 € a segnale). Il bankroll dei segnali italiani è nella scheda Bankroll, sotto "allenamento".</p><div id="bankMini"></div></section>
     <details class="fold"><summary><span>Strategia A · test di ottobre</span><small>verdetto, numeri e tappe</small></summary>
@@ -217,8 +219,9 @@
     <section class="block">
       <h3>Segnali</h3>
       <div class="scope" role="group" aria-label="Quali segnali">
-        <button id="scope-it" class="on" onclick="setScope('it')">🇮🇹 Giocabili in Italia</button>
-        <button id="scope-all" onclick="setScope('all')">Tutte le strategie</button>
+        <button id="scope-mine" class="on" onclick="setScope('mine')">🎯 I miei siti</button>
+        <button id="scope-it" onclick="setScope('it')">🇮🇹 Tutti italiani</button>
+        <button id="scope-all" onclick="setScope('all')">Tutte</button>
       </div>
       <div class="seg" role="tablist">
         <button class="tab on" data-s="" onclick="setTab(this)">Tutti</button>
@@ -507,7 +510,7 @@
   const resLine = r => !r || !r.settled ? 'ancora nessuno' : `${r.won} vinte, ${r.lost} perse · saldo carta <span class="${cls(r.pnlEur)}">${signedMoney(r.pnlEur)}</span>`;
   function oddsCard(d) {
     const t = d.total, isI = d.strategy !== 'B';
-    const rows = (d.recent || []).map(r => `<div class="move"><div>${esc(r.home)} – ${esc(r.away)}<small>${esc(r.league || '')} · ${fmtDate(r.commence_time)}</small><small>Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)} (${pct(r.edge_pct)})${isI && r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</small></div><div class="${cls(r.clv_pct)}" style="font-weight:700;white-space:nowrap;">${r.clv_pct === null ? 'in attesa' : pct(r.clv_pct)}</div></div>`).join('');
+    const rows = (d.recent || []).map(r => `<div class="move"><div>${esc(r.home)} – ${esc(r.away)}<small>${esc(r.league || '')} · ${fmtDate(r.commence_time)}</small><small>Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)} (${pct(r.edge_pct)})</small></div><div class="${cls(r.clv_pct)}" style="font-weight:700;white-space:nowrap;">${r.clv_pct === null ? 'in attesa' : pct(r.clv_pct)}</div></div>`).join('');
     const desc = isI
       ? `Ogni ${d.rules.scanEveryMin} minuti guarda le partite delle prossime ${d.rules.windowHours} ore e segnala dove ${esc(d.books.join(', '))} pagano più del prezzo giusto di Pinnacle (vantaggio dal ${d.rules.minEdge}% al ${d.rules.maxEdge}%, quota sotto ${num(d.rules.maxOdd, 0)}). Alla chiusura misura il valore.`
       : `La prova della selezione B su partite nuove, con la stessa richiesta della strategia I (nessun credito in più): libri esteri ${esc(d.books.join(', '))}, vantaggio dal ${d.rules.minEdge}% al ${d.rules.maxEdge}%, quota sotto ${num(d.rules.maxOdd, 0)}, partite delle prossime ${d.rules.windowHours} ore. Solo misura: questi libri non si giocano dall'Italia.`;
@@ -516,7 +519,7 @@
         <dl class="facts"><div><dt>Segnali</dt><dd>${t.signals} (${t.measured} con chiusura)</dd></div>
           <div><dt>Valore vs chiusura</dt><dd class="${t.measured >= 5 ? cls(t.avgClvPct) : ''}">${itStat(t)}</dd></div>
           <div><dt>Risultati veri</dt><dd>${resLine(d.results)}</dd></div>
-          ${isI ? `<div><dt>Giocando sempre su Netwin</dt><dd class="${d.netwin.measured >= 5 ? cls(d.netwin.avgClvPct) : ''}">${itStat(d.netwin)}</dd></div>
+          ${isI ? `
           <div><dt>Richieste odss</dt><dd>${d.requestsThisMonth} usate dal CRM questo mese${d.quotaRemaining !== null && d.quotaRemaining !== undefined ? ', ' + d.quotaRemaining + ' rimaste sull\'account' : ''}</dd></div>` : ''}</dl>
         ${d.byBook.length ? `<details><summary>Per bookmaker ed esito</summary><h4>Per bookmaker</h4><dl class="facts">${d.byBook.map(b => `<div><dt>${esc(b.book)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl><h4>Per esito</h4><dl class="facts">${d.bySelection.map(b => `<div><dt>${esc(b.name)}</dt><dd>${b.signals} segnali, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
         ${d.byOdds && d.total.signals ? `<details${isI ? ' open' : ''}><summary>Per fascia di quota</summary><dl class="facts">${d.byOdds.map(b => `<div><dt>${b.recommended ? '⭐ ' : ''}${esc(b.name)}</dt><dd>${b.signals} segnali${b.expectedWinsOf10 !== null ? ', attese ' + num(b.expectedWinsOf10, 1) + ' su 10' : ''}, ${itStat(b)}</dd></div>`).join('')}</dl></details>` : ''}
@@ -591,11 +594,11 @@
   async function loadToday() {
     try {
       const d = await getJson('/api/tracker/italia'), now = Date.now();
-      const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now).sort((a, b) => ((b.final || b.final2 || b.final3) - (a.final || a.final2 || a.final3)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
+      const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now && (r.play || r.played)).sort((a, b) => ((b.final || b.final2 || b.final3) - (a.final || a.final2 || a.final3)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
       $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
-        <div class="w"><b>${esc(r.home)} – ${esc(r.away)}</b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.book)}${r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
-        <div class="q">${num(r.odd, 2)}</div></div>`).join('')
-        : '<div class="empty">Nessun segnale italiano in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
+        <div class="w"><b>${esc(r.home)} – ${esc(r.away)}</b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
+        <div class="q">${num(r.played ? r.played.odd : r.play.odd, 2)}</div></div>`).join('')
+        : '<div class="empty">Nessun segnale giocabile su 888sport o Snai in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
   }
   async function loadHome() {
@@ -638,11 +641,11 @@
   }
 
   // ------------------------------------------------------------------ SEGNALI
-  let sigScope = 'it';
-  try { sigScope = localStorage.getItem('sigScope') || 'it'; } catch (e) { /* senza memoria del browser: giocabili */ }
+  let sigScope = 'mine';
+  try { sigScope = localStorage.getItem('sigScope2') || 'mine'; } catch (e) { /* senza memoria del browser: giocabili */ }
   function setScope(v) {
-    sigScope = v; try { localStorage.setItem('sigScope', v); } catch (e) { /* facoltativo */ }
-    $('scope-it').classList.toggle('on', v === 'it'); $('scope-all').classList.toggle('on', v === 'all'); loadSignals();
+    sigScope = v; try { localStorage.setItem('sigScope2', v); } catch (e) { /* facoltativo */ }
+    loadSignals();
   }
   function setTab(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('on')); el.classList.add('on'); sigTab = el.dataset.s; loadSignals(); }
   // Segnali della strategia I (solo bookmaker italiani): stessa scheda, con l'etichetta IT e la quota minima da accettare sul sito.
@@ -650,7 +653,8 @@
   function italiaTickets(d, head, chip, tail) {
     const now = Date.now();
     (d && d.recent || []).forEach(r => { sigById[r.id] = r; });
-    const list = (d && d.recent || []).filter(r => sigTab === 'pending' ? Date.parse(r.commence_time) > now : sigTab === 'settled' || sigTab === 'closed' ? r.clv_pct !== null : true).slice(0, 15);
+    const list = (d && d.recent || []).filter(r => sigTab === 'pending' ? Date.parse(r.commence_time) > now : sigTab === 'settled' || sigTab === 'closed' ? r.clv_pct !== null : true)
+      .filter(r => sigScope !== 'mine' || !chip.includes('chip it') || r.play || r.played).slice(0, 15);
     if (!list.length) return '';
     return head + list.map(r => `
         <article class="ticket">
@@ -658,14 +662,14 @@
           <div class="tmain">
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.clv_pct !== null ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
-            ${r.min_odd && chip.includes('chip it') ? `<div class="avail">Gioca solo se sul sito la quota è almeno <b>${num(r.min_odd, 2)}</b>${r.netwin_odd && r.book !== 'Netwin' ? ' · Netwin ' + num(r.netwin_odd, 2) : ''}</div>` : ''}
-            ${chip.includes('chip it') && r.alt ? `<div class="alt">${Object.entries(r.alt).map(([b, v]) => `<span class="${r.min_odd && v >= r.min_odd ? 'ok' : 'no'}">${esc(b)} <b>${num(v, 2)}</b> ${r.min_odd && v >= r.min_odd ? '✔' : '✗'}</span>`).join('')}</div>` : ''}
+            ${chip.includes('chip it') ? (r.play ? `<div class="todo-line">👉 Gioca su <b>${esc(r.play.book)}</b> a <b>${num(r.play.odd, 2)}</b></div>` : `<div class="todo-line no">⛔ Non giocabile su 888sport e Snai</div>`) : ''}
+            ${chip.includes('chip it') && r.min_odd ? `<div class="avail">Prima di giocare controlla sul sito: quota almeno <b>${num(r.min_odd, 2)}</b>${r.alt && Object.keys(r.alt).length > 1 ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''}</div>` : ''}
             ${chip.includes('chip it') ? (r.played ? `<div class="played">✅ Giocata: <b>${num(r.played.odd, 2)}</b> su ${esc(r.played.book)}</div>` : `<button class="playbtn" onclick="openPlay(${Number(r.id)})">✍️ Ho giocato</button><div class="playform" id="pf-${Number(r.id)}"></div>`) : ''}
             <div class="foot">${chip}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.final3 ? '<span class="chip fin">✅ F3</span>' : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
         </article>`).join('') + tail;
   }
-  const PLAY_BOOKS = ['888sport', 'Snai', 'Netwin', 'Goldbet', 'Eurobet', 'Sisal'];
+  const PLAY_BOOKS = ['888sport', 'Snai', 'Goldbet', 'Netwin', 'Eurobet', 'Sisal'];
   function openPlay(id) {
     const r = sigById[id], box = $('pf-' + id); if (!r || !box) return;
     if (box.innerHTML) { box.innerHTML = ''; return; }
@@ -713,11 +717,12 @@
     try {
       const [rows, it, bs] = await Promise.all([getJson('/api/tracker/signals' + (sigTab ? '?status=' + sigTab : '')), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/italia?s=B').catch(() => null)]);
       const aHead = `<h4 class="sechead">Tutti i bookmaker <small class="muted">· strategia A, il test in corso</small></h4>`;
-      $('scope-it').classList.toggle('on', sigScope === 'it'); $('scope-all').classList.toggle('on', sigScope === 'all');
+      ['mine', 'it', 'all'].forEach(k => $('scope-' + k).classList.toggle('on', sigScope === k));
       const itPart = italiaTickets(it, `<h4 class="sechead">🇮🇹 Bookmaker italiani <small class="muted">· strategia I, prova senza soldi</small></h4>`, '<span class="chip it">IT</span>', '');
-      if (sigScope === 'it') {
+      if (sigScope === 'it' || sigScope === 'mine') {
         el.innerHTML = itPart ? '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + itPart
-          : '<div class="empty">Nessun segnale sui bookmaker italiani in questa lista. Il CRM controlla le partite ogni 3 ore, dalle 9 alle 22. Per vedere anche le strategie di sola misura tocca “Tutte le strategie”.</div>';
+          : sigScope === 'mine' ? '<div class="empty">Nessun segnale giocabile su 888sport o Snai in questa lista. Gli altri segnali italiani sono in “Tutti italiani”.</div>'
+          : '<div class="empty">Nessun segnale sui bookmaker italiani in questa lista. Il CRM controlla le partite ogni 3 ore, dalle 9 alle 22. Per vedere anche le strategie di sola misura tocca “Tutte”.</div>';
         paintDots(); return;
       }
       const itHtml = itPart

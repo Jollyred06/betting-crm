@@ -30,9 +30,9 @@ assert.ok(adv.some(x => /Strategia B/.test(x.title) && x.level === 'good'));
 assert.ok(adv.some(x => /Strategia I/.test(x.title) && /pochi dati/.test(x.title)));
 assert.ok(adv.some(x => /Strategia A/.test(x.title)));
 
-// Netwin da solo
+// Netwin da solo: non compare piu' tra i consigli (non si gioca su Netwin)
 adv = buildAdvice({ it: rows(20, 3).map(r => ({ ...r, netwin_clv_pct: '-4' })) });
-assert.ok(adv.some(x => x.key === 'netwin' && /non basta/.test(x.title)));
+assert.ok(!adv.some(x => x.key === 'netwin'));
 
 // selezione F con abbastanza dati decide il consiglio principale
 adv = buildAdvice({ it: rows(10, 1), final: rows(25, 4) });
