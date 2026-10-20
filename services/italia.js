@@ -347,6 +347,10 @@ function latestRows(rows) {
   return rows.filter(r => !(phaseOf(r) === 'far' && near.has(sigKey(r))));
 }
 
+// "6 su 10": dentro la F, i segnali con l'esito piu' probabile (Pinnacle lo da' almeno al 55%). Non cambia la F: e' un sottoinsieme.
+const SIX_MIN_PROB = 0.55;
+const isSix = r => Number(r.fair_prob) >= SIX_MIN_PROB;
+
 const FINAL = { since: '2026-10-17T08:00:00Z', minEdge: 2, maxEdge: 6, minOdd: 1.6, maxOdd: 3.5, bookMinN: 15 };
 
 /** Guadagno atteso sulla carta: puntata fissa per il valore contro la chiusura di ogni segnale misurato (non dipende dalla fortuna dei risultati). */
@@ -470,7 +474,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     return Object.keys(out).length ? out : null; };
   return {
     ...base, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
-    final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows), results: R.resultStats(finRows) } : null,
+    final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows), results: R.resultStats(finRows),
+      six: { ...oddsStats(finRows.filter(isSix)), minProb: SIX_MIN_PROB, results: R.resultStats(finRows.filter(isSix)) } } : null,
     final2: strategy === 'I' ? { ...oddsStats(fin2Rows), rules: FINAL2, stake: STAKE, expectedEur: expectedEur(fin2Rows), results: R.resultStats(fin2Rows) } : null,
     final3: strategy === 'I' ? { ...oddsStats(fin3Rows), rules: FINAL3, stake: STAKE, expectedEur: expectedEur(fin3Rows), results: R.resultStats(fin3Rows) } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
@@ -489,6 +494,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final: !!(fin.get(firstOf.get(sigKey(r))) || {}).final, again: phaseOf(r) === 'near' && firstOf.get(sigKey(r)) !== r.id,
       final2: fin2.get(r.id) ? fin2.get(r.id).final : false,
       final3: !!(fin3.get(firstOf.get(sigKey(r))) || {}).final,
+      six: !!(fin.get(firstOf.get(sigKey(r))) || {}).final && isSix(r),
       alt: strategy === 'I' ? altOdds(r) : null, played: played.get(Number(r.id)) || null,
       // dove giocarlo: il bookmaker consigliato (888sport o Snai) con la quota piu' alta, solo se almeno la minima
       play: (() => { const a = strategy === 'I' ? altOdds(r) : null, m = r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null;
@@ -499,4 +505,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   };
 }
 
-module.exports = { NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

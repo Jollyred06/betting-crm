@@ -62,6 +62,9 @@ router.get('/italia-export', async (req, res) => {
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+router.get('/learning', async (req, res) => {
+  try { res.json(await require('../services/learner').getLearning(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/training', async (req, res) => {
   try { res.json(await require('../services/training').getTraining(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });

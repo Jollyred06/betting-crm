@@ -104,7 +104,16 @@ async function getAdvice(pool) {
   const final2 = allI.filter(r => fin2.get(r.id) && fin2.get(r.id).final);
   const fin3 = markFinal3(iOnly), final3 = iOnly.filter(r => fin3.get(r.id) && fin3.get(r.id).final);
   it = it.map(r => ({ ...r, book: names[r.book] || r.book }));
-  return { advice: buildAdvice({ a, it, final, final2, final3 }), minN: MIN_N, updatedAt: new Date().toISOString() };
+  const advice = buildAdvice({ a, it, final, final2, final3 });
+  try {
+    const L = require('./learner').buildLearning(it.filter(r => r.clv_pct !== null && r.clv_pct !== undefined));
+    if (L.ready) {
+      const best = L.learned.flatMap(f => f.levels.map(l => ({ ...l, f: f.label }))).sort((x, y) => y.effect - x.effect)[0];
+      advice.push({ level: L.test.proven ? 'good' : 'info', key: 'impara', title: L.test.proven ? '🧠 Il modello che impara sceglie meglio: proponiamolo come selezione' : '🧠 Il modello che impara sta osservando',
+        text: `Su ${L.measured} segnali misurati, la caratteristica che pesa di più è "${best.f.toLowerCase()}: ${best.level}" (${f1(best.effect)} rispetto alla media). ${L.test.proven ? 'Le sue scelte battono chiaramente quelle scartate.' : 'Non ha ancora dimostrato di scegliere meglio di tutti i segnali insieme.'}` });
+    }
+  } catch (e) { /* facoltativo */ }
+  return { advice, minN: MIN_N, updatedAt: new Date().toISOString() };
 }
 
 module.exports = { buildAdvice, getAdvice, summary, MIN_N, MIN_GROUP, BAD_BOOKS };
