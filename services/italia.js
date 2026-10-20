@@ -204,7 +204,12 @@ async function ensureTables(pool) {
   // tabelle create prima della strategia B: colonna nuova e unicita' per (partita, esito, strategia)
   await pool.query(`ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS strategy TEXT NOT NULL DEFAULT 'I'`);
   await pool.query(`ALTER TABLE italia_signals DROP CONSTRAINT IF EXISTS italia_signals_event_id_selection_key`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS italia_signals_uniq ON italia_signals (event_id, selection, strategy)`);
+  // fase del segnale: 'far' = uscito oltre 3 ore dal calcio d'inizio, 'near' = entro 3 ore. Per ogni partita ed esito
+  // ci possono essere al massimo due righe: la prima uscita e la rilettura vicino al calcio d'inizio (serve alla F2).
+  await pool.query(`ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS phase TEXT`);
+  await pool.query(`UPDATE italia_signals SET phase = CASE WHEN commence_time - created_at <= INTERVAL '${NEAR_HOURS} hours' THEN 'near' ELSE 'far' END WHERE phase IS NULL`);
+  await pool.query(`DROP INDEX IF EXISTS italia_signals_uniq`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS italia_signals_uniq2 ON italia_signals (event_id, selection, strategy, phase)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS italia_requests (
     id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), kind TEXT, ok BOOLEAN, records INT, quota_remaining INT, note TEXT)`);
   ready = true;
@@ -261,10 +266,15 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   for (const [strategy, list] of [['I', found], ['B', foundB]]) {
     for (const s of list) {
       const r = await pool.query(
-        `INSERT INTO italia_signals (event_id, league, home, away, commence_time, selection, book, odd, fair_prob, edge_pct, pin_h, pin_d, pin_a, netwin_odd, netwin_edge_pct, quotes, strategy)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) ON CONFLICT (event_id, selection, strategy) DO NOTHING RETURNING id`,
-        [s.event_id, s.league, s.home, s.away, s.commence_time, s.selection, s.book, s.odd, s.fair_prob, s.edge_pct, s.pin[0], s.pin[1], s.pin[2], s.netwin_odd, s.netwin_edge_pct, JSON.stringify(s.quotes), strategy]);
-      if (r.rowCount) { if (strategy === 'I') fresh.push(s); else nuoviB++; }
+        `INSERT INTO italia_signals (event_id, league, home, away, commence_time, selection, book, odd, fair_prob, edge_pct, pin_h, pin_d, pin_a, netwin_odd, netwin_edge_pct, quotes, strategy, phase)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) ON CONFLICT (event_id, selection, strategy, phase) DO NOTHING RETURNING id`,
+        [s.event_id, s.league, s.home, s.away, s.commence_time, s.selection, s.book, s.odd, s.fair_prob, s.edge_pct, s.pin[0], s.pin[1], s.pin[2], s.netwin_odd, s.netwin_edge_pct, JSON.stringify(s.quotes), strategy,
+         (Date.parse(s.commence_time) - nowMs) / 3600000 <= NEAR_HOURS ? 'near' : 'far']);
+      if (r.rowCount) {
+        // una rilettura di un segnale gia' avvisato non manda un secondo messaggio
+        const again = (await pool.query(`SELECT COUNT(*)::int AS n FROM italia_signals WHERE event_id = $1 AND selection = $2 AND strategy = $3`, [s.event_id, s.selection, strategy])).rows[0].n > 1;
+        if (strategy === 'I') { if (!again) fresh.push(s); } else if (!again) nuoviB++;
+      }
     }
   }
   if (fresh.length && notify) {
@@ -322,6 +332,21 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
  *  5. niente amichevoli/giovanili/riserve (gia' escluse alla fonte)
  *  6. bookmaker escluso se, PRIMA del segnale, aveva almeno 15 segnali misurati con valore medio negativo
  */
+// ------------------------------------------------------------------------------------------- prima uscita e rilettura
+const NEAR_HOURS = 3;
+const phaseOf = r => r.phase || ((Date.parse(r.commence_time) - Date.parse(r.created_at)) / 3600000 <= NEAR_HOURS ? 'near' : 'far');
+const sigKey = r => `${r.event_id}|${r.selection}|${r.strategy || 'I'}`;
+/** Righe "prima uscita": tutte tranne le riletture vicino al calcio d'inizio di un segnale gia' uscito prima (le misure di I, B, F e F3 restano quelle di sempre). */
+function primaryRows(rows) {
+  const far = new Set(rows.filter(r => phaseOf(r) === 'far').map(sigKey));
+  return rows.filter(r => !(phaseOf(r) === 'near' && far.has(sigKey(r))));
+}
+/** Per l'app: una scheda per partita ed esito, la piu' recente (la rilettura, se c'e'). */
+function latestRows(rows) {
+  const near = new Set(rows.filter(r => phaseOf(r) === 'near').map(sigKey));
+  return rows.filter(r => !(phaseOf(r) === 'far' && near.has(sigKey(r))));
+}
+
 const FINAL = { since: '2026-10-17T08:00:00Z', minEdge: 2, maxEdge: 6, minOdd: 1.6, maxOdd: 3.5, bookMinN: 15 };
 
 /** Guadagno atteso sulla carta: puntata fissa per il valore contro la chiusura di ogni segnale misurato (non dipende dalla fortuna dei risultati). */
@@ -422,14 +447,17 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const R = require('./results');
   try { await R.ensureResults(pool); } catch (e) { /* risultati facoltativi */ }
   const resultsStatus = await R.resultsStatus(pool, env).catch(() => null);
-  const { rows } = await pool.query(`SELECT * FROM italia_signals WHERE strategy = $1 ORDER BY commence_time DESC, id DESC LIMIT 500`, [strategy]);
+  const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = $1 ORDER BY commence_time DESC, id DESC LIMIT 600`, [strategy])).rows;
+  const rows = primaryRows(all);   // le misure restano sulla prima uscita; la F2 guarda anche le riletture
   const used = await usedThisMonth(pool);
   const last = (await pool.query(`SELECT at, ok, kind, records, quota_remaining, note FROM italia_requests ORDER BY id DESC LIMIT 1`)).rows[0] || null;
   const byBook = [...new Set(rows.map(r => r.book))].map(b => ({ book: BOOK_NAMES[b] || b, ...stats(rows.filter(r => r.book === b)) })).sort((a, b) => b.signals - a.signals);
   const fin = strategy === 'I' ? markFinal(rows) : new Map();
   const finRows = rows.filter(r => fin.get(r.id) && fin.get(r.id).final);
-  const fin2 = strategy === 'I' ? markFinal2(rows) : new Map();
-  const fin2Rows = rows.filter(r => fin2.get(r.id) && fin2.get(r.id).final);
+  const fin2 = strategy === 'I' ? markFinal2(all) : new Map();
+  const fin2Rows = all.filter(r => fin2.get(r.id) && fin2.get(r.id).final);
+  // la rilettura eredita l'etichetta F e F3 della prima uscita (stessa partita, stesso esito)
+  const firstOf = new Map(rows.map(r => [sigKey(r), r.id]));
   const fin3 = strategy === 'I' ? markFinal3(rows) : new Map();
   const fin3Rows = rows.filter(r => fin3.get(r.id) && fin3.get(r.id).final);
   const nwRows = rows.filter(r => r.netwin_clv_pct !== null).map(r => ({ clv_pct: r.netwin_clv_pct }));
@@ -452,15 +480,15 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       { name: 'Sopra 2,60 (meno di 4 su 10)', ...oddsStats(rows.filter(r => Number(r.odd) > BAND.max)) }
     ],
     requestsThisMonth: used, quotaRemaining: last && last.quota_remaining !== null ? Number(last.quota_remaining) : null, lastRequest: last,
-    recent: rows.slice(0, 30).map(r => ({
+    recent: latestRows(all).slice(0, 30).map(r => ({
       id: r.id, created_at: r.created_at, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away,
       selection: r.selection, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book, odd: Number(r.odd), edge_pct: Number(r.edge_pct),
       netwin_odd: r.netwin_odd !== null ? Number(r.netwin_odd) : null, clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null,
       min_odd: r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null, in_band: inBand(r.odd),
       win_prob: r.fair_prob ? Number(r.fair_prob) : null,
-      final: fin.get(r.id) ? fin.get(r.id).final : false,
+      final: !!(fin.get(firstOf.get(sigKey(r))) || {}).final, again: phaseOf(r) === 'near' && firstOf.get(sigKey(r)) !== r.id,
       final2: fin2.get(r.id) ? fin2.get(r.id).final : false,
-      final3: fin3.get(r.id) ? fin3.get(r.id).final : false,
+      final3: !!(fin3.get(firstOf.get(sigKey(r))) || {}).final,
       alt: strategy === 'I' ? altOdds(r) : null, played: played.get(Number(r.id)) || null,
       // dove giocarlo: il bookmaker consigliato (888sport o Snai) con la quota piu' alta, solo se almeno la minima
       play: (() => { const a = strategy === 'I' ? altOdds(r) : null, m = r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null;
@@ -471,4 +499,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   };
 }
 
-module.exports = { expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

@@ -23,8 +23,9 @@ def stat(rows):
     verdict = 'SOPRA ZERO' if m - h > 0 else ('SOTTO ZERO' if m + h < 0 else 'incerto')
     return f'{n} misurati, {m:+.2f}% (da {m-h:+.1f} a {m+h:+.1f}) {verdict}, positivi {pos:.0f}%'
 
+nd = lambda r: not r.get('dup')   # le riletture vicino al calcio d'inizio contano solo per la F2
 groups = [('F', lambda r: r['f']), ('F2', lambda r: r['f2']), ('F3', lambda r: r['f3']),
-          ('I', lambda r: r['strategy'] == 'I'), ('B', lambda r: r['strategy'] == 'B')]
+          ('I', lambda r: r['strategy'] == 'I' and nd(r)), ('B', lambda r: r['strategy'] == 'B' and nd(r))]
 print(f"Analisi del {now:%d/%m/%Y %H:%M} UTC, {len(S)} segnali in totale\n")
 for name, f in groups:
     rows = [r for r in S if f(r)]
@@ -32,12 +33,13 @@ for name, f in groups:
     print(f"{name:3} totale:  {stat(rows)}")
     print(f"{'':3} 7 giorni: {stat(recent)}")
 print('\nBookmaker (strategia I):')
-for b in sorted({r['book'] for r in S if r['strategy'] == 'I'}):
-    print(f"  {b:12} {stat([r for r in S if r['strategy'] == 'I' and r['book'] == b])}")
+S1 = [r for r in S if nd(r)]
+for b in sorted({r['book'] for r in S1 if r['strategy'] == 'I'}):
+    print(f"  {b:12} {stat([r for r in S1 if r['strategy'] == 'I' and r['book'] == b])}")
 print('\nEsiti (strategia I):')
 for k, lab in [('home', '1'), ('draw', 'X'), ('away', '2')]:
-    print(f"  {lab}  {stat([r for r in S if r['strategy'] == 'I' and r['selection'] == k])}")
-nw = [{'clv_pct': r['netwin_clv_pct']} for r in S if r['strategy'] == 'I' and r.get('netwin_clv_pct') is not None]
+    print(f"  {lab}  {stat([r for r in S1 if r['strategy'] == 'I' and r['selection'] == k])}")
+nw = [{'clv_pct': r['netwin_clv_pct']} for r in S1 if r['strategy'] == 'I' and r.get('netwin_clv_pct') is not None]
 print(f"\nNetwin sempre: {stat(nw)}")
 print(f"\nRichieste odss rimaste: {d.get('quotaRemaining')} | ultimi giorni: " + ', '.join(f"{x['day'][5:]}={x['n']}" for x in d.get('requestsByDay', [])))
 lr = d.get('lastResults') or []

@@ -149,5 +149,14 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   assert.strictEqual(m.get(1).final, true); assert.ok(!m.get(2).final && !m.get(3).final && !m.get(4).final);
   assert.ok(/prima delle regole/.test(m.get(5).reasons[0]));
 }
+// --- prima uscita e rilettura vicino al calcio d'inizio
+{
+  const r = (id, ev, phase, extra = {}) => ({ id, event_id: ev, selection: 'draw', strategy: 'I', phase, created_at: '2026-10-20T10:00:00Z', commence_time: '2026-10-20T18:00:00Z', ...extra });
+  const rows = [r(1, 'a', 'far'), r(2, 'a', 'near'), r(3, 'b', 'near'), r(4, 'c', 'far')];
+  assert.deepStrictEqual(it.primaryRows(rows).map(x => x.id), [1, 3, 4]);   // la rilettura di 'a' non conta due volte
+  assert.deepStrictEqual(it.latestRows(rows).map(x => x.id), [2, 3, 4]);    // nell'app si vede la quota piu' recente
+  assert.strictEqual(it.phaseOf({ created_at: '2026-10-20T16:00:00Z', commence_time: '2026-10-20T18:00:00Z' }), 'near');
+  assert.strictEqual(it.phaseOf({ created_at: '2026-10-20T12:00:00Z', commence_time: '2026-10-20T18:00:00Z' }), 'far');
+}
 console.log('italia.test.js: tutti i controlli passati');
 })().catch(e => { console.error(e); process.exit(1); });

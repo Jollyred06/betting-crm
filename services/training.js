@@ -71,10 +71,11 @@ function trainSelection(signals, start = START) {
 async function getTraining(pool) {
   const I = require('./italia');
   const { rows } = await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY created_at`);
-  const pick = mark => { const m = mark(rows); return rows.filter(r => m.get(r.id) && m.get(r.id).final); };
+  const prim = I.primaryRows(rows);   // F e F3 sulla prima uscita, F2 anche sulle riletture vicino al calcio d'inizio
+  const pick = (mark, list = prim) => { const m = mark(list); return list.filter(r => m.get(r.id) && m.get(r.id).final); };
   const sel = [
     { key: 'F', title: 'Selezione F', rows: pick(I.markFinal) },
-    { key: 'F2', title: 'Selezione F2', rows: pick(I.markFinal2) },
+    { key: 'F2', title: 'Selezione F2', rows: pick(I.markFinal2, rows) },
     { key: 'F3', title: 'Selezione F3 (favoriti)', rows: pick(I.markFinal3) }
   ];
   return { start: START, stopAtPct: STOP_AT * 100, selections: sel.map(s => ({ key: s.key, title: s.title, ...trainSelection(s.rows) })) };

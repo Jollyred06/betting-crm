@@ -249,7 +249,10 @@ CREATE TABLE IF NOT EXISTS italia_signals (
 );
 ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS strategy TEXT NOT NULL DEFAULT 'I';
 ALTER TABLE italia_signals DROP CONSTRAINT IF EXISTS italia_signals_event_id_selection_key;
-CREATE UNIQUE INDEX IF NOT EXISTS italia_signals_uniq ON italia_signals (event_id, selection, strategy);
+ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS phase TEXT;
+UPDATE italia_signals SET phase = CASE WHEN commence_time - created_at <= INTERVAL '3 hours' THEN 'near' ELSE 'far' END WHERE phase IS NULL;
+DROP INDEX IF EXISTS italia_signals_uniq;
+CREATE UNIQUE INDEX IF NOT EXISTS italia_signals_uniq2 ON italia_signals (event_id, selection, strategy, phase);
 CREATE TABLE IF NOT EXISTS italia_requests (
   id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), kind TEXT, ok BOOLEAN, records INT, quota_remaining INT, note TEXT
 );

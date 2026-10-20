@@ -47,16 +47,18 @@ router.delete('/played/:id', async (req, res) => {
 router.get('/italia-export', async (req, res) => {
   try {
     const I = require('../services/italia');
-    const { rows } = await pool.query(`SELECT id, created_at, league, home, away, commence_time, selection, book, odd, fair_prob, edge_pct, netwin_odd,
+    const { rows } = await pool.query(`SELECT id, event_id, phase, created_at, league, home, away, commence_time, selection, book, odd, fair_prob, edge_pct, netwin_odd,
       closing_fair_prob, clv_pct, netwin_clv_pct, close_lag_min, strategy, result, result_score FROM italia_signals ORDER BY id`);
-    const iRows = rows.filter(r => (r.strategy || 'I') === 'I');
-    const m1 = I.markFinal(iRows), m2 = I.markFinal2(iRows), m3 = I.markFinal3(iRows);
+    const prim = new Set(I.primaryRows(rows).map(r => r.id));
+    const iAll = rows.filter(r => (r.strategy || 'I') === 'I'), iRows = iAll.filter(r => prim.has(r.id));
+    const m1 = I.markFinal(iRows), m2 = I.markFinal2(iAll), m3 = I.markFinal3(iRows);
     const last = (await pool.query(`SELECT at, kind, quota_remaining FROM italia_requests ORDER BY id DESC LIMIT 1`).catch(() => ({ rows: [] }))).rows[0] || null;
     const reqs = (await pool.query(`SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*)::int AS n FROM italia_requests WHERE at > NOW() - INTERVAL '8 days' GROUP BY 1 ORDER BY 1`).catch(() => ({ rows: [] }))).rows;
     const results = (await pool.query(`SELECT at, ok, src, note FROM results_requests ORDER BY id DESC LIMIT 2`).catch(() => ({ rows: [] }))).rows;
     res.json({
       at: new Date().toISOString(), quotaRemaining: last ? last.quota_remaining : null, requestsByDay: reqs, lastResults: results,
-      signals: rows.map(r => ({ ...r, f: !!(m1.get(r.id) || {}).final, f2: !!(m2.get(r.id) || {}).final, f3: !!(m3.get(r.id) || {}).final }))
+      // dup = rilettura vicino al calcio d'inizio di un segnale gia' uscito: esclusa da I, B, F e F3, conta solo per la F2
+      signals: rows.map(r => ({ ...r, dup: !prim.has(r.id), f: !!(m1.get(r.id) || {}).final, f2: !!(m2.get(r.id) || {}).final, f3: !!(m3.get(r.id) || {}).final }))
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
