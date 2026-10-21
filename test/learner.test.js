@@ -28,4 +28,9 @@ assert.ok(m.effects.esito.pareggio.shrunk < m.effects.esito.pareggio.raw / 5, 't
 // rumore puro: nessuna promozione
 const noise = Array.from({ length: 200 }, (_, i) => sig(i, { edge_pct: 2 + (i % 5), selection: ['home', 'draw', 'away'][i % 3], clv_pct: ((i * 7919) % 13) - 6 }));
 assert.strictEqual(L.buildLearning(noise).test.proven, false);
+// calibrazione: 10 partite da 0,5 con 5 vinte = in linea solo sopra le 20 partite
+const cal = L.calibration(Array.from({ length: 40 }, (_, i) => ({ fair_prob: 0.5, result: i % 2 ? 'won' : 'lost' })));
+assert.strictEqual(cal.n, 40); assert.strictEqual(cal.won, 20); assert.strictEqual(cal.expected, 20); assert.strictEqual(cal.ok, true);
+assert.strictEqual(L.calibration([{ fair_prob: 0.5, result: 'won' }]).ok, null);
+assert.strictEqual(L.calibration(Array.from({ length: 40 }, () => ({ fair_prob: 0.5, result: 'lost' }))).ok, false);
 console.log('learner.test.js: tutti i controlli passati');

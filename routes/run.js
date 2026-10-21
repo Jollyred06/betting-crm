@@ -83,7 +83,7 @@ router.post('/capture-closing', async (req, res) => {
     require('../services/italia').tick(pool, { notify: sendTelegramNotification })
       .then(r => { if (r && (r.erroreScansione || r.erroreChiusura || r.errore)) console.error('Strategia I:', JSON.stringify(r)); })
       .catch(e => console.error('Strategia I:', e.message))
-      .finally(() => { italiaRunning = false; });
+      .finally(() => { italiaRunning = false; require('../services/cache').clear(); });   // segnali nuovi: via la copia pronta
   };
   try {
     const cc = require('../services/closingCapture'), odds = require('../services/oddsApi');

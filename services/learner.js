@@ -52,19 +52,36 @@ function predict(model, r) {
 /** Prova a ritroso: ogni segnale I giudicato con i soli segnali la cui partita era gia' iniziata (chiusura nota). */
 function walkForward(measured) {
   const ordered = [...measured].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+  // allenamento = partite gia' iniziate prima del segnale: in ordine di calcio d'inizio sono sempre "le prime k",
+  // quindi il modello per ogni k si calcola una volta sola (molto piu' veloce con tanti segnali)
+  const byKick = [...measured].sort((a, b) => Date.parse(a.commence_time) - Date.parse(b.commence_time));
+  const kicks = byKick.map(x => Date.parse(x.commence_time)), memo = new Map();
+  const firstK = t => { let lo = 0, hi = kicks.length; while (lo < hi) { const mid = (lo + hi) >> 1; if (kicks[mid] < t) lo = mid + 1; else hi = mid; } return lo; };
   const judged = [];
   for (const r of ordered) {
     if ((r.strategy || 'I') !== 'I') continue;
-    const t = Date.parse(r.created_at);
-    const train = ordered.filter(x => Date.parse(x.commence_time) < t);
-    if (train.length < MIN_TRAIN) continue;
-    const m = fit(train);
+    const k = firstK(Date.parse(r.created_at));
+    if (k < MIN_TRAIN) continue;
+    if (!memo.has(k)) memo.set(k, fit(byKick.slice(0, k)));
+    const m = memo.get(k);
     judged.push({ id: r.id, clv: num(r.clv_pct), pred: predict(m, r), pick: predict(m, r) >= m.mu + PICK_MARGIN });
   }
   const all = band(judged.map(j => j.clv)), picked = band(judged.filter(j => j.pick).map(j => j.clv)), skipped = band(judged.filter(j => !j.pick).map(j => j.clv));
   // il modello "ha dimostrato" qualcosa solo se le sue scelte battono chiaramente quelle scartate
   const proven = picked.n >= 30 && skipped.n >= 30 && picked.lo !== null && skipped.hi !== null && picked.lo > skipped.mean && picked.mean - skipped.mean >= 1;
   return { judged: judged.length, all, picked, skipped, proven };
+}
+
+/** Le probabilita' sono giuste? Partite vinte contro vinte attese (probabilita' di Pinnacle), in totale e per fascia. */
+function calibration(rows) {
+  const done = rows.filter(r => (r.result === 'won' || r.result === 'lost') && num(r.fair_prob) > 0);
+  const grp = list => { const won = list.filter(r => r.result === 'won').length, exp = list.reduce((a, r) => a + num(r.fair_prob), 0);
+    return { n: list.length, won, expected: exp, sd: Math.sqrt(list.reduce((a, r) => a + num(r.fair_prob) * (1 - num(r.fair_prob)), 0)) }; };
+  const buckets = [['sotto il 35%', 0, 0.35], ['35–50%', 0.35, 0.5], ['50% e oltre', 0.5, 1.01]]
+    .map(([label, lo, hi]) => ({ label, ...grp(done.filter(r => num(r.fair_prob) >= lo && num(r.fair_prob) < hi)) }));
+  const total = grp(done);
+  // "in linea" se la differenza tra vinte e attese sta entro 2 deviazioni (normale fortuna)
+  return { ...total, ok: total.n >= 20 ? Math.abs(total.won - total.expected) <= 2 * total.sd : null, buckets };
 }
 
 /** Riepilogo per l'app: cosa ha imparato, come se la cava, e la stima per i segnali in arrivo. */
@@ -79,13 +96,13 @@ function buildLearning(rows, nowMs = Date.now()) {
   const wf = walkForward(measured);
   const upcoming = rows.filter(r => (r.strategy || 'I') === 'I' && Date.parse(r.commence_time) > nowMs)
     .map(r => ({ id: r.id, pred: predict(model, r), pick: predict(model, r) >= model.mu + PICK_MARGIN }));
-  return { ready: true, measured: measured.length, mu: model.mu, margin: PICK_MARGIN, learned, test: wf, upcoming, updatedAt: new Date(nowMs).toISOString() };
+  return { ready: true, measured: measured.length, mu: model.mu, margin: PICK_MARGIN, learned, test: wf, upcoming, calibration: calibration(rows), updatedAt: new Date(nowMs).toISOString() };
 }
 
 async function getLearning(pool, nowMs = Date.now()) {
   const I = require('./italia');
-  const { rows } = await pool.query(`SELECT id, event_id, phase, strategy, created_at, commence_time, selection, odd, edge_pct, clv_pct FROM italia_signals`);
+  const { rows } = await pool.query(`SELECT id, event_id, phase, strategy, created_at, commence_time, selection, odd, edge_pct, clv_pct, fair_prob, result FROM italia_signals`);
   return buildLearning(I.primaryRows(rows), nowMs);
 }
 
-module.exports = { K, DAMP, MIN_TRAIN, PICK_MARGIN, FEATURES, fit, predict, walkForward, buildLearning, getLearning, band };
+module.exports = { calibration, K, DAMP, MIN_TRAIN, PICK_MARGIN, FEATURES, fit, predict, walkForward, buildLearning, getLearning, band };

@@ -263,3 +263,10 @@ ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS result_score TEXT;
 ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;
 ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS af_fixture_id BIGINT;
 CREATE TABLE IF NOT EXISTS results_requests (id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), day TEXT, ok BOOLEAN, fixtures INT, note TEXT);
+
+-- Sicurezza Supabase: sicurezza a livello di riga su tutte le tabelle (il CRM si collega come proprietario e non ne e' toccato).
+DO $$ DECLARE t record; BEGIN
+  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t.tablename);
+  END LOOP;
+END $$;

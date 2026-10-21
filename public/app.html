@@ -112,6 +112,7 @@
   .ms > summary, .ms.plain { display:flex; gap:12px; align-items:center; list-style:none; padding:0; min-height:44px; } .ms > summary::-webkit-details-marker { display:none; } .ms .cm { flex:none; }
   .ms .snap { padding:10px 0 4px 21px; }
   .callout { border-left:5px solid var(--muted); background:var(--tint); border-radius:0 12px 12px 0; padding:12px 14px; margin:12px 0; } .callout.plausible { border-left-color:var(--ok); } .callout.close, .callout.mixed { border-left-color:var(--bad); } .callout.none { border-left-color:var(--warn); }
+  .callout.ok { border-left-color:var(--ok); } .callout.warn { border-left-color:var(--warn); }
   .callout b { display:block; } .callout span { color:var(--muted); font-size:14.5px; }
   .hash { font:12.5px ui-monospace,Menlo,Consolas,monospace; color:var(--muted); margin-top:10px; word-break:break-all; }
   .rule ul { padding-left:18px; margin:8px 0 0; } .rule li { margin:7px 0; color:var(--muted); font-size:14.5px; }
@@ -128,7 +129,7 @@
   .foot { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; font-size:13px; color:var(--muted); }
   details.more-advice > summary { cursor:pointer; font-weight:700; padding:10px 0 2px; color:var(--ink); list-style:none; } details.more-advice > summary::before { content:'▸ '; } details.more-advice[open] > summary::before { content:'▾ '; }
   .livebox { font-size:13.5px; margin:2px 0 4px; } a.live { color:var(--ink); font-weight:600; text-decoration:none; white-space:nowrap; } a.live.on { color:var(--bad); } a.tlink { color:inherit; text-decoration:none; }
-  .sixbtn { display:block; width:100%; margin:8px 0 2px; padding:9px 12px; border-radius:999px; border:1.5px dashed var(--line); background:none; color:var(--muted); font-weight:600; font-size:14px; cursor:pointer; }
+  .hidnote { font-size:13.5px; margin:4px 0 10px; } .sixbtn { display:block; width:100%; margin:8px 0 2px; padding:9px 12px; border-radius:999px; border:1.5px dashed var(--line); background:none; color:var(--muted); font-weight:600; font-size:14px; cursor:pointer; }
   .sixbtn.on { border-style:solid; border-color:var(--ok); color:var(--ok); background:var(--tint); }
   .learn { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:14px; margin:4px 0 8px; } .learn small { color:var(--muted); }
   .todo-line { margin-top:6px; font-size:14.5px; font-weight:600; color:var(--ok); } .todo-line.no { color:var(--muted); font-weight:500; }
@@ -577,7 +578,16 @@
       <h4>Prova onesta (ogni segnale giudicato solo con i dati di prima)</h4>
       <dl class="facts"><div><dt>Segnali scelti dal modello</dt><dd class="${t.picked.n ? cls(t.picked.mean) : ''}">${bs(t.picked)}</dd></div>
         <div><dt>Segnali scartati</dt><dd>${bs(t.skipped)}</dd></div>
-        <div><dt>Tutti</dt><dd>${bs(t.all)}</dd></div></dl>${verdict}</div>`;
+        <div><dt>Tutti</dt><dd>${bs(t.all)}</dd></div></dl>${verdict}</div>` + calibCard(L.calibration);
+  }
+  function calibCard(c) {
+    if (!c || !c.n) return '';
+    const line = b => `${b.won} vinte su ${b.n} · attese ${num(b.expected, 1)}`;
+    const v = c.ok === null ? `<p class="muted" style="margin:6px 0;">Servono almeno 20 partite con risultato per un giudizio (ora ${c.n}).</p>`
+      : c.ok ? `<div class="callout ok"><b>Sì: le partite vinte sono in linea con le probabilità.</b> Quando il CRM dice "vince 4 volte su 10", vince davvero circa 4 volte su 10. Le perdite che vedi sono la parte normale del gioco.</div>`
+      : `<div class="callout warn"><b>Le vinte si scostano dalle attese più della normale fortuna.</b> Da controllare con l'analisi del lunedì.</div>`;
+    return `<div class="strat"><div class="sh"><div class="letter" style="font-size:30px">⚖️</div><div><b>Le probabilità sono giuste?</b><span>Partite vinte contro vinte attese, su tutte le partite con risultato</span></div></div>
+      <dl class="facts"><div><dt>Totale</dt><dd>${line(c)}</dd></div>${c.buckets.filter(b => b.n).map(b => `<div><dt>Esiti dati ${esc(b.label)}</dt><dd>${line(b)}</dd></div>`).join('')}</dl>${v}</div>`;
   }
   async function loadItalia() {
     try {
@@ -681,11 +691,14 @@
   function italiaTickets(d, head, chip, tail) {
     const now = Date.now();
     (d && d.recent || []).forEach(r => { sigById[r.id] = r; });
-    const list = (d && d.recent || []).filter(r => sigTab === 'pending' ? Date.parse(r.commence_time) > now : sigTab === 'settled' || sigTab === 'closed' ? r.clv_pct !== null : true)
-      .filter(r => sigScope !== 'mine' || !chip.includes('chip it') || r.play || r.played)
+    const base = (d && d.recent || []).filter(r => sigTab === 'pending' ? Date.parse(r.commence_time) > now : sigTab === 'settled' || sigTab === 'closed' ? r.clv_pct !== null : true);
+    const list = base.filter(r => sigScope !== 'mine' || !chip.includes('chip it') || r.play || r.played)
       .filter(r => !sixOnly || !chip.includes('chip it') || r.six).slice(0, 15);
-    if (!list.length) return '';
-    return head + list.map(r => `
+    // quanti segnali i filtri stanno nascondendo: cosi' non sembra che "manchino"
+    const hidden = chip.includes('chip it') ? Math.min(base.length, 15) - list.length : 0;
+    const note = hidden > 0 ? `<p class="muted hidnote">${hidden} ${hidden === 1 ? 'segnale nascosto' : 'segnali nascosti'} dai filtri (${[sigScope === 'mine' ? 'non giocabili su 888sport o Snai' : '', sixOnly ? 'non 🎯 6 su 10' : ''].filter(Boolean).join(' o ')}). <button class="linkbtn" onclick="sixOnly=false;try{localStorage.setItem('sixOnly','0')}catch(e){};setScope('it')">Mostrali</button></p>` : '';
+    if (!list.length) return note ? head + note : '';
+    return head + note + list.map(r => `
         <article class="ticket">
           <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { day: 'numeric' })}</b><span>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span></div>
           <div class="tmain">
