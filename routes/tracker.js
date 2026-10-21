@@ -62,6 +62,10 @@ router.get('/italia-export', async (req, res) => {
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+router.get('/archive', async (req, res) => {
+  try { res.json(await require('../services/italia').getArchive(pool, { before: /^\d{4}-\d{2}-\d{2}$/.test(req.query.before || '') ? req.query.before : null, days: Number(req.query.days) || 7 })); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/learning', async (req, res) => {
   try { res.json(await require('../services/learner').getLearning(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });

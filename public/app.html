@@ -129,6 +129,11 @@
   .foot { display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; font-size:13px; color:var(--muted); }
   details.more-advice > summary { cursor:pointer; font-weight:700; padding:10px 0 2px; color:var(--ink); list-style:none; } details.more-advice > summary::before { content:'▸ '; } details.more-advice[open] > summary::before { content:'▾ '; }
   .livebox { font-size:13.5px; margin:2px 0 4px; } a.live { color:var(--ink); font-weight:600; text-decoration:none; white-space:nowrap; } a.live.on { color:var(--bad); } a.tlink { color:inherit; text-decoration:none; }
+  .aday { border:1.5px solid var(--line); border-radius:16px; margin:10px 0; background:var(--surface); } .aday > summary { cursor:pointer; padding:12px 14px; list-style:none; display:flex; flex-direction:column; gap:2px; }
+  .aday > summary span { font-size:13.5px; } .aday[open] > summary { border-bottom:1px solid var(--line); }
+  .arow { display:grid; grid-template-columns:44px 1fr auto; gap:8px; padding:10px 14px; border-top:1px solid var(--line); align-items:start; } .arow:first-of-type { border-top:0; }
+  .arow .t { font-weight:700; font-size:14px; } .arow .m { display:flex; flex-direction:column; min-width:0; font-weight:600; font-size:14.5px; } .arow .m small { font-weight:400; color:var(--muted); font-size:12.5px; }
+  .arow .v { display:flex; flex-direction:column; align-items:flex-end; text-align:right; font-size:14.5px; } .arow .v small { color:var(--muted); font-size:12px; white-space:nowrap; }
   .hidnote { font-size:13.5px; margin:4px 0 10px; } .sixbtn { display:block; width:100%; margin:8px 0 2px; padding:9px 12px; border-radius:999px; border:1.5px dashed var(--line); background:none; color:var(--muted); font-weight:600; font-size:14px; cursor:pointer; }
   .sixbtn.on { border-style:solid; border-color:var(--ok); color:var(--ok); background:var(--tint); }
   .learn { display:flex; flex-wrap:wrap; gap:6px 14px; font-size:14px; margin:4px 0 8px; } .learn small { color:var(--muted); }
@@ -230,9 +235,8 @@
       </div>
       <button id="sixBtn" class="sixbtn" onclick="toggleSix()">🎯 Solo i più probabili · 6 su 10</button>
       <div class="seg" role="tablist">
-        <button class="tab on" data-s="" onclick="setTab(this)">Tutti</button>
-        <button class="tab" data-s="pending" onclick="setTab(this)">In attesa</button>
-        <button class="tab" data-s="settled" onclick="setTab(this)">Chiusi</button>
+        <button class="tab on" data-s="next" onclick="setTab(this)">⚽ Da giocare</button>
+        <button class="tab" data-s="archive" onclick="setTab(this)">🗂️ Archivio</button>
       </div>
       <div id="signals"></div>
     </section>
@@ -356,7 +360,7 @@
   const KEY_STORE = 'crmKey';
   let key = '';
   try { key = localStorage.getItem(KEY_STORE) || ''; } catch (e) { /* memoria del browser non disponibile */ }
-  let sigTab = '', lastRuns = [], bankMode = 'deposit', bankData = null, keyWaiter = null, lastLoad = 0;
+  let sigTab = 'next', lastRuns = [], bankMode = 'deposit', bankData = null, keyWaiter = null, lastLoad = 0;
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
   const num = (v, d = 1) => Number(v).toLocaleString('it-IT', { minimumFractionDigits: d, maximumFractionDigits: d });
   const pct = (v, d = 1) => { if (v === null || v === undefined) return '—'; const r = Number(Number(v).toFixed(d)); return (r > 0 ? '+' : r < 0 ? '−' : '') + num(Math.abs(r), d) + '%'; };
@@ -691,7 +695,7 @@
   function italiaTickets(d, head, chip, tail) {
     const now = Date.now();
     (d && d.recent || []).forEach(r => { sigById[r.id] = r; });
-    const base = (d && d.recent || []).filter(r => sigTab === 'pending' ? Date.parse(r.commence_time) > now : sigTab === 'settled' || sigTab === 'closed' ? r.clv_pct !== null : true);
+    const base = (d && d.recent || []).filter(r => Date.parse(r.commence_time) > now - 2 * 3600000);
     const list = base.filter(r => sigScope !== 'mine' || !chip.includes('chip it') || r.play || r.played)
       .filter(r => !sixOnly || !chip.includes('chip it') || r.six).slice(0, 15);
     // quanti segnali i filtri stanno nascondendo: cosi' non sembra che "manchino"
@@ -754,10 +758,37 @@
         <div><dt>Quota presa rispetto al segnale</dt><dd>${d.avgSlipPct !== null ? pct(d.avgSlipPct) : '—'}${d.okMinPct !== null ? ` · sopra la minima ${num(d.okMinPct, 0)}%` : ''}</dd></div></dl>
       <h4>Ultime giocate</h4>` + d.items.slice(0, 20).map(x => `<div class="move"><span>${esc(x.home)} – ${esc(x.away)} · <b>${sel[x.selection] || ''}</b><small>${esc(x.book)} ${num(x.odd, 2)} · ${money(x.stake)}${x.clvPct !== null ? ' · ' + pct(x.clvPct) + ' vs chiusura' : ''}${x.result === 'won' || x.result === 'lost' ? ' · ' + (x.result === 'won' ? 'vinta' : 'persa') : ''}</small></span><span style="display:flex;gap:10px;align-items:center;"><b class="${x.pnlEur !== null ? cls(x.pnlEur) : 'muted'}">${x.pnlEur !== null ? signedMoney(x.pnlEur) : 'in attesa'}</b><button class="linkbtn" aria-label="Cancella" onclick="deletePlay(${x.id})">✕</button></span></div>`).join('');
   }
+  // ARCHIVIO: le partite gia' giocate, per giorno. Non si cancella niente: servono a tutte le misure.
+  let archNext = null;
+  async function loadArchive(reset) {
+    const el = $('signals');
+    ['mine', 'it', 'all'].forEach(k => $('scope-' + k).classList.toggle('on', sigScope === k)); $('sixBtn').classList.toggle('on', sixOnly);
+    if (reset) { archNext = null; el.innerHTML = '<div class="sk box"></div>'; }
+    try {
+      const d = await getJson('/api/tracker/archive?days=7' + (archNext ? '&before=' + archNext : ''));
+      const sel = r => !sixOnly || r.six;
+      const dayName = s => { const t = new Date(s + 'T12:00:00Z').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }); return t.charAt(0).toUpperCase() + t.slice(1); };
+      const html = d.days.map((g, i) => {
+        const items = g.items.filter(sel); if (!items.length) return '';
+        const res = g.results && g.results.settled ? ` · ${g.results.won} vinte su ${g.results.settled}` : '';
+        return `<details class="aday"${reset && i === 0 ? ' open' : ''}><summary><b>${esc(dayName(g.day))}</b><span class="muted">${items.length} ${items.length === 1 ? 'segnale' : 'segnali'}${g.avgClvPct !== null ? ` · <span class="${cls(g.avgClvPct)}">${pct(g.avgClvPct, 1)}</span> vs chiusura` : ''}${res}</span></summary>
+          ${items.map(r => `<div class="arow"><span class="t">${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>
+            <span class="m"><a class="tlink" href="${liveUrl(r.home, r.away)}" target="_blank" rel="noopener">${esc(r.home)} – ${esc(r.away)}</a>
+              <small>${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${r.final ? ' · ✅ F' : ''}${r.six ? ' 🎯' : ''}${r.final2 ? ' · ✅ F2' : ''}${r.final3 ? ' · ✅ F3' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small></span>
+            <span class="v"><b class="${r.clv_pct !== null ? cls(r.clv_pct) : 'muted'}">${r.clv_pct !== null ? pct(r.clv_pct, 1) : '—'}</b><small>${r.result === 'won' ? '✅ vinta ' + esc(r.result_score || '') : r.result === 'lost' ? '❌ persa ' + esc(r.result_score || '') : r.result === 'void' ? 'annullata' : 'risultato da leggere'}</small></span></div>`).join('')}</details>`;
+      }).join('');
+      const intro = reset ? `<p class="muted sub">Tutte le partite già giocate, dalla più recente. Niente viene cancellato: servono alle misure di F, F2, F3 e del modello che impara. Il numero colorato è il valore contro la chiusura.</p>` : '';
+      const more = d.more ? `<button class="sixbtn" id="archMore" onclick="loadArchive(false)">Mostra i 7 giorni prima</button>` : '';
+      archNext = d.next;
+      if (reset) el.innerHTML = intro + (html || '<div class="empty">Nessuna partita in archivio con questi filtri.</div>') + more;
+      else { const b = $('archMore'); if (b) b.remove(); el.insertAdjacentHTML('beforeend', html + more); }
+    } catch (e) { el.innerHTML = '<div class="empty">Non riesco a caricare l\'archivio: ' + esc(e.message) + '</div>'; }
+  }
   async function loadSignals() {
     const el = $('signals');
     try {
-      const [rows, it, bs] = await Promise.all([getJson('/api/tracker/signals' + (sigTab ? '?status=' + sigTab : '')), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/italia?s=B').catch(() => null), loadLearnMap()]);
+      if (sigTab === 'archive') return loadArchive(true);
+      const [rows, it, bs] = await Promise.all([getJson('/api/tracker/signals?status=pending'), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/italia?s=B').catch(() => null), loadLearnMap()]);
       const aHead = `<h4 class="sechead">Tutti i bookmaker <small class="muted">· strategia A, il test in corso</small></h4>`;
       ['mine', 'it', 'all'].forEach(k => $('scope-' + k).classList.toggle('on', sigScope === k)); $('sixBtn').classList.toggle('on', sixOnly);
       const itPart = italiaTickets(it, `<h4 class="sechead">🇮🇹 Bookmaker italiani <small class="muted">· strategia I, prova senza soldi</small></h4>`, '<span class="chip it">IT</span>', '');

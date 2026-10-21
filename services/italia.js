@@ -443,6 +443,38 @@ function stats(list) {
   };
 }
 
+/**
+ * ARCHIVIO: le partite gia' iniziate, raggruppate per giorno (ora italiana), dalla piu' recente.
+ * Niente viene cancellato: l'archivio legge le stesse righe che usano tutte le misure.
+ * before = giorno (AAAA-MM-GG) da cui andare indietro, escluso; days = quanti giorni restituire.
+ */
+async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } = {}) {
+  await ensureTables(pool);
+  try { await require('./results').ensureResults(pool); } catch (e) { /* risultati facoltativi */ }
+  const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY commence_time DESC, id DESC`)).rows;
+  const prim = primaryRows(all), fin = markFinal(prim), fin3 = markFinal3(prim), fin2 = markFinal2(all);
+  const firstOf = new Map(prim.map(r => [sigKey(r), r.id]));
+  const played = await require('./played').playedSignalIds(pool);
+  const romeDay = ms => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date(ms));   // AAAA-MM-GG
+  const past = latestRows(all).filter(r => Date.parse(r.commence_time) <= nowMs && (!before || romeDay(Date.parse(r.commence_time)) < before));
+  const dayList = [...new Set(past.map(r => romeDay(Date.parse(r.commence_time))))].slice(0, Math.max(1, Math.min(31, days)));
+  const R = require('./results');
+  const out = dayList.map(day => {
+    const items = past.filter(r => romeDay(Date.parse(r.commence_time)) === day).map(r => {
+      const first = firstOf.get(sigKey(r));
+      return { id: r.id, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book,
+        odd: Number(r.odd), clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null, result: r.result || null, result_score: r.result_score || null,
+        win_prob: r.fair_prob ? Number(r.fair_prob) : null, final: !!(fin.get(first) || {}).final, final2: !!(fin2.get(r.id) || {}).final, final3: !!(fin3.get(first) || {}).final,
+        six: !!(fin.get(first) || {}).final && isSix(r), played: played.get(Number(r.id)) || null };
+    });
+    const cl = items.map(i => i.clv_pct).filter(v => v !== null);
+    return { day, count: items.length, avgClvPct: cl.length ? cl.reduce((a, b) => a + b, 0) / cl.length : null, positivePct: cl.length ? 100 * cl.filter(v => v > 0).length / cl.length : null,
+      results: R.resultStats(items), items };
+  });
+  const oldest = dayList[dayList.length - 1];
+  return { days: out, more: !!oldest && past.some(r => romeDay(Date.parse(r.commence_time)) < oldest), next: oldest || null, totalPast: past.length };
+}
+
 async function getItalia(pool, env = process.env, strategy = 'I') {
   strategy = STRATEGIES[strategy] ? strategy : 'I';
   const c = cfgFor(cfg(env), strategy);
@@ -505,4 +537,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   };
 }
 
-module.exports = { SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
