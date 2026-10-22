@@ -21,6 +21,7 @@ const FEATURES = {
   ore: { label: 'Ore al calcio d\'inizio', of: r => { const h = hours(r); return h <= 1.5 ? 'entro 1,5 ore' : h <= 3 ? 'da 1,5 a 3 ore' : 'da 3 a 6 ore'; } },
   vantaggio: { label: 'Vantaggio del segnale', of: r => { const e = num(r.edge_pct); return e < 3 ? '2–3%' : e < 4 ? '3–4%' : e < 6 ? '4–6%' : '6% e oltre'; } },
   esito: { label: 'Esito', of: r => ({ home: 'segno 1', draw: 'pareggio', away: 'segno 2' }[r.selection] || r.selection) },
+  giorno: { label: 'Giorno della partita', of: r => { const d = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', weekday: 'short' }).format(new Date(r.commence_time)); return d === 'Sat' || d === 'Sun' ? 'weekend' : 'giorni feriali'; } },
   quota: { label: 'Quota', of: r => { const o = num(r.odd); return o < 1.6 ? 'sotto 1,60' : o <= 2.6 ? '1,60–2,60' : o <= 3.5 ? '2,60–3,50' : 'sopra 3,50'; } }
 };
 
