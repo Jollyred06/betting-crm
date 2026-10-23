@@ -374,7 +374,19 @@
   const marker = level => `<i class="cm ${level}"></i>`;
 
   const PANES = ['home', 'signals', 'strategies', 'bankroll', 'more'];
+  // la scheda aperta resta nell'indirizzo (#segnali, #archivio...): tornando indietro da Google si riapre la stessa
+  const HASH = { home: '', signals: 'segnali', strategies: 'strategie', bankroll: 'bankroll', more: 'altro' };
+  function setHash(name) {
+    const h = HASH[name] + (name === 'signals' && sigTab === 'archive' ? '-archivio' : '');
+    try { history.replaceState(null, '', h ? '#' + h : location.pathname); } catch (e) { /* facoltativo */ }
+  }
+  function rememberSpot() { try { sessionStorage.setItem('spotY', String(window.scrollY || 0)); } catch (e) { /* facoltativo */ } }
+  function restoreSpot() {
+    let y = null; try { y = sessionStorage.getItem('spotY'); sessionStorage.removeItem('spotY'); } catch (e) { /* facoltativo */ }
+    if (y !== null && window.scrollTo) setTimeout(() => window.scrollTo(0, Number(y) || 0), 50);
+  }
   function show(name) {
+    setHash(name);
     PANES.forEach(n => { $('pane-' + n).style.display = n === name ? 'block' : 'none'; $('nav-' + n).className = n === name ? 'on' : ''; });
     if (name === 'signals') loadSignals(); if (name === 'strategies') loadStrategies(); if (name === 'bankroll') loadBankroll(); if (name === 'more') moreRefresh();
     if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, 0);
@@ -630,7 +642,7 @@
       const d = await getJson('/api/tracker/italia'), now = Date.now();
       const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now && (r.play || r.played)).sort((a, b) => ((b.final || b.final2 || b.final3) - (a.final || a.final2 || a.final3)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
       $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
-        <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" target="_blank" rel="noopener">${esc(r.home)} – ${esc(r.away)}</a></b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.six ? ' · <span class="chip fin">🎯</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
+        <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a></b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.six ? ' · <span class="chip fin">🎯</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
         <div class="q">${num(r.played ? r.played.odd : r.play.odd, 2)}</div></div>`).join('')
         : '<div class="empty">Nessun segnale giocabile su 888sport o Snai in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
@@ -684,14 +696,14 @@
     sigScope = v; try { localStorage.setItem('sigScope2', v); } catch (e) { /* facoltativo */ }
     loadSignals();
   }
-  function setTab(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('on')); el.classList.add('on'); sigTab = el.dataset.s; loadSignals(); }
+  function setTab(el) { document.querySelectorAll('.tab').forEach(t => t.classList.remove('on')); el.classList.add('on'); sigTab = el.dataset.s; setHash('signals'); loadSignals(); }
   // Segnali della strategia I (solo bookmaker italiani): stessa scheda, con l'etichetta IT e la quota minima da accettare sul sito.
   const sigById = {};
   let learnMap = {};
   async function loadLearnMap() { try { const L = await getJson('/api/tracker/learning'); learnMap = Object.fromEntries((L.upcoming || []).map(u => [u.id, u])); } catch (e) { learnMap = {}; } }
   const liveUrl = (h, a) => 'https://www.google.com/search?q=' + encodeURIComponent(`${h} - ${a}`);
   // il testo e l'indirizzo li aggiorna paintDots ogni minuto (prima, durante e dopo la partita)
-  const liveLink = (h, a) => `<a class="live" data-q="${esc(h + ' - ' + a)}" href="${liveUrl(h, a)}" target="_blank" rel="noopener">🔎 Partita su Google</a>`;
+  const liveLink = (h, a) => `<a class="live" data-q="${esc(h + ' - ' + a)}" href="${liveUrl(h, a)}" rel="noopener" onclick="rememberSpot()">🔎 Partita su Google</a>`;
   function italiaTickets(d, head, chip, tail) {
     const now = Date.now();
     (d && d.recent || []).forEach(r => { sigById[r.id] = r; });
@@ -773,7 +785,7 @@
         const res = g.results && g.results.settled ? ` · ${g.results.won} vinte su ${g.results.settled}` : '';
         return `<details class="aday"${reset && i === 0 ? ' open' : ''}><summary><b>${esc(dayName(g.day))}</b><span class="muted">${items.length} ${items.length === 1 ? 'segnale' : 'segnali'}${g.avgClvPct !== null ? ` · <span class="${cls(g.avgClvPct)}">${pct(g.avgClvPct, 1)}</span> vs chiusura` : ''}${res}</span></summary>
           ${items.map(r => `<div class="arow"><span class="t">${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>
-            <span class="m"><a class="tlink" href="${liveUrl(r.home, r.away)}" target="_blank" rel="noopener">${esc(r.home)} – ${esc(r.away)}</a>
+            <span class="m"><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a>
               <small>${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${r.final ? ' · ✅ F' : ''}${r.six ? ' 🎯' : ''}${r.final2 ? ' · ✅ F2' : ''}${r.final3 ? ' · ✅ F3' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small></span>
             <span class="v"><b class="${r.clv_pct !== null ? cls(r.clv_pct) : 'muted'}">${r.clv_pct !== null ? pct(r.clv_pct, 1) : '—'}</b><small>${r.result === 'won' ? '✅ vinta ' + esc(r.result_score || '') : r.result === 'lost' ? '❌ persa ' + esc(r.result_score || '') : r.result === 'void' ? 'annullata' : 'risultato da leggere'}</small></span></div>`).join('')}</details>`;
       }).join('');
@@ -812,7 +824,7 @@
             ${r.near === null || r.near === undefined ? '' : r.near >= 2 ? `<div class="avail">Quota vicina a questa offerta da ${r.near} bookmaker</div>` : '<div class="avail lone">Un solo bookmaker offre questa quota: da prendere con cautela</div>'}
             <div class="foot"><span class="chip ${r.status}">${r.status === 'pending' ? 'in attesa' : (r.status === 'won' ? 'vinta ' : 'persa ') + esc(r.score || '')}</span>
               <span>${esc(r.bookmaker || 'n/d')}, vantaggio ${pct(r.edgePct)}</span>${r.clvPct !== null ? `<span class="${cls(r.clvPct)}">${pct(r.clvPct)} rispetto alla chiusura</span>` : ''}</div>
-            <a class="live" target="_blank" rel="noopener" data-q="${esc((r.home || '') + ' ' + (r.away || ''))}" href="https://www.google.com/search?q=${encodeURIComponent((r.home || '') + ' ' + (r.away || '') + ' diretta')}">Segui in diretta</a>
+            <a class="live" rel="noopener" onclick="rememberSpot()" data-q="${esc((r.home || '') + ' ' + (r.away || ''))}" href="https://www.google.com/search?q=${encodeURIComponent((r.home || '') + ' ' + (r.away || '') + ' diretta')}">Segui in diretta</a>
           </div>
         </article>`).join('');
       paintDots();
@@ -955,7 +967,16 @@
   // quando torni all'app dopo un po', i numeri si aggiornano da soli
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && lastLoad && Date.now() - lastLoad > 60000) loadHome(); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => { /* senza, l'app funziona lo stesso */ });
-  loadHome();
+  // apertura: se l'indirizzo dice una scheda (per esempio tornando indietro da Google), si riapre quella, nello stesso punto
+  (function start() {
+    const h = (typeof location !== 'undefined' && location.hash || '').replace('#', '');
+    const name = Object.keys(HASH).find(k => HASH[k] && h.startsWith(HASH[k]));
+    if (!name) { loadHome(); return; }
+    if (name === 'signals' && h.endsWith('-archivio')) { sigTab = 'archive'; document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.s === 'archive')); }
+    loadHome(); show(name); setTimeout(restoreSpot, 1200);
+  })();
+  // se il telefono ripresenta la pagina com'era (torna indietro "istantaneo"), si rimette solo nel punto giusto
+  if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('pageshow', e => { if (e.persisted) restoreSpot(); });
 </script>
 </body>
 </html>
