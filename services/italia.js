@@ -25,6 +25,10 @@ const STRATEGIES = {
   B: { letter: 'B', title: 'Selezione B – libri esteri (da odss)', playable: false }
 };
 const OUT = { home: 'HOME', draw: 'DRAW', away: 'AWAY' };
+// formattatori dell'ora italiana creati una volta sola (crearli a ogni riga riempiva la memoria del server)
+const ROME_DAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' });
+const ROME_HOUR = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false });
+const ROME_WHEN = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', hour: '2-digit', minute: '2-digit' });
 const SEL_NAME = { home: '1', draw: 'X', away: '2' };
 
 function cfg(env = process.env) {
@@ -172,14 +176,14 @@ function closingPin(records, eventId) {
 
 /** Ora italiana (0-23) per decidere se e' il momento di scansionare. */
 function romeHour(nowMs) {
-  return Number(new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(new Date(nowMs))) % 24;
+  return Number(ROME_HOUR.format(new Date(nowMs))) % 24;
 }
 
 /** Quota minima da accettare sul sito: sotto questa il vantaggio sul prezzo giusto di Pinnacle scende sotto la soglia. */
 function minOdd(fairProb, minEdgePct) { return Math.ceil((1 + minEdgePct / 100) / fairProb * 100) / 100; }
 
 function signalText(s, minEdgePct = 2) {
-  const when = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', weekday: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(s.commence_time));
+  const when = ROME_WHEN.format(new Date(s.commence_time));
   const n = (v, d = 2) => Number(v).toFixed(d).replace('.', ',');
   const pick = s.selection === 'home' ? `1 (${s.home})` : s.selection === 'away' ? `2 (${s.away})` : 'X (pareggio)';
   const nw = s.netwin_odd && s.book !== 'netwin' ? `\nNetwin: ${n(s.netwin_odd)} (${s.netwin_edge_pct >= 0 ? '+' : ''}${n(s.netwin_edge_pct, 1)}%)` : '';
@@ -455,7 +459,7 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
   const prim = primaryRows(all), fin = markFinal(prim), fin3 = markFinal3(prim), fin2 = markFinal2(all);
   const firstOf = new Map(prim.map(r => [sigKey(r), r.id]));
   const played = await require('./played').playedSignalIds(pool);
-  const romeDay = ms => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date(ms));   // AAAA-MM-GG
+  const romeDay = ms => ROME_DAY.format(new Date(ms));   // AAAA-MM-GG
   const past = latestRows(all).filter(r => Date.parse(r.commence_time) <= nowMs && (!before || romeDay(Date.parse(r.commence_time)) < before));
   const dayList = [...new Set(past.map(r => romeDay(Date.parse(r.commence_time))))].slice(0, Math.max(1, Math.min(31, days)));
   const R = require('./results');

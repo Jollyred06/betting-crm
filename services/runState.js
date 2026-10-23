@@ -1,8 +1,8 @@
+const ROME_PARTS = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 /** Stato del giro giornaliero rispetto all'orologio italiano. */
 function romeParts(d) {
   const o = {};
-  new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-    .formatToParts(new Date(d)).forEach(x => { o[x.type] = x.value; });
+  ROME_PARTS.formatToParts(new Date(d)).forEach(x => { o[x.type] = x.value; });
   return { ymd: `${o.year}-${o.month}-${o.day}`, mins: Number(o.hour) * 60 + Number(o.minute) };
 }
 

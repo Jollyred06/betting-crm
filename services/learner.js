@@ -14,6 +14,8 @@ const DAMP = 0.6;         // le caratteristiche si sovrappongono: la somma degli
 const MIN_TRAIN = 40;     // sotto questi segnali misurati il modello non giudica
 const PICK_MARGIN = 0.5;  // il modello "sceglie" un segnale se lo stima almeno 0,5 punti sopra la media
 
+// un solo formattatore per tutto il modulo: crearne uno a ogni segnale consumava centinaia di MB di memoria
+const WEEKDAY = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', weekday: 'short' });
 const num = v => (v === null || v === undefined || v === '' ? null : Number(v));
 const hours = r => (Date.parse(r.commence_time) - Date.parse(r.created_at)) / 3600000;
 
@@ -21,7 +23,7 @@ const FEATURES = {
   ore: { label: 'Ore al calcio d\'inizio', of: r => { const h = hours(r); return h <= 1.5 ? 'entro 1,5 ore' : h <= 3 ? 'da 1,5 a 3 ore' : 'da 3 a 6 ore'; } },
   vantaggio: { label: 'Vantaggio del segnale', of: r => { const e = num(r.edge_pct); return e < 3 ? '2–3%' : e < 4 ? '3–4%' : e < 6 ? '4–6%' : '6% e oltre'; } },
   esito: { label: 'Esito', of: r => ({ home: 'segno 1', draw: 'pareggio', away: 'segno 2' }[r.selection] || r.selection) },
-  giorno: { label: 'Giorno della partita', of: r => { const d = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', weekday: 'short' }).format(new Date(r.commence_time)); return d === 'Sat' || d === 'Sun' ? 'weekend' : 'giorni feriali'; } },
+  giorno: { label: 'Giorno della partita', of: r => { const d = WEEKDAY.format(new Date(r.commence_time)); return d === 'Sat' || d === 'Sun' ? 'weekend' : 'giorni feriali'; } },
   quota: { label: 'Quota', of: r => { const o = num(r.odd); return o < 1.6 ? 'sotto 1,60' : o <= 2.6 ? '1,60–2,60' : o <= 3.5 ? '2,60–3,50' : 'sopra 3,50'; } }
 };
 
