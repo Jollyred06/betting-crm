@@ -51,14 +51,14 @@ router.get('/italia-export', async (req, res) => {
       closing_fair_prob, clv_pct, netwin_clv_pct, close_lag_min, strategy, result, result_score FROM italia_signals ORDER BY id`);
     const prim = new Set(I.primaryRows(rows).map(r => r.id));
     const iAll = rows.filter(r => (r.strategy || 'I') === 'I'), iRows = iAll.filter(r => prim.has(r.id));
-    const m1 = I.markFinal(iRows), m2 = I.markFinal2(iAll), m3 = I.markFinal3(iRows);
+    const m1 = I.markFinal(iRows), m2 = I.markFinal2(iAll), m3 = I.markFinal3(iRows), m4 = I.markFinal4(iAll);
     const last = (await pool.query(`SELECT at, kind, quota_remaining FROM italia_requests ORDER BY id DESC LIMIT 1`).catch(() => ({ rows: [] }))).rows[0] || null;
     const reqs = (await pool.query(`SELECT to_char(at AT TIME ZONE 'UTC', 'YYYY-MM-DD') AS day, COUNT(*)::int AS n FROM italia_requests WHERE at > NOW() - INTERVAL '8 days' GROUP BY 1 ORDER BY 1`).catch(() => ({ rows: [] }))).rows;
     const results = (await pool.query(`SELECT at, ok, src, note FROM results_requests ORDER BY id DESC LIMIT 2`).catch(() => ({ rows: [] }))).rows;
     res.json({
       at: new Date().toISOString(), quotaRemaining: last ? last.quota_remaining : null, requestsByDay: reqs, lastResults: results,
       // dup = rilettura vicino al calcio d'inizio di un segnale gia' uscito: esclusa da I, B, F e F3, conta solo per la F2
-      signals: rows.map(r => ({ ...r, dup: !prim.has(r.id), f: !!(m1.get(r.id) || {}).final, f2: !!(m2.get(r.id) || {}).final, f3: !!(m3.get(r.id) || {}).final }))
+      signals: rows.map(r => ({ ...r, dup: !prim.has(r.id), f: !!(m1.get(r.id) || {}).final, f2: !!(m2.get(r.id) || {}).final, f3: !!(m3.get(r.id) || {}).final, f4: !!(m4.get(r.id) || {}).final }))
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -88,6 +88,13 @@ router.post('/signals/:id/result', async (req, res) => {
     let tappe = []; try { tappe = await require('../services/milestones').checkMilestones(pool); } catch (e) { /* tabella non ancora creata */ }
     res.json({ success: true, ...out, tappe });
   }
+  catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
+
+// Risultato a mano di un segnale italiano (strategia I o B), protetto dalla chiave: gol dei 90 minuti, si puo' correggere.
+router.post('/italia/:id/result', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json({ success: true, ...(await require('../services/results').settleItaliaManual(pool, Number(req.params.id), req.body && req.body.homeGoals, req.body && req.body.awayGoals)) }); }
   catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 

@@ -1,6 +1,6 @@
 """Analisi settimanale dei segnali del CRM (sola lettura, nessuna chiave).
 Uso: python3 scripts/weekly_report.py [URL]   (predefinito: https://betting-crm.onrender.com)
-Stampa per F, F2, F3, I, B: segnali misurati, valore medio contro la chiusura, fascia al 95%, quota sopra la chiusura;
+Stampa per F2+, F, F2, F3, I, B: segnali misurati, valore medio contro la chiusura, fascia al 95%, quota sopra la chiusura;
 sia su tutto lo storico sia sugli ultimi 7 giorni. Poi bookmaker, richieste odss e stato dei risultati."""
 import json, math, sys, urllib.request
 from datetime import datetime, timedelta, timezone
@@ -24,7 +24,7 @@ def stat(rows):
     return f'{n} misurati, {m:+.2f}% (da {m-h:+.1f} a {m+h:+.1f}) {verdict}, positivi {pos:.0f}%'
 
 nd = lambda r: not r.get('dup')   # le riletture vicino al calcio d'inizio contano solo per la F2
-groups = [('F', lambda r: r['f']), ('F2', lambda r: r['f2']), ('F3', lambda r: r['f3']),
+groups = [('F2+', lambda r: r.get('f4')), ('F', lambda r: r['f']), ('F2', lambda r: r['f2']), ('F3', lambda r: r['f3']),
           ('I', lambda r: r['strategy'] == 'I' and nd(r)), ('B', lambda r: r['strategy'] == 'B' and nd(r))]
 print(f"Analisi del {now:%d/%m/%Y %H:%M} UTC, {len(S)} segnali in totale\n")
 for name, f in groups:

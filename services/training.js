@@ -1,6 +1,6 @@
 /**
  * BANKROLL DI ALLENAMENTO (sulla carta, nessun soldo vero).
- * Per ogni selezione candidata (F, F2, F3) fa crescere tre casse da START euro con tre modi di puntare,
+ * Per ogni selezione candidata (F, F2, F3, F2+) fa crescere tre casse da START euro con tre modi di puntare,
  * sugli stessi segnali e nello stesso ordine in cui sono usciti:
  *   - fisso:          sempre il 2% della cassa di partenza
  *   - proporzionale:  il 2% della cassa del momento (sale quando si vince, scende quando si perde)
@@ -76,7 +76,8 @@ async function getTraining(pool) {
   const sel = [
     { key: 'F', title: 'Selezione F', rows: pick(I.markFinal) },
     { key: 'F2', title: 'Selezione F2', rows: pick(I.markFinal2, rows) },
-    { key: 'F3', title: 'Selezione F3 (favoriti)', rows: pick(I.markFinal3) }
+    { key: 'F3', title: 'Selezione F3 (favoriti)', rows: pick(I.markFinal3) },
+    { key: 'F2+', title: 'Selezione ⭐ F2+', rows: pick(I.markFinal4, rows) }
   ];
   return { start: START, stopAtPct: STOP_AT * 100, selections: sel.map(s => ({ key: s.key, title: s.title, ...trainSelection(s.rows) })) };
 }

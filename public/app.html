@@ -142,6 +142,10 @@
   .alt { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:13px; margin-top:4px; } .alt .ok { color:var(--ok); } .alt .no { color:var(--muted); text-decoration:line-through; }
   .playbtn { margin-top:8px; border:1.5px solid var(--ink); background:none; color:var(--ink); border-radius:999px; padding:6px 14px; font-weight:700; font-size:13.5px; cursor:pointer; }
   .played { margin-top:8px; font-size:13.5px; color:var(--ok); font-weight:600; }
+  .bestbox { margin:0 0 18px; } .ticket.bestt { border-color:var(--ok); box-shadow:0 0 0 1.5px var(--ok) inset; }
+  .budget { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 12px; padding:10px 14px; margin:0 0 10px; border:1px solid var(--line); border-radius:12px; background:var(--surface); font-size:14.5px; }
+  .budget.stop { border-color:var(--bad); } .chip.now { background:var(--ok); color:#fff; border-color:var(--ok); }
+  .resbtn { margin-top:4px; align-self:flex-start; font-size:13px; } .arow .resform, .move .resform { margin:6px 0 0; } .arow .resform input, .move .resform input { width:40px; height:36px; font-size:17px; } .arow .resform button, .move .resform button { height:36px; }
   .pf { display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:8px; margin-top:8px; } .pf label { display:flex; flex-direction:column; font-size:12.5px; color:var(--muted); gap:3px; min-width:0; }
   .pf select, .pf input { width:100%; padding:8px; border:1.5px solid var(--line); border-radius:10px; background:var(--surface); color:var(--text); font-size:15px; } .pfb { grid-column:1/-1; display:flex; gap:12px; align-items:center; }
   .tcash { border:1.5px solid var(--line); border-radius:16px; padding:12px 14px; margin-top:10px; } .tcash.best { border-color:var(--ok); }
@@ -201,7 +205,7 @@
   <main id="pane-home">
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
     <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Consigli automatici sui risultati, aggiornati a ogni apertura. Niente giudizi su pochi dati.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
-    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani. Solo quelli giocabili su 888sport o Snai, con il sito e la quota. In alto quelli ✅ F, F2 e F3.</p><div id="today"><div class="sk box"></div></div>
+    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani giocabili su 888sport o Snai. In alto le ⭐ da giocare: le altre sono solo da guardare.</p><div id="today"><div class="sk box"></div></div>
       <button class="ghost" onclick="show('signals')">Tutti i segnali →</button></section>
     <section class="block"><h3>Bankroll di carta</h3><p class="muted sub">Strategia A (libri esteri, 2 € a segnale). Il bankroll dei segnali italiani è nella scheda Bankroll, sotto "allenamento".</p><div id="bankMini"></div></section>
     <details class="fold"><summary><span>Strategia A · test di ottobre</span><small>verdetto, numeri e tappe</small></summary>
@@ -246,7 +250,7 @@
   <main id="pane-strategies" style="display:none;">
     <section class="block">
       <h3>Strategie</h3>
-      <p class="muted sub">Tutte in prova sulla carta, senza soldi veri. <b>F</b>, <b>F2</b> e <b>F3</b> sono le selezioni candidate, <b>I</b> i bookmaker italiani, <b>B</b> la prova delle regole B sui libri esteri, <b>A</b> il test di ottobre.</p>
+      <p class="muted sub">Tutte in prova sulla carta. <b>⭐ F2+</b> è quella da giocare dal 1° novembre (2 € l'una); <b>F</b>, <b>F2</b> e <b>F3</b> restano in misura, <b>I</b> i bookmaker italiani, <b>B</b> la prova delle regole B sui libri esteri, <b>A</b> il test di ottobre.</p>
       <div id="italia"></div>
       <div id="strategies"></div>
     </section>
@@ -263,7 +267,7 @@
     <section class="block train">
       <h3>🏋️ Bankroll di allenamento</h3>
       <p class="muted sub">Sulla carta, nessun soldo vero. Tre casse da 500 € per ogni selezione, con tre modi di puntare sugli stessi segnali. Si ferma da sola se perde il 25%.</p>
-      <div class="seg" id="trainTabs"><button class="on" data-k="F" onclick="setTrain(this)">✅ F</button><button data-k="F2" onclick="setTrain(this)">✅ F2</button><button data-k="F3" onclick="setTrain(this)">✅ F3</button></div>
+      <div class="seg" id="trainTabs"><button class="on" data-k="F2+" onclick="setTrain(this)">⭐ F2+</button><button data-k="F" onclick="setTrain(this)">✅ F</button><button data-k="F2" onclick="setTrain(this)">✅ F2</button><button data-k="F3" onclick="setTrain(this)">✅ F3</button></div>
       <div id="trainBox"><div class="sk box"></div></div>
     </section>
     <section class="block">
@@ -482,7 +486,7 @@
       </dl>
       <h4>Ultimi movimenti</h4>` + (b.movements.length ? b.movements.map(m => `<div class="move"><span>${esc((m.note || (m.manual ? 'Movimento manuale' : 'Segnale chiuso')).replace(/: won\b/, ': vinta').replace(/: lost\b/, ': persa').replace(/: void\b/, ': annullata'))}<small>${fmtDate(m.at)}</small></span><b class="${cls(m.amount)}">${signedMoney(m.amount)}</b></div>`).join('') : '<div class="empty">Nessun movimento.</div>');
   }
-  let trainData = null, trainKey = 'F';
+  let trainData = null, trainKey = 'F2+';
   function setTrain(el) { document.querySelectorAll('#trainTabs button').forEach(b => b.classList.remove('on')); el.classList.add('on'); trainKey = el.dataset.k; renderTrain(); }
   function renderTrain() {
     const d = trainData; if (!d) return;
@@ -560,6 +564,18 @@
         ${f.six ? `<div><dt>Di cui 🎯 6 su 10 (vince ${num(f.six.minProb * 10, 1)}+ volte)</dt><dd class="${f.six.measured >= 5 ? cls(f.six.avgClvPct) : ''}">${f.six.signals} segnali · ${itStat(f.six)}${f.six.expectedWinsOf10 !== null ? ` · vince ${num(f.six.expectedWinsOf10, 1)} su 10` : ''}</dd></div>` : ''}
         <div><dt>Obiettivo</dt><dd>9 segnali su 10 sopra la chiusura, su almeno 20</dd></div></dl></div>`;
   }
+  function final4Card(i) {
+    const f = i && i.final4; if (!f) return '';
+    const r = f.rules, rt = f.retro;
+    return `<div class="strat final"><div class="sh"><div class="letter" style="font-size:22px">F2+</div><div><b>⭐ La principale per i soldi veri</b><span>Regole fissate il 24 ottobre sera, misurate solo da quel momento</span></div></div>
+      <p class="muted" style="margin:0 0 4px;font-size:14px;">Scelta tra circa 1.200 combinazioni: è l'unica che reggeva in tutte e due le metà del periodo e anche sui bookmaker esteri. Si gioca una volta per partita, alla lettura più vicina al calcio d'inizio.</p><ul class="rules"><li>Bookmaker italiano (strategia I)</li><li>Entro ${r.maxLeadHours} ore dal calcio d'inizio</li><li>Vantaggio dal ${r.minEdge}% in su</li><li>Quota da ${num(r.minOdd, 2)}</li><li>Si gioca su 888sport o Snai, a quota almeno minima</li></ul>
+      <dl class="facts"><div><dt>Segnali ⭐ F2+</dt><dd>${f.signals} (${f.measured} con chiusura)</dd></div>
+        <div><dt>Valore vs chiusura</dt><dd class="${f.measured >= 5 ? cls(f.avgClvPct) : ''}">${itStat(f)}</dd></div>
+        <div><dt>Guadagno atteso (${num(f.stake || 2, 0)} € a segnale)</dt><dd class="${f.measured ? cls(f.expectedEur) : ''}">${f.measured ? signedMoney(f.expectedEur) : '—'}</dd></div>
+        <div><dt>Vinte attese su 10</dt><dd>${f.expectedWinsOf10 !== null ? num(f.expectedWinsOf10, 1) : '—'}</dd></div>
+        <div><dt>Risultati veri</dt><dd>${resLine(f.results)}</dd></div>
+        ${rt && rt.measured ? `<div><dt>Riferimento: le stesse regole all'indietro${rt.from ? ' dal ' + dt(rt.from, { day: 'numeric', month: 'short' }) : ''}</dt><dd class="muted">${itStat(rt)}</dd></div>` : ''}</dl></div>`;
+  }
   function final2Card(i) {
     const f = i && i.final2; if (!f) return '';
     const r = f.rules;
@@ -608,7 +624,7 @@
   async function loadItalia() {
     try {
       const [i, b, L] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null)]);
-      $('italia').innerHTML = finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
+      $('italia').innerHTML = final4Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
   async function loadStrategies() {
@@ -640,9 +656,10 @@
   async function loadToday() {
     try {
       const d = await getJson('/api/tracker/italia'), now = Date.now();
-      const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now && (r.play || r.played)).sort((a, b) => ((b.final || b.final2 || b.final3) - (a.final || a.final2 || a.final3)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
+      const best = new Set(d.best || []);
+      const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now && (r.play || r.played)).sort((a, b) => (best.has(b.id) - best.has(a.id)) || ((b.final4 || b.final || b.final2 || b.final3) - (a.final4 || a.final || a.final2 || a.final3)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
       $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
-        <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a></b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.six ? ' · <span class="chip fin">🎯</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
+        <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a></b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${best.has(r.id) ? ' · <span class="chip now">⭐ da giocare</span>' : r.final4 ? ' · <span class="chip fin">⭐ F2+</span>' : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.six ? ' · <span class="chip fin">🎯</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
         <div class="q">${num(r.played ? r.played.odd : r.play.odd, 2)}</div></div>`).join('')
         : '<div class="empty">Nessun segnale giocabile su 888sport o Snai in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
@@ -704,28 +721,49 @@
   const liveUrl = (h, a) => 'https://www.google.com/search?q=' + encodeURIComponent(`${h} - ${a}`);
   // il testo e l'indirizzo li aggiorna paintDots ogni minuto (prima, durante e dopo la partita)
   const liveLink = (h, a) => `<a class="live" data-q="${esc(h + ' - ' + a)}" href="${liveUrl(h, a)}" rel="noopener" onclick="rememberSpot()">🔎 Partita su Google</a>`;
-  function italiaTickets(d, head, chip, tail) {
-    const now = Date.now();
-    (d && d.recent || []).forEach(r => { sigById[r.id] = r; });
-    const base = (d && d.recent || []).filter(r => Date.parse(r.commence_time) > now - 2 * 3600000);
-    const list = base.filter(r => sigScope !== 'mine' || !chip.includes('chip it') || r.play || r.played)
-      .filter(r => !sixOnly || !chip.includes('chip it') || r.six).slice(0, 15);
-    // quanti segnali i filtri stanno nascondendo: cosi' non sembra che "manchino"
-    const hidden = chip.includes('chip it') ? Math.min(base.length, 15) - list.length : 0;
-    const note = hidden > 0 ? `<p class="muted hidnote">${hidden} ${hidden === 1 ? 'segnale nascosto' : 'segnali nascosti'} dai filtri (${[sigScope === 'mine' ? 'non giocabili su 888sport o Snai' : '', sixOnly ? 'non 🎯 6 su 10' : ''].filter(Boolean).join(' o ')}). <button class="linkbtn" onclick="sixOnly=false;try{localStorage.setItem('sixOnly','0')}catch(e){};setScope('it')">Mostrali</button></p>` : '';
-    if (!list.length) return note ? head + note : '';
-    return head + note + list.map(r => `
-        <article class="ticket">
+  // ⏱️ il momento giusto: mancano meno di 3 ore e la quota su 888sport o Snai e' ancora almeno la minima (dai dati: piu' vicino, piu' valore)
+  const isNow = r => { const t = Date.parse(r.commence_time) - Date.now(); return !!r.play && !r.played && t > 0 && t <= 3 * 3600000; };
+  function ticket(r, chip) {
+    const it = chip.includes('chip it');
+    return `
+        <article class="ticket${r.best ? ' bestt' : ''}">
           <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { day: 'numeric' })}</b><span>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span></div>
           <div class="tmain">
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
-            ${chip.includes('chip it') ? (r.play ? `<div class="todo-line">👉 Gioca su <b>${esc(r.play.book)}</b> a <b>${num(r.play.odd, 2)}</b></div>` : `<div class="todo-line no">⛔ Non giocabile su 888sport e Snai</div>`) : ''}
-            ${chip.includes('chip it') && r.min_odd ? `<div class="avail">Prima di giocare controlla sul sito: quota almeno <b>${num(r.min_odd, 2)}</b>${r.alt && Object.keys(r.alt).length > 1 ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''}</div>` : ''}
-            ${chip.includes('chip it') ? (r.played ? `<div class="played">✅ Giocata: <b>${num(r.played.odd, 2)}</b> su ${esc(r.played.book)}</div>` : `<button class="playbtn" onclick="openPlay(${Number(r.id)})">✍️ Ho giocato</button><div class="playform" id="pf-${Number(r.id)}"></div>`) : ''}
-            <div class="foot">${chip}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.six ? '<span class="chip fin">🎯 6 su 10</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.final3 ? '<span class="chip fin">✅ F3</span>' : ''}${r.again ? '<span class="chip">🔄 quota riletta vicino alla partita</span>' : ''}${learnMap[r.id] ? `<span class="chip${learnMap[r.id].pick ? ' fin' : ''}">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
+            ${it ? (r.play ? `<div class="todo-line">👉 Gioca su <b>${esc(r.play.book)}</b> a <b>${num(r.play.odd, 2)}</b>${isNow(r) ? ' <span class="chip now">⏱️ Ora è il momento</span>' : ''}</div>` : `<div class="todo-line no">⛔ Non giocabile su 888sport e Snai</div>`) : ''}
+            ${it && r.min_odd ? `<div class="avail">Prima di giocare controlla sul sito: quota almeno <b>${num(r.min_odd, 2)}</b>${r.alt && Object.keys(r.alt).length > 1 ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''}</div>` : ''}
+            ${it ? (r.played ? `<div class="played">✅ Giocata: <b>${num(r.played.odd, 2)}</b> su ${esc(r.played.book)}</div>` : `<button class="playbtn" onclick="openPlay(${Number(r.id)})">✍️ Ho giocato</button><div class="playform" id="pf-${Number(r.id)}"></div>`) : ''}
+            <div class="foot">${chip}${r.final4 ? '<span class="chip fin">⭐ F2+</span>' : ''}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.six ? '<span class="chip fin">🎯 6 su 10</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.final3 ? '<span class="chip fin">✅ F3</span>' : ''}${r.again ? '<span class="chip">🔄 quota riletta vicino alla partita</span>' : ''}${learnMap[r.id] ? `<span class="chip${learnMap[r.id].pick ? ' fin' : ''}">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
-        </article>`).join('') + tail;
+        </article>`;
+  }
+  // ⭐ LE MIGLIORI DI OGGI: solo F2+ giocabili su 888sport o Snai, al massimo 5 al giorno, con il conto del budget e lo stop
+  function bestBox(d) {
+    const b = d && d.budget; if (!b) return '';
+    const ids = d.best || [], items = ids.map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
+    items.forEach(r => { r.best = true; });
+    const line = `<div class="budget${b.stopped ? ' stop' : ''}"><span>💶 Budget: <b>${money(b.start)}</b> → <b class="${cls(b.pnl)}">${money(b.balance)}</b>${b.open ? ` <small class="muted">(${money(b.open)} in gioco)</small>` : ''}</span><span class="muted">stop a ${money(b.stop)} · oggi ${b.playedToday} su ${b.maxPerDay}</span></div>`;
+    let body;
+    if (b.stopped) body = `<div class="callout warn"><b>Fermati: il budget è sceso a ${money(b.balance)}, sotto lo stop di ${money(b.stop)}.</b> Niente giocate finché non controlliamo insieme i numeri (mandami il backup).</div>`;
+    else if (b.playedToday >= b.maxPerDay) body = `<p class="muted hidnote">Hai già fatto ${b.playedToday} giocate oggi: per oggi basta così. Meno giocate scelte bene, meno errori.</p>`;
+    else if (!items.length) body = `<p class="muted hidnote">Nessuna partita ⭐ adesso. Compaiono quando mancano meno di 3 ore alla partita, c'è un vantaggio dal 4% in su e la quota su 888sport o Snai è almeno la minima. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</p>`;
+    else body = items.map(r => ticket(r, '<span class="chip it">IT</span>')).join('');
+    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una</small></h4>${line}${body}</section>`;
+  }
+  function italiaTickets(d, head, chip, tail) {
+    const now = Date.now(), it = chip.includes('chip it');
+    (d && d.recent || []).forEach(r => { sigById[r.id] = r; r.best = false; });
+    const top = it ? bestBox(d) : '';
+    const bestIds = new Set(it && d && d.best && !(d.budget && d.budget.stopped) ? d.best : []);
+    const base = (d && d.recent || []).filter(r => Date.parse(r.commence_time) > now - 2 * 3600000 && !bestIds.has(r.id));
+    const list = base.filter(r => sigScope !== 'mine' || !it || r.play || r.played)
+      .filter(r => !sixOnly || !it || r.six).slice(0, 15);
+    // quanti segnali i filtri stanno nascondendo: cosi' non sembra che "manchino"
+    const hidden = it ? Math.min(base.length, 15) - list.length : 0;
+    const note = hidden > 0 ? `<p class="muted hidnote">${hidden} ${hidden === 1 ? 'segnale nascosto' : 'segnali nascosti'} dai filtri (${[sigScope === 'mine' ? 'non giocabili su 888sport o Snai' : '', sixOnly ? 'non 🎯 6 su 10' : ''].filter(Boolean).join(' o ')}). <button class="linkbtn" onclick="sixOnly=false;try{localStorage.setItem('sixOnly','0')}catch(e){};setScope('it')">Mostrali</button></p>` : '';
+    if (!list.length) return top + (note ? head + note : '');
+    return top + head + note + list.map(r => ticket(r, chip)).join('') + tail;
   }
   const PLAY_BOOKS = ['888sport', 'Snai', 'Goldbet', 'Netwin', 'Eurobet', 'Sisal'];
   function openPlay(id) {
@@ -768,7 +806,27 @@
         <div><dt>Valore delle tue quote vs chiusura</dt><dd class="${d.measured ? cls(d.avgClvPct) : ''}">${d.measured ? pct(d.avgClvPct) + `, positive ${num(d.positivePct, 0)}%` : 'da misurare'}</dd></div>
         <div><dt>Guadagno atteso (senza fortuna)</dt><dd class="${d.measured ? cls(d.expectedEur) : ''}">${d.measured ? signedMoney(d.expectedEur) : '—'}</dd></div>
         <div><dt>Quota presa rispetto al segnale</dt><dd>${d.avgSlipPct !== null ? pct(d.avgSlipPct) : '—'}${d.okMinPct !== null ? ` · sopra la minima ${num(d.okMinPct, 0)}%` : ''}</dd></div></dl>
-      <h4>Ultime giocate</h4>` + d.items.slice(0, 20).map(x => `<div class="move"><span>${esc(x.home)} – ${esc(x.away)} · <b>${sel[x.selection] || ''}</b><small>${esc(x.book)} ${num(x.odd, 2)} · ${money(x.stake)}${x.clvPct !== null ? ' · ' + pct(x.clvPct) + ' vs chiusura' : ''}${x.result === 'won' || x.result === 'lost' ? ' · ' + (x.result === 'won' ? 'vinta' : 'persa') : ''}</small></span><span style="display:flex;gap:10px;align-items:center;"><b class="${x.pnlEur !== null ? cls(x.pnlEur) : 'muted'}">${x.pnlEur !== null ? signedMoney(x.pnlEur) : 'in attesa'}</b><button class="linkbtn" aria-label="Cancella" onclick="deletePlay(${x.id})">✕</button></span></div>`).join('');
+      <h4>Ultime giocate</h4>` + d.items.slice(0, 20).map(x => `<div class="move"><span>${esc(x.home)} – ${esc(x.away)} · <b>${sel[x.selection] || ''}</b><small>${esc(x.book)} ${num(x.odd, 2)} · ${money(x.stake)}${x.clvPct !== null ? ' · ' + pct(x.clvPct) + ' vs chiusura' : ''}${x.result === 'won' || x.result === 'lost' ? ' · ' + (x.result === 'won' ? 'vinta ' : 'persa ') + esc(x.score || '') : ''}</small>${Date.parse(x.commence_time) < Date.now() ? resEdit(x.signalId, x.home, x.away, x.result === 'won' || x.result === 'lost') : ''}</span><span style="display:flex;gap:10px;align-items:center;"><b class="${x.pnlEur !== null ? cls(x.pnlEur) : 'muted'}">${x.pnlEur !== null ? signedMoney(x.pnlEur) : 'in attesa'}</b><button class="linkbtn" aria-label="Cancella" onclick="deletePlay(${x.id})">✕</button></span></div>`).join('');
+  }
+  // RISULTATO A MANO per i segnali italiani (le serie minori non le copre nessuna fonte gratuita): gol dei 90 minuti, si puo' correggere
+  const resEdit = (id, home, away, done) => `<button class="linkbtn resbtn" onclick="toggleRes(this)">${done ? '✏️ correggi' : '✏️ scrivi il risultato'}</button><div class="resform" hidden data-sid="${Number(id)}" data-name="${esc((home || '') + ' – ' + (away || ''))}"><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(home || 'casa')}"><span>–</span><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(away || 'trasferta')}"><button onclick="saveItRes(this)">Salva</button></div>`;
+  function toggleRes(btn) { const f = btn.nextElementSibling; if (f) { f.hidden = !f.hidden; if (!f.hidden) f.querySelector('input').focus(); } }
+  async function saveItRes(btn) {
+    const box = btn.closest('.resform'), [a, b] = box.querySelectorAll('input'), name = box.dataset.name, id = Number(box.dataset.sid);
+    const ok = v => /^\d{1,2}$/.test(v.trim());
+    if (!ok(a.value) || !ok(b.value)) { alert('Scrivi i gol di tutte e due le squadre (numeri), per esempio 2 e 1.'); return; }
+    const hg = Number(a.value), ag = Number(b.value);
+    if (!confirm(name + ' ' + hg + '-' + ag + '\nSalvo questo risultato (90 minuti)?')) return;
+    if (!(await ensureKey())) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/tracker/italia/' + id + '/result', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ homeGoals: hg, awayGoals: ag }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova e inseriscila di nuovo.'); btn.disabled = false; return; }
+      if (!r.ok) { alert('Errore: ' + (d.error || r.status)); btn.disabled = false; return; }
+      if (box.closest('#playedBox')) { loadPlayed(); return; }
+      box.hidden = true; box.previousElementSibling.textContent = '✅ salvato ' + hg + '-' + ag + (d.result ? (d.result === 'won' ? ' · vinta' : ' · persa') : '');
+    } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
   }
   // ARCHIVIO: le partite gia' giocate, per giorno. Non si cancella niente: servono a tutte le misure.
   let archNext = null;
@@ -786,7 +844,7 @@
         return `<details class="aday"${reset && i === 0 ? ' open' : ''}><summary><b>${esc(dayName(g.day))}</b><span class="muted">${items.length} ${items.length === 1 ? 'segnale' : 'segnali'}${g.avgClvPct !== null ? ` · <span class="${cls(g.avgClvPct)}">${pct(g.avgClvPct, 1)}</span> vs chiusura` : ''}${res}</span></summary>
           ${items.map(r => `<div class="arow"><span class="t">${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>
             <span class="m"><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a>
-              <small>${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${r.final ? ' · ✅ F' : ''}${r.six ? ' 🎯' : ''}${r.final2 ? ' · ✅ F2' : ''}${r.final3 ? ' · ✅ F3' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small></span>
+              <small>${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${r.final ? ' · ✅ F' : ''}${r.six ? ' 🎯' : ''}${r.final4 ? ' · ⭐ F2+' : ''}${r.final2 ? ' · ✅ F2' : ''}${r.final3 ? ' · ✅ F3' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small>${resEdit(r.id, r.home, r.away, r.result === 'won' || r.result === 'lost')}</span>
             <span class="v"><b class="${r.clv_pct !== null ? cls(r.clv_pct) : 'muted'}">${r.clv_pct !== null ? pct(r.clv_pct, 1) : '—'}</b><small>${r.result === 'won' ? '✅ vinta ' + esc(r.result_score || '') : r.result === 'lost' ? '❌ persa ' + esc(r.result_score || '') : r.result === 'void' ? 'annullata' : 'risultato da leggere'}</small></span></div>`).join('')}</details>`;
       }).join('');
       const intro = reset ? `<p class="muted sub">Tutte le partite già giocate, dalla più recente. Niente viene cancellato: servono alle misure di F, F2, F3 e del modello che impara. Il numero colorato è il valore contro la chiusura.</p>` : '';
@@ -803,7 +861,7 @@
       const [rows, it, bs] = await Promise.all([getJson('/api/tracker/signals?status=pending'), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/italia?s=B').catch(() => null), loadLearnMap()]);
       const aHead = `<h4 class="sechead">Tutti i bookmaker <small class="muted">· strategia A, il test in corso</small></h4>`;
       ['mine', 'it', 'all'].forEach(k => $('scope-' + k).classList.toggle('on', sigScope === k)); $('sixBtn').classList.toggle('on', sixOnly);
-      const itPart = italiaTickets(it, `<h4 class="sechead">🇮🇹 Bookmaker italiani <small class="muted">· strategia I, prova senza soldi</small></h4>`, '<span class="chip it">IT</span>', '');
+      const itPart = italiaTickets(it, `<h4 class="sechead">🇮🇹 Gli altri segnali <small class="muted">· da guardare, si giocano solo le ⭐</small></h4>`, '<span class="chip it">IT</span>', '');
       if (sigScope === 'it' || sigScope === 'mine') {
         el.innerHTML = itPart ? '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + itPart
           : sigScope === 'mine' ? '<div class="empty">Nessun segnale giocabile su 888sport o Snai in questa lista. Gli altri segnali italiani sono in “Tutti italiani”.</div>'

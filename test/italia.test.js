@@ -158,5 +158,34 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   assert.strictEqual(it.phaseOf({ created_at: '2026-10-20T16:00:00Z', commence_time: '2026-10-20T18:00:00Z' }), 'near');
   assert.strictEqual(it.phaseOf({ created_at: '2026-10-20T12:00:00Z', commence_time: '2026-10-20T18:00:00Z' }), 'far');
 }
+// --- selezione F2+: entro 3 ore, vantaggio dal 4% senza tetto, una sola lettura per partita, solo dopo il 24/10 18:00Z
+{
+  const base = { event_id: 'e', selection: 'home', strategy: 'I', book: 'snai', created_at: '2026-10-24T19:00:00Z', commence_time: '2026-10-24T21:00:00Z', edge_pct: 9, odd: 4.5 };
+  const rows = [{ id: 1, ...base }, { id: 2, ...base, event_id: 'f', edge_pct: 3.9 }, { id: 3, ...base, event_id: 'g', commence_time: '2026-10-24T23:00:00Z' },
+    { id: 4, ...base, event_id: 'h', created_at: '2026-10-24T17:00:00Z', commence_time: '2026-10-24T19:00:00Z' },
+    { id: 5, ...base, event_id: 'k', created_at: '2026-10-24T19:30:00Z' }, { id: 6, ...base, event_id: 'k', created_at: '2026-10-24T20:00:00Z' }];
+  const m = it.markFinal4(rows);
+  assert.strictEqual(m.get(1).final, true);                         // vantaggio 9% e quota 4,50: nessun tetto
+  assert.ok(!m.get(2).final && !m.get(3).final);                     // sotto il 4% / oltre 3 ore
+  assert.ok(/prima delle regole/.test(m.get(4).reasons[0]));
+  assert.ok(it.markFinal4(rows, { ignoreSince: true }).get(4).final); // riferimento all'indietro
+  assert.ok(!m.get(5).final && m.get(6).final);                      // una lettura per partita: la piu' vicina al via
+  // le migliori di oggi: solo F2+ giocabili e non ancora iniziate, ordinate per valore, al massimo 5 meno quelle gia' giocate
+  const now = Date.parse('2026-10-24T19:00:00Z'), ko = '2026-10-24T21:00:00Z';
+  const items = [{ id: 1, final4: true, play: { odd: 2.2 }, win_prob: 0.5, commence_time: ko }, { id: 2, final4: true, play: { odd: 2.4 }, win_prob: 0.5, commence_time: ko },
+    { id: 3, final4: true, play: null, win_prob: 0.5, commence_time: ko }, { id: 4, final4: false, play: { odd: 3 }, win_prob: 0.5, commence_time: ko },
+    { id: 5, final4: true, play: { odd: 3 }, win_prob: 0.5, commence_time: '2026-10-24T18:00:00Z' }, { id: 6, final4: true, play: { odd: 3 }, win_prob: 0.5, commence_time: ko, played: { odd: 3 } }];
+  assert.deepStrictEqual(it.pickBest(items, { nowMs: now }), [2, 1]);
+  assert.deepStrictEqual(it.pickBest(items, { nowMs: now, playedToday: 4 }), [2]);
+  assert.deepStrictEqual(it.pickBest(items, { nowMs: now, playedToday: 5 }), []);
+  assert.deepStrictEqual(it.pickBest(items, { nowMs: now, stopped: true }), []);
+  // budget: 100 + saldo delle chiuse, stop a 75, giocate di oggi (ora italiana)
+  const c4 = it.budgetCfg({});
+  assert.deepStrictEqual([c4.start, c4.stop, c4.maxPerDay], [100, 75, 5]);
+  const b = it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 2, pnlEur: 2.4 }, { at: '2026-10-24T09:00:00Z', stake: 2, pnlEur: -2 }, { at: '2026-10-23T09:00:00Z', stake: 2, pnlEur: null }] }, c4, now);
+  assert.ok(Math.abs(b.balance - 100.4) < 1e-9 && b.open === 2 && b.playedToday === 2 && !b.stopped);
+  assert.ok(it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 26, pnlEur: -26 }] }, c4, now).stopped);
+  assert.strictEqual(it.budgetCfg({ BUDGET_START: '200', BUDGET_STOP: '150', BEST_MAX_PER_DAY: '3' }).stop, 150);
+}
 console.log('italia.test.js: tutti i controlli passati');
 })().catch(e => { console.error(e); process.exit(1); });
