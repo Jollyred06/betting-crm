@@ -493,13 +493,55 @@ function markFinal5(rows, { ignoreSince = false } = {}) {
   return out;
 }
 
+// ------------------------------------------------------------------------------------------- selezione F2+ consigliate (soldi veri)
+/**
+ * Condizioni fissate il 25 ottobre 2026 alle 15:30 (ora italiana), dopo i primi 221 risultati veri (scritti a mano).
+ * I risultati hanno mostrato un solo gruppo dove le probabilita' di Pinnacle sbagliano: i FAVORITI (probabilita' dal 50%)
+ * nei MERCATI SOTTILI (margine di Pinnacle dal 6% in su, tipico dei campionati minori): 22 vinte su 30 attese, saldo -22%,
+ * mentre tutto il resto era in linea (61 vinte su 52 attese). Il CLV non lo vede perche' si misura contro lo stesso Pinnacle.
+ * Le 🛡️ sicure cadevano TUTTE in quel gruppo. Quindi: tutte le regole F2+, tranne i favoriti nei mercati sottili.
+ */
+const FINAL6 = { since: '2026-10-25T14:30:00Z', favProb: 0.5, thinMarginPct: 6 };
+const pinMarginPct = r => { const o = [r.pin_h, r.pin_d, r.pin_a].map(Number); return o.every(v => v > 1) ? (o.reduce((a, v) => a + 1 / v, 0) - 1) * 100 : null; };
+const thinFav = r => Number(r.fair_prob) >= FINAL6.favProb && (pinMarginPct(r) ?? 99) >= FINAL6.thinMarginPct;
+
+/**
+ * SOLIDITA' del segnale (25 ottobre 2026, in prova sulla carta): quante di queste tre condizioni rispetta.
+ *  1. letto a meno di 1 ora dal calcio d'inizio   2. mercato liquido (margine Pinnacle sotto il 6%)
+ *  3. almeno 2 book italiani sopra il prezzo giusto (+2%)
+ * Sui 161 segnali I senza favoriti sottili: con 2 condizioni su 3 CLV +5,3% (±1,0), con 0-1 condizioni +1,9%.
+ * Serve alla puntata ADATTIVA del bankroll di allenamento: 3% invece del 2% quando il segnale e' solido.
+ */
+const SEL_IDX = { home: 0, draw: 1, away: 2 };
+function solidity(r) {
+  const leadH = (Date.parse(r.commence_time) - Date.parse(r.created_at)) / 3600000, m = pinMarginPct(r);
+  let q = r.quotes; try { if (typeof q === 'string') q = JSON.parse(q); } catch (e) { q = null; }
+  const fair = Number(r.fair_prob), i = SEL_IDX[r.selection];
+  const books = q && fair > 0 ? Object.values(q).filter(v => Array.isArray(v) && Number(v[i]) * fair - 1 >= 0.02).length : 0;
+  const near = leadH < 1, liquid = m !== null && m < FINAL6.thinMarginPct, agree = books >= 2;
+  return { score: near + liquid + agree, near, liquid, agree, books };
+}
+
+function markFinal6(rows, { ignoreSince = false } = {}) {
+  const f4 = markFinal4(rows, { ignoreSince: true }), since = Date.parse(FINAL6.since), out = new Map();
+  for (const r of rows) {
+    const reasons = [...((f4.get(r.id) || {}).reasons || [])];
+    if (!ignoreSince && Date.parse(r.created_at) < since) reasons.push('prima delle regole');
+    if (thinFav(r)) reasons.push('favorito in un mercato sottile');
+    out.set(r.id, { final: reasons.length === 0, reasons });
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------------------------------- le migliori di oggi e il budget
 /** Config del budget delle giocate vere (si cambia da Render senza toccare il codice). */
 const budgetCfg = (env = process.env) => ({
   start: Number(env.BUDGET_START) > 0 ? Number(env.BUDGET_START) : 100,
   stop: Number(env.BUDGET_STOP) >= 0 && env.BUDGET_STOP !== undefined && env.BUDGET_STOP !== '' ? Number(env.BUDGET_STOP) : 75,
   maxPerDay: Number(env.BEST_MAX_PER_DAY) > 0 ? Number(env.BEST_MAX_PER_DAY) : 5,
-  onlySafe: env.BEST_ONLY_SAFE !== '0'   // dal 24 ottobre sera: nelle migliori di oggi solo le F2+ sicure (BEST_ONLY_SAFE=0 per tornare a tutte le F2+)
+  // quali F2+ mettere nelle migliori di oggi: 'consigliate' (predefinito dal 25 ottobre), 'sicure' o 'tutte'
+  rule: ['consigliate', 'sicure', 'tutte'].includes(env.BEST_RULE) ? env.BEST_RULE : 'consigliate',
+  onlySafe: env.BEST_RULE === 'sicure'
 });
 
 /**
@@ -508,11 +550,12 @@ const budgetCfg = (env = process.env) => ({
  * Solo F2+ non ancora iniziate, giocabili su 888sport o Snai a quota almeno minima, non gia' giocate;
  * ordinate per valore della quota consigliata, al massimo maxPerDay meno quelle gia' giocate oggi. Niente se il budget e' allo stop.
  */
-function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false } = {}) {
+function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null } = {}) {
   if (stopped) return [];
   const room = Math.max(0, maxPerDay - playedToday);
   const value = r => r.play && r.win_prob ? r.play.odd * r.win_prob - 1 : -1;
-  return items.filter(r => r.final4 && (!onlySafe || r.final5) && r.play && !r.played && Date.parse(r.commence_time) > nowMs)
+  const ok = r => rule === 'consigliate' ? r.final6 : (rule === 'sicure' || onlySafe) ? r.final5 : true;
+  return items.filter(r => r.final4 && ok(r) && r.play && !r.played && Date.parse(r.commence_time) > nowMs)
     .sort((a, b) => value(b) - value(a)).slice(0, room).map(r => r.id);
 }
 
@@ -555,7 +598,7 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
   await ensureTables(pool);
   try { await require('./results').ensureResults(pool); } catch (e) { /* risultati facoltativi */ }
   const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY commence_time DESC, id DESC`)).rows;
-  const prim = primaryRows(all), fin = markFinal(prim), fin3 = markFinal3(prim), fin2 = markFinal2(all), fin4 = markFinal4(all), fin5 = markFinal5(all);
+  const prim = primaryRows(all), fin = markFinal(prim), fin3 = markFinal3(prim), fin2 = markFinal2(all), fin4 = markFinal4(all), fin5 = markFinal5(all), fin6 = markFinal6(all);
   const firstOf = new Map(prim.map(r => [sigKey(r), r.id]));
   const played = await require('./played').playedSignalIds(pool);
   const playedByKey = new Map(all.filter(r => played.get(Number(r.id))).map(r => [sigKey(r), played.get(Number(r.id))]));
@@ -568,7 +611,7 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
       const first = firstOf.get(sigKey(r));
       return { id: r.id, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book,
         odd: Number(r.odd), clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null, result: r.result || null, result_score: r.result_score || null,
-        win_prob: r.fair_prob ? Number(r.fair_prob) : null, final: !!(fin.get(first) || {}).final, final2: !!(fin2.get(r.id) || {}).final, final3: !!(fin3.get(first) || {}).final, final4: !!(fin4.get(r.id) || {}).final, final5: !!(fin5.get(r.id) || {}).final,
+        win_prob: r.fair_prob ? Number(r.fair_prob) : null, final: !!(fin.get(first) || {}).final, final2: !!(fin2.get(r.id) || {}).final, final3: !!(fin3.get(first) || {}).final, final4: !!(fin4.get(r.id) || {}).final, final5: !!(fin5.get(r.id) || {}).final, final6: !!(fin6.get(r.id) || {}).final, thin: pinMarginPct(r) !== null && pinMarginPct(r) >= FINAL6.thinMarginPct,
         six: !!(fin.get(first) || {}).final && isSix(r), played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null };
     });
     const cl = items.map(i => i.clv_pct).filter(v => v !== null);
@@ -604,6 +647,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const fin5Rows = all.filter(r => fin5.get(r.id) && fin5.get(r.id).final);
   const retro5 = strategy === 'I' ? markFinal5(all, { ignoreSince: true }) : new Map();
   const retro5Rows = all.filter(r => retro5.get(r.id) && retro5.get(r.id).final);
+  const fin6 = strategy === 'I' ? markFinal6(all) : new Map();
+  const fin6Rows = all.filter(r => fin6.get(r.id) && fin6.get(r.id).final);
+  const retro6 = strategy === 'I' ? markFinal6(all, { ignoreSince: true }) : new Map();
+  const retro6Rows = all.filter(r => retro6.get(r.id) && retro6.get(r.id).final);
   // la rilettura eredita l'etichetta F e F3 della prima uscita (stessa partita, stesso esito)
   const firstOf = new Map(rows.map(r => [sigKey(r), r.id]));
   const fin3 = strategy === 'I' ? markFinal3(rows) : new Map();
@@ -628,6 +675,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       retro: { ...stats(retro4Rows), from: retro4Rows.length ? retro4Rows.reduce((m, r) => (r.created_at < m ? r.created_at : m), retro4Rows[0].created_at) : null } } : null,
     final5: strategy === 'I' ? { ...oddsStats(fin5Rows), rules: FINAL5, stake: STAKE, expectedEur: expectedEur(fin5Rows), results: R.resultStats(fin5Rows),
       retro: { ...oddsStats(retro5Rows), results: R.resultStats(retro5Rows) } } : null,
+    final6: strategy === 'I' ? { ...oddsStats(fin6Rows), rules: FINAL6, stake: STAKE, expectedEur: expectedEur(fin6Rows), results: R.resultStats(fin6Rows),
+      retro: { ...oddsStats(retro6Rows), results: R.resultStats(retro6Rows) } } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
     byOdds: [
       { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
@@ -646,6 +695,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final3: !!(fin3.get(firstOf.get(sigKey(r))) || {}).final,
       final4: !!(fin4.get(r.id) || {}).final,
       final5: !!(fin5.get(r.id) || {}).final,
+      final6: !!(fin6.get(r.id) || {}).final,
+      pin_margin: pinMarginPct(r), thin: pinMarginPct(r) !== null && pinMarginPct(r) >= FINAL6.thinMarginPct, solid: solidity(r),
       six: !!(fin.get(firstOf.get(sigKey(r))) || {}).final && isSix(r),
       alt: strategy === 'I' ? altOdds(r) : null, played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null,
       // dove giocarlo: il bookmaker consigliato (888sport o Snai) con la quota piu' alta, solo se almeno la minima
@@ -660,10 +711,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     const budget = budgetOf(playedSum, budgetCfg(env));
     out.budget = budget;
     const bc = budgetCfg(env);
-    out.bestOnlySafe = bc.onlySafe;
-    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, onlySafe: bc.onlySafe });
+    out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule;
+    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule });
   }
   return out;
 }
 
-module.exports = { getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

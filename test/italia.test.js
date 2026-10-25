@@ -187,6 +187,35 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   assert.ok(it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 26, pnlEur: -26 }] }, c4, now).stopped);
   assert.strictEqual(it.budgetCfg({ BUDGET_START: '200', BUDGET_STOP: '150', BEST_MAX_PER_DAY: '3' }).stop, 150);
 }
+// --- F2+ consigliate: F2+ senza i favoriti nei mercati sottili (margine Pinnacle dal 6%), solo dopo il 25/10 14:30Z
+{
+  const base = { selection: 'home', strategy: 'I', book: 'snai', created_at: '2026-10-25T15:00:00Z', commence_time: '2026-10-25T17:00:00Z', edge_pct: 5, odd: 1.9 };
+  const liquid = { pin_h: 1.80, pin_d: 3.70, pin_a: 4.80 }, thin = { pin_h: 1.70, pin_d: 3.40, pin_a: 4.20 };   // margini circa 3% e 12%
+  const rows = [{ id: 1, ...base, event_id: 'a', fair_prob: 0.55, ...liquid }, { id: 2, ...base, event_id: 'b', fair_prob: 0.55, ...thin },
+    { id: 3, ...base, event_id: 'c', fair_prob: 0.40, ...thin }, { id: 4, ...base, event_id: 'd', fair_prob: 0.40, ...liquid, created_at: '2026-10-25T14:00:00Z', commence_time: '2026-10-25T16:00:00Z' }];
+  assert.ok(it.pinMarginPct(rows[0]) < 6 && it.pinMarginPct(rows[1]) >= 6);
+  const m = it.markFinal6(rows);
+  assert.ok(m.get(1).final && !m.get(2).final && m.get(3).final);                 // favorito liquido si', favorito sottile no, non favorito si'
+  assert.ok(/mercato sottile/.test(m.get(2).reasons.join()));
+  assert.ok(!m.get(4).final && it.markFinal6(rows, { ignoreSince: true }).get(4).final);
+  const ko = '2026-10-26T21:00:00Z', now = Date.parse('2026-10-26T19:00:00Z');
+  const items = [{ id: 1, final4: true, final6: true, play: { odd: 1.9 }, win_prob: 0.55, commence_time: ko }, { id: 2, final4: true, final6: false, final5: true, play: { odd: 2.0 }, win_prob: 0.55, commence_time: ko }];
+  assert.deepStrictEqual(it.pickBest(items, { nowMs: now, rule: 'consigliate' }), [1]);
+  assert.deepStrictEqual(it.pickBest(items, { nowMs: now, rule: 'sicure' }), [2]);
+  assert.strictEqual(it.budgetCfg({}).rule, 'consigliate');
+  assert.strictEqual(it.budgetCfg({ BEST_RULE: 'tutte' }).rule, 'tutte');
+}
+// --- solidita': meno di 1 ora, mercato liquido, 2+ book italiani sopra il prezzo giusto
+{
+  const r = { selection: 'home', created_at: '2026-10-25T15:20:00Z', commence_time: '2026-10-25T16:00:00Z', fair_prob: 0.4, pin_h: 2.4, pin_d: 3.4, pin_a: 3.1,
+    quotes: { snai: [2.6, 3.3, 3.0], '888sport_it': [2.55, 3.3, 3.0], eurobet: [2.3, 3.2, 3.1] } };
+  const s = it.solidity(r);
+  assert.ok(s.near && s.liquid && s.agree && s.books === 2 && s.score === 3);
+  assert.strictEqual(it.solidity({ ...r, created_at: '2026-10-25T13:00:00Z', quotes: { snai: [2.6, 3.3, 3.0] } }).score, 1);
+  const T = require('../services/training');
+  assert.strictEqual(T.stakeFor('adapt', 500, r), 15);
+  assert.strictEqual(T.stakeFor('adapt', 500, { ...r, created_at: '2026-10-25T13:00:00Z', quotes: {} }), 10);
+}
 // --- nomi senza parole in comune tra le fonti
 assert.ok(it.sameTeam('Athletic Bilbao', 'Athletic Club') && it.sameTeam('Athletic Bilbao', 'Athletic') && !it.sameTeam('Athletic Bilbao', 'Atletico Madrid'));
 // --- F2+ sicure: regole F2+ piu' probabilita' Pinnacle almeno 50%, solo dopo il 24/10 20:45Z
@@ -201,8 +230,8 @@ assert.ok(it.sameTeam('Athletic Bilbao', 'Athletic Club') && it.sameTeam('Athlet
   const items = [{ id: 1, final4: true, final5: true, play: { odd: 1.9 }, win_prob: 0.55, commence_time: ko }, { id: 2, final4: true, final5: false, play: { odd: 3.4 }, win_prob: 0.32, commence_time: ko }];
   assert.deepStrictEqual(it.pickBest(items, { nowMs: now }), [2, 1]);
   assert.deepStrictEqual(it.pickBest(items, { nowMs: now, onlySafe: true }), [1]);
-  assert.strictEqual(it.budgetCfg({}).onlySafe, true);
-  assert.strictEqual(it.budgetCfg({ BEST_ONLY_SAFE: '0' }).onlySafe, false);
+  assert.strictEqual(it.budgetCfg({}).onlySafe, false);
+  assert.strictEqual(it.budgetCfg({ BEST_RULE: 'sicure' }).onlySafe, true);
 }
 console.log('italia.test.js: tutti i controlli passati');
 })().catch(e => { console.error(e); process.exit(1); });

@@ -15,7 +15,8 @@ const STOP_AT = 0.75;
 const METHODS = [
   { key: 'fixed', label: 'Fisso', desc: '2% della cassa di partenza, sempre uguale' },
   { key: 'prop', label: 'Proporzionale', desc: '2% della cassa del momento' },
-  { key: 'kelly', label: 'Kelly prudente', desc: 'Più puntata quando il vantaggio è alto, massimo 3%' }
+  { key: 'kelly', label: 'Kelly prudente', desc: 'Più puntata quando il vantaggio è alto, massimo 3%' },
+  { key: 'adapt', label: 'Adattivo', desc: '2% della partenza, 3% sui segnali 🟢 solidi (2 condizioni su 3). In prova dal 25 ottobre' }
 ];
 
 const num = v => (v === null || v === undefined || v === '' ? null : Number(v));
@@ -24,6 +25,7 @@ const num = v => (v === null || v === undefined || v === '' ? null : Number(v));
 function stakeFor(method, balance, signal, start = START) {
   if (method === 'fixed') return 0.02 * start;
   if (method === 'prop') return 0.02 * balance;
+  if (method === 'adapt') return (require('./italia').solidity(signal).score >= 2 ? 0.03 : 0.02) * start;
   // mezzo Kelly: f = p - (1 - p) / (q - 1) con p dal prezzo giusto di Pinnacle, poi / 2, tra 0,5% e 3%
   const q = num(signal.odd), p = num(signal.fair_prob);
   if (!(q > 1) || !(p > 0)) return 0.01 * balance;
@@ -78,6 +80,7 @@ async function getTraining(pool) {
     { key: 'F2', title: 'Selezione F2', rows: pick(I.markFinal2, rows) },
     { key: 'F3', title: 'Selezione F3 (favoriti)', rows: pick(I.markFinal3) },
     { key: 'F2+', title: 'Selezione ⭐ F2+', rows: pick(I.markFinal4, rows) },
+    { key: 'F2+C', title: 'Selezione ✅ F2+ consigliate', rows: pick(I.markFinal6, rows) },
     { key: 'F2+S', title: 'Selezione 🛡️ F2+ sicure', rows: pick(I.markFinal5, rows) }
   ];
   return { start: START, stopAtPct: STOP_AT * 100, selections: sel.map(s => ({ key: s.key, title: s.title, ...trainSelection(s.rows) })) };
