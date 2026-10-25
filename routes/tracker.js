@@ -94,7 +94,7 @@ router.post('/signals/:id/result', async (req, res) => {
 // Risultato a mano di un segnale italiano (strategia I o B), protetto dalla chiave: gol dei 90 minuti, si puo' correggere.
 router.post('/italia/:id/result', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
-  try { res.json({ success: true, ...(await require('../services/results').settleItaliaManual(pool, Number(req.params.id), req.body && req.body.homeGoals, req.body && req.body.awayGoals)) }); }
+  try { res.json({ success: true, ...(await require('../services/results').settleItaliaManual(pool, Number(req.params.id), req.body && req.body.homeGoals, req.body && req.body.awayGoals, { voided: !!(req.body && req.body.void) })) }); }
   catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
 

@@ -204,15 +204,20 @@ async function settleSignals(pool, { env = process.env, nowMs = Date.now(), http
  * Risultato scritto a mano (serie minori che nessuna fonte gratuita copre): gol dei 90 minuti di casa e trasferta.
  * Vale per tutte le righe della stessa partita (prima uscita e rilettura, ogni esito), e si puo' correggere riscrivendolo.
  */
-async function settleItaliaManual(pool, id, homeGoals, awayGoals) {
+async function settleItaliaManual(pool, id, homeGoals, awayGoals, { voided = false } = {}) {
   const ok = v => Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 30 && String(v).trim() !== '';
-  if (!ok(homeGoals) || !ok(awayGoals)) { const e = new Error('Scrivi i gol di tutte e due le squadre (numeri da 0 a 30).'); e.status = 400; throw e; }
+  if (!voided && (!ok(homeGoals) || !ok(awayGoals))) { const e = new Error('Scrivi i gol di tutte e due le squadre (numeri da 0 a 30).'); e.status = 400; throw e; }
   await ensureResults(pool);
   const s = (await pool.query(`SELECT id, event_id, commence_time FROM italia_signals WHERE id = $1`, [id])).rows[0];
   if (!s) { const e = new Error('Segnale non trovato.'); e.status = 404; throw e; }
   if (Date.parse(s.commence_time) > Date.now()) { const e = new Error('La partita non è ancora iniziata.'); e.status = 400; throw e; }
-  const h = Number(homeGoals), a = Number(awayGoals);
   const rows = (await pool.query(`SELECT id, selection FROM italia_signals WHERE event_id = $1`, [s.event_id])).rows;
+  // partita rinviata o annullata: la giocata viene rimborsata dal bookmaker, quindi non conta (ne' vinta ne' persa)
+  if (voided) {
+    for (const r of rows) await pool.query(`UPDATE italia_signals SET result = 'void', result_score = 'rinviata', settled_at = NOW() WHERE id = $1`, [r.id]);
+    return { updated: rows.length, result: 'void', score: 'rinviata' };
+  }
+  const h = Number(homeGoals), a = Number(awayGoals);
   for (const r of rows) {
     await pool.query(`UPDATE italia_signals SET result = $2, result_score = $3, settled_at = NOW() WHERE id = $1`, [r.id, outcome(r.selection, h, a), `${h}-${a}`]);
   }

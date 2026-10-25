@@ -830,23 +830,23 @@
   }
   // RISULTATO A MANO per i segnali italiani (le serie minori non le copre nessuna fonte gratuita): gol dei 90 minuti, si puo' correggere
   const resUrl = (h, a, t) => 'https://www.google.com/search?q=' + encodeURIComponent(`${h} ${a} risultato ${t ? new Date(t).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}`.trim());
-  const resEdit = (id, home, away, done, t) => `${done ? '' : `<a class="linkbtn resbtn" href="${resUrl(home, away, t)}" target="_blank" rel="noopener" onclick="rememberSpot()">🔎 vedi il risultato</a>`}<button class="linkbtn resbtn" onclick="toggleRes(this)">${done ? '✏️ correggi' : '✏️ scrivi il risultato'}</button><div class="resform" hidden data-sid="${Number(id)}" data-name="${esc((home || '') + ' – ' + (away || ''))}"><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(home || 'casa')}"><span>–</span><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(away || 'trasferta')}"><button onclick="saveItRes(this)">Salva</button></div>`;
+  const resEdit = (id, home, away, done, t) => `${done ? '' : `<a class="linkbtn resbtn" href="${resUrl(home, away, t)}" target="_blank" rel="noopener" onclick="rememberSpot()">🔎 vedi il risultato</a>`}<button class="linkbtn resbtn" onclick="toggleRes(this)">${done ? '✏️ correggi' : '✏️ scrivi il risultato'}</button><div class="resform" hidden data-sid="${Number(id)}" data-name="${esc((home || '') + ' – ' + (away || ''))}"><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(home || 'casa')}"><span>–</span><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(away || 'trasferta')}"><button onclick="saveItRes(this)">Salva</button><button class="linkbtn" onclick="saveItRes(this, true)">rinviata o annullata</button></div>`;
   function toggleRes(btn) { const f = btn.nextElementSibling; if (f) { f.hidden = !f.hidden; if (!f.hidden) f.querySelector('input').focus(); } }
-  async function saveItRes(btn) {
+  async function saveItRes(btn, voided) {
     const box = btn.closest('.resform'), [a, b] = box.querySelectorAll('input'), name = box.dataset.name, id = Number(box.dataset.sid);
     const ok = v => /^\d{1,2}$/.test(v.trim());
-    if (!ok(a.value) || !ok(b.value)) { alert('Scrivi i gol di tutte e due le squadre (numeri), per esempio 2 e 1.'); return; }
+    if (!voided && (!ok(a.value) || !ok(b.value))) { alert('Scrivi i gol di tutte e due le squadre (numeri), per esempio 2 e 1. Se la partita non si è giocata, tocca "rinviata o annullata".'); return; }
     const hg = Number(a.value), ag = Number(b.value);
-    if (!confirm(name + ' ' + hg + '-' + ag + '\nSalvo questo risultato (90 minuti)?')) return;
+    if (!confirm(voided ? name + '\nSegno la partita come rinviata o annullata? Non conterà né come vinta né come persa (la giocata viene rimborsata).' : name + ' ' + hg + '-' + ag + '\nSalvo questo risultato (90 minuti)?')) return;
     if (!(await ensureKey())) return;
     btn.disabled = true;
     try {
-      const r = await fetch('/api/tracker/italia/' + id + '/result', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ homeGoals: hg, awayGoals: ag }) });
+      const r = await fetch('/api/tracker/italia/' + id + '/result', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify(voided ? { void: true } : { homeGoals: hg, awayGoals: ag }) });
       const d = await r.json().catch(() => ({}));
       if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova e inseriscila di nuovo.'); btn.disabled = false; return; }
       if (!r.ok) { alert('Errore: ' + (d.error || r.status)); btn.disabled = false; return; }
       if (box.closest('#playedBox')) { loadPlayed(); return; }
-      box.hidden = true; box.previousElementSibling.textContent = '✅ salvato ' + hg + '-' + ag + (d.result ? (d.result === 'won' ? ' · vinta' : ' · persa') : '');
+      box.hidden = true; box.previousElementSibling.textContent = voided ? '✅ salvata come rinviata' : '✅ salvato ' + hg + '-' + ag + (d.result ? (d.result === 'won' ? ' · vinta' : ' · persa') : '');
     } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
   }
   // ARCHIVIO: le partite gia' giocate, per giorno. Non si cancella niente: servono a tutte le misure.
