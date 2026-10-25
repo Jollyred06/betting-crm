@@ -87,8 +87,11 @@ const FRIENDLY = /friendl|amichev|club friendly|test match/i;
 const BAND = { min: 1.6, max: 2.6 };
 const inBand = odd => Number(odd) >= BAND.min && Number(odd) <= BAND.max;
 const words = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+// Nomi che non hanno parole in comune tra le fonti (football-data.org scrive "Athletic Club" o "Athletic", il feed "Athletic Bilbao")
+const ALIAS = { 'athletic club': 'athletic bilbao', 'athletic': 'athletic bilbao', 'athletic club bilbao': 'athletic bilbao' };
+const canonWords = s => { const w = words(s), k = w.join(' '); return ALIAS[k] ? ALIAS[k].split(' ') : w; };
 function sameTeam(a, b) {
-  const wa = words(a), wb = words(b);
+  const wa = canonWords(a), wb = canonWords(b);
   if (FLAGS.filter(f => wa.includes(f)).join() !== FLAGS.filter(f => wb.includes(f)).join()) return false;   // giovanili, donne, riserve: mai con la prima squadra
   const A = wa.filter(w => !GENERIC.has(w) && w.length > 1), B = wb.filter(w => !GENERIC.has(w) && w.length > 1);
   if (!A.length || !B.length) return wa.join(' ') === wb.join(' ');
@@ -461,12 +464,34 @@ function markFinal4(rows, { ignoreSince = false } = {}) {
   return out;
 }
 
+// ------------------------------------------------------------------------------------------- selezione F2+ sicure (soldi veri)
+/**
+ * Condizioni fissate il 24 ottobre 2026 alle 22:45 (ora italiana), PRIMA di vedere i segnali successivi.
+ * Sono le F2+ con probabilita' Pinnacle di vincita almeno al 50% (in pratica quota fino a circa 2): sui 182 segnali I
+ * il valore contro la chiusura era uguale in tutte le fasce di probabilita' (circa +2,7%), quindi scegliere le piu' probabili
+ * non toglie valore ma riduce le oscillazioni (serie di sconfitte piu' corte, stop dei 75 euro meno raggiungibile per sfortuna).
+ *  1. tutte le regole F2+      2. probabilita' Pinnacle di vincita almeno 50%
+ */
+const FINAL5 = { since: '2026-10-24T20:45:00Z', minProb: 0.5 };
+
+function markFinal5(rows, { ignoreSince = false } = {}) {
+  const f4 = markFinal4(rows, { ignoreSince: true }), since = Date.parse(FINAL5.since), out = new Map();
+  for (const r of rows) {
+    const reasons = [...((f4.get(r.id) || {}).reasons || [])];
+    if (!ignoreSince && Date.parse(r.created_at) < since) reasons.push('prima delle regole');
+    if (!(Number(r.fair_prob) >= FINAL5.minProb)) reasons.push('probabilita\' di vincita sotto il 50%');
+    out.set(r.id, { final: reasons.length === 0, reasons });
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------------------------------- le migliori di oggi e il budget
 /** Config del budget delle giocate vere (si cambia da Render senza toccare il codice). */
 const budgetCfg = (env = process.env) => ({
   start: Number(env.BUDGET_START) > 0 ? Number(env.BUDGET_START) : 100,
   stop: Number(env.BUDGET_STOP) >= 0 && env.BUDGET_STOP !== undefined && env.BUDGET_STOP !== '' ? Number(env.BUDGET_STOP) : 75,
-  maxPerDay: Number(env.BEST_MAX_PER_DAY) > 0 ? Number(env.BEST_MAX_PER_DAY) : 5
+  maxPerDay: Number(env.BEST_MAX_PER_DAY) > 0 ? Number(env.BEST_MAX_PER_DAY) : 5,
+  onlySafe: env.BEST_ONLY_SAFE !== '0'   // dal 24 ottobre sera: nelle migliori di oggi solo le F2+ sicure (BEST_ONLY_SAFE=0 per tornare a tutte le F2+)
 });
 
 /**
@@ -475,11 +500,11 @@ const budgetCfg = (env = process.env) => ({
  * Solo F2+ non ancora iniziate, giocabili su 888sport o Snai a quota almeno minima, non gia' giocate;
  * ordinate per valore della quota consigliata, al massimo maxPerDay meno quelle gia' giocate oggi. Niente se il budget e' allo stop.
  */
-function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false } = {}) {
+function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false } = {}) {
   if (stopped) return [];
   const room = Math.max(0, maxPerDay - playedToday);
   const value = r => r.play && r.win_prob ? r.play.odd * r.win_prob - 1 : -1;
-  return items.filter(r => r.final4 && r.play && !r.played && Date.parse(r.commence_time) > nowMs)
+  return items.filter(r => r.final4 && (!onlySafe || r.final5) && r.play && !r.played && Date.parse(r.commence_time) > nowMs)
     .sort((a, b) => value(b) - value(a)).slice(0, room).map(r => r.id);
 }
 
@@ -522,7 +547,7 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
   await ensureTables(pool);
   try { await require('./results').ensureResults(pool); } catch (e) { /* risultati facoltativi */ }
   const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY commence_time DESC, id DESC`)).rows;
-  const prim = primaryRows(all), fin = markFinal(prim), fin3 = markFinal3(prim), fin2 = markFinal2(all), fin4 = markFinal4(all);
+  const prim = primaryRows(all), fin = markFinal(prim), fin3 = markFinal3(prim), fin2 = markFinal2(all), fin4 = markFinal4(all), fin5 = markFinal5(all);
   const firstOf = new Map(prim.map(r => [sigKey(r), r.id]));
   const played = await require('./played').playedSignalIds(pool);
   const playedByKey = new Map(all.filter(r => played.get(Number(r.id))).map(r => [sigKey(r), played.get(Number(r.id))]));
@@ -535,7 +560,7 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
       const first = firstOf.get(sigKey(r));
       return { id: r.id, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book,
         odd: Number(r.odd), clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null, result: r.result || null, result_score: r.result_score || null,
-        win_prob: r.fair_prob ? Number(r.fair_prob) : null, final: !!(fin.get(first) || {}).final, final2: !!(fin2.get(r.id) || {}).final, final3: !!(fin3.get(first) || {}).final, final4: !!(fin4.get(r.id) || {}).final,
+        win_prob: r.fair_prob ? Number(r.fair_prob) : null, final: !!(fin.get(first) || {}).final, final2: !!(fin2.get(r.id) || {}).final, final3: !!(fin3.get(first) || {}).final, final4: !!(fin4.get(r.id) || {}).final, final5: !!(fin5.get(r.id) || {}).final,
         six: !!(fin.get(first) || {}).final && isSix(r), played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null };
     });
     const cl = items.map(i => i.clv_pct).filter(v => v !== null);
@@ -567,6 +592,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const fin4Rows = all.filter(r => fin4.get(r.id) && fin4.get(r.id).final);
   const retro4 = strategy === 'I' ? markFinal4(all, { ignoreSince: true }) : new Map();
   const retro4Rows = all.filter(r => retro4.get(r.id) && retro4.get(r.id).final);
+  const fin5 = strategy === 'I' ? markFinal5(all) : new Map();
+  const fin5Rows = all.filter(r => fin5.get(r.id) && fin5.get(r.id).final);
+  const retro5 = strategy === 'I' ? markFinal5(all, { ignoreSince: true }) : new Map();
+  const retro5Rows = all.filter(r => retro5.get(r.id) && retro5.get(r.id).final);
   // la rilettura eredita l'etichetta F e F3 della prima uscita (stessa partita, stesso esito)
   const firstOf = new Map(rows.map(r => [sigKey(r), r.id]));
   const fin3 = strategy === 'I' ? markFinal3(rows) : new Map();
@@ -589,6 +618,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     final3: strategy === 'I' ? { ...oddsStats(fin3Rows), rules: FINAL3, stake: STAKE, expectedEur: expectedEur(fin3Rows), results: R.resultStats(fin3Rows) } : null,
     final4: strategy === 'I' ? { ...oddsStats(fin4Rows), rules: FINAL4, stake: STAKE, expectedEur: expectedEur(fin4Rows), results: R.resultStats(fin4Rows),
       retro: { ...stats(retro4Rows), from: retro4Rows.length ? retro4Rows.reduce((m, r) => (r.created_at < m ? r.created_at : m), retro4Rows[0].created_at) : null } } : null,
+    final5: strategy === 'I' ? { ...oddsStats(fin5Rows), rules: FINAL5, stake: STAKE, expectedEur: expectedEur(fin5Rows), results: R.resultStats(fin5Rows),
+      retro: { ...oddsStats(retro5Rows), results: R.resultStats(retro5Rows) } } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
     byOdds: [
       { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
@@ -606,6 +637,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final2: fin2.get(r.id) ? fin2.get(r.id).final : false,
       final3: !!(fin3.get(firstOf.get(sigKey(r))) || {}).final,
       final4: !!(fin4.get(r.id) || {}).final,
+      final5: !!(fin5.get(r.id) || {}).final,
       six: !!(fin.get(firstOf.get(sigKey(r))) || {}).final && isSix(r),
       alt: strategy === 'I' ? altOdds(r) : null, played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null,
       // dove giocarlo: il bookmaker consigliato (888sport o Snai) con la quota piu' alta, solo se almeno la minima
@@ -619,9 +651,11 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     let playedSum = null; try { playedSum = await require('./played').getPlayed(pool); } catch (e) { /* tabella non ancora creata */ }
     const budget = budgetOf(playedSum, budgetCfg(env));
     out.budget = budget;
-    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped });
+    const bc = budgetCfg(env);
+    out.bestOnlySafe = bc.onlySafe;
+    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, onlySafe: bc.onlySafe });
   }
   return out;
 }
 
-module.exports = { getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

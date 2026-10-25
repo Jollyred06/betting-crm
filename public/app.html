@@ -238,6 +238,7 @@
         <button id="scope-all" onclick="setScope('all')">Tutte</button>
       </div>
       <button id="sixBtn" class="sixbtn" onclick="toggleSix()">🎯 Solo i più probabili · 6 su 10</button>
+      <button id="todoBtn" class="sixbtn" onclick="toggleTodo()" style="display:none">✏️ Solo risultati da scrivere</button>
       <div class="seg" role="tablist">
         <button class="tab on" data-s="next" onclick="setTab(this)">⚽ Da giocare</button>
         <button class="tab" data-s="archive" onclick="setTab(this)">🗂️ Archivio</button>
@@ -267,7 +268,7 @@
     <section class="block train">
       <h3>🏋️ Bankroll di allenamento</h3>
       <p class="muted sub">Sulla carta, nessun soldo vero. Tre casse da 500 € per ogni selezione, con tre modi di puntare sugli stessi segnali. Si ferma da sola se perde il 25%.</p>
-      <div class="seg" id="trainTabs"><button class="on" data-k="F2+" onclick="setTrain(this)">⭐ F2+</button><button data-k="F" onclick="setTrain(this)">✅ F</button><button data-k="F2" onclick="setTrain(this)">✅ F2</button><button data-k="F3" onclick="setTrain(this)">✅ F3</button></div>
+      <div class="seg" id="trainTabs"><button class="on" data-k="F2+S" onclick="setTrain(this)">🛡️ Sicure</button><button data-k="F2+" onclick="setTrain(this)">⭐ F2+</button><button data-k="F" onclick="setTrain(this)">✅ F</button><button data-k="F2" onclick="setTrain(this)">✅ F2</button><button data-k="F3" onclick="setTrain(this)">✅ F3</button></div>
       <div id="trainBox"><div class="sk box"></div></div>
     </section>
     <section class="block">
@@ -486,7 +487,7 @@
       </dl>
       <h4>Ultimi movimenti</h4>` + (b.movements.length ? b.movements.map(m => `<div class="move"><span>${esc((m.note || (m.manual ? 'Movimento manuale' : 'Segnale chiuso')).replace(/: won\b/, ': vinta').replace(/: lost\b/, ': persa').replace(/: void\b/, ': annullata'))}<small>${fmtDate(m.at)}</small></span><b class="${cls(m.amount)}">${signedMoney(m.amount)}</b></div>`).join('') : '<div class="empty">Nessun movimento.</div>');
   }
-  let trainData = null, trainKey = 'F2+';
+  let trainData = null, trainKey = 'F2+S';
   function setTrain(el) { document.querySelectorAll('#trainTabs button').forEach(b => b.classList.remove('on')); el.classList.add('on'); trainKey = el.dataset.k; renderTrain(); }
   function renderTrain() {
     const d = trainData; if (!d) return;
@@ -564,6 +565,18 @@
         ${f.six ? `<div><dt>Di cui 🎯 6 su 10 (vince ${num(f.six.minProb * 10, 1)}+ volte)</dt><dd class="${f.six.measured >= 5 ? cls(f.six.avgClvPct) : ''}">${f.six.signals} segnali · ${itStat(f.six)}${f.six.expectedWinsOf10 !== null ? ` · vince ${num(f.six.expectedWinsOf10, 1)} su 10` : ''}</dd></div>` : ''}
         <div><dt>Obiettivo</dt><dd>9 segnali su 10 sopra la chiusura, su almeno 20</dd></div></dl></div>`;
   }
+  function final5Card(i) {
+    const f = i && i.final5; if (!f) return '';
+    const rt = f.retro;
+    return `<div class="strat final"><div class="sh"><div class="letter" style="font-size:26px">🛡️</div><div><b>F2+ sicure · quelle da giocare</b><span>Regole fissate il 24 ottobre alle 22:45, misurate solo da quel momento</span></div></div>
+      <p class="muted" style="margin:0 0 4px;font-size:14px;">Le ⭐ F2+ che secondo Pinnacle vincono almeno 5 volte su 10 (quota fino a circa 2). Il valore contro la chiusura era lo stesso a tutte le quote: scegliendo le più probabili si vince più spesso e lo stop dei ${money(75)} si tocca meno per sfortuna.</p><ul class="rules"><li>Tutte le regole ⭐ F2+</li><li>Probabilità di vincita Pinnacle dal ${num(f.rules.minProb * 100, 0)}% in su</li><li>Si gioca su 888sport o Snai, a quota almeno minima</li></ul>
+      <dl class="facts"><div><dt>Segnali 🛡️</dt><dd>${f.signals} (${f.measured} con chiusura)</dd></div>
+        <div><dt>Valore vs chiusura</dt><dd class="${f.measured >= 5 ? cls(f.avgClvPct) : ''}">${itStat(f)}</dd></div>
+        <div><dt>Guadagno atteso (${num(f.stake || 2, 0)} € a segnale)</dt><dd class="${f.measured ? cls(f.expectedEur) : ''}">${f.measured ? signedMoney(f.expectedEur) : '—'}</dd></div>
+        <div><dt>Vinte attese su 10</dt><dd>${f.expectedWinsOf10 !== null ? num(f.expectedWinsOf10, 1) : '—'}</dd></div>
+        <div><dt>Risultati veri</dt><dd>${resLine(f.results)}</dd></div>
+        ${rt && rt.measured ? `<div><dt>Riferimento: le stesse regole all'indietro</dt><dd class="muted">${rt.signals} segnali · ${itStat(rt)}${rt.expectedWinsOf10 !== null ? ' · vince ' + num(rt.expectedWinsOf10, 1) + ' su 10' : ''}</dd></div>` : ''}</dl></div>`;
+  }
   function final4Card(i) {
     const f = i && i.final4; if (!f) return '';
     const r = f.rules, rt = f.retro;
@@ -624,7 +637,7 @@
   async function loadItalia() {
     try {
       const [i, b, L] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null)]);
-      $('italia').innerHTML = final4Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
+      $('italia').innerHTML = final5Card(i) + final4Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
   async function loadStrategies() {
@@ -706,6 +719,10 @@
   // ------------------------------------------------------------------ SEGNALI
   let sixOnly = false;
   try { sixOnly = localStorage.getItem('sixOnly') === '1'; } catch (e) { /* facoltativo */ }
+  let todoOnly = false;
+  function toggleTodo() { todoOnly = !todoOnly; loadArchive(true); }
+  // da scrivere: finita da almeno 2 ore e mezza e senza vinta/persa/annullata (prima le ⭐ F2+ e le giocate)
+  const needsResult = r => !['won', 'lost', 'void'].includes(r.result) && Date.parse(r.commence_time) < Date.now() - 150 * 60000;
   function toggleSix() { sixOnly = !sixOnly; try { localStorage.setItem('sixOnly', sixOnly ? '1' : '0'); } catch (e) { /* facoltativo */ } loadSignals(); }
   let sigScope = 'mine';
   try { sigScope = localStorage.getItem('sigScope2') || 'mine'; } catch (e) { /* senza memoria del browser: giocabili */ }
@@ -734,7 +751,7 @@
             ${it ? (r.play ? `<div class="todo-line">👉 Gioca su <b>${esc(r.play.book)}</b> a <b>${num(r.play.odd, 2)}</b>${isNow(r) ? ' <span class="chip now">⏱️ Ora è il momento</span>' : ''}</div>` : `<div class="todo-line no">⛔ Non giocabile su 888sport e Snai</div>`) : ''}
             ${it && r.min_odd ? `<div class="avail">Prima di giocare controlla sul sito: quota almeno <b>${num(r.min_odd, 2)}</b>${r.alt && Object.keys(r.alt).length > 1 ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''}</div>` : ''}
             ${it ? (r.played ? `<div class="played">✅ Giocata: <b>${num(r.played.odd, 2)}</b> su ${esc(r.played.book)}</div>` : `<button class="playbtn" onclick="openPlay(${Number(r.id)})">✍️ Ho giocato</button><div class="playform" id="pf-${Number(r.id)}"></div>`) : ''}
-            <div class="foot">${chip}${r.final4 ? '<span class="chip fin">⭐ F2+</span>' : ''}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.six ? '<span class="chip fin">🎯 6 su 10</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.final3 ? '<span class="chip fin">✅ F3</span>' : ''}${r.again ? '<span class="chip">🔄 quota riletta vicino alla partita</span>' : ''}${learnMap[r.id] ? `<span class="chip${learnMap[r.id].pick ? ' fin' : ''}">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
+            <div class="foot">${chip}${r.final5 ? '<span class="chip fin">🛡️ sicura</span>' : ''}${r.final4 ? '<span class="chip fin">⭐ F2+</span>' : ''}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.six ? '<span class="chip fin">🎯 6 su 10</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.final3 ? '<span class="chip fin">✅ F3</span>' : ''}${r.again ? '<span class="chip">🔄 quota riletta vicino alla partita</span>' : ''}${learnMap[r.id] ? `<span class="chip${learnMap[r.id].pick ? ' fin' : ''}">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
         </article>`;
   }
@@ -747,9 +764,9 @@
     let body;
     if (b.stopped) body = `<div class="callout warn"><b>Fermati: il budget è sceso a ${money(b.balance)}, sotto lo stop di ${money(b.stop)}.</b> Niente giocate finché non controlliamo insieme i numeri (mandami il backup).</div>`;
     else if (b.playedToday >= b.maxPerDay) body = `<p class="muted hidnote">Hai già fatto ${b.playedToday} giocate oggi: per oggi basta così. Meno giocate scelte bene, meno errori.</p>`;
-    else if (!items.length) body = `<p class="muted hidnote">Nessuna partita ⭐ adesso. Compaiono quando mancano meno di 3 ore alla partita, c'è un vantaggio dal 4% in su e la quota su 888sport o Snai è almeno la minima. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</p>`;
+    else if (!items.length) body = `<p class="muted hidnote">Nessuna partita ${d.bestOnlySafe ? '🛡️' : '⭐'} adesso. Compaiono quando mancano meno di 3 ore alla partita, c'è un vantaggio dal 4% in su${d.bestOnlySafe ? ', vince almeno 5 volte su 10' : ''} e la quota su 888sport o Snai è almeno la minima. Il CRM controlla ogni 3 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata: va bene così.</p>`;
     else body = items.map(r => ticket(r, '<span class="chip it">IT</span>')).join('');
-    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una</small></h4>${line}${body}</section>`;
+    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una${d.bestOnlySafe ? ' · solo 🛡️ sicure' : ''}</small></h4>${line}${body}</section>`;
   }
   function italiaTickets(d, head, chip, tail) {
     const now = Date.now(), it = chip.includes('chip it');
@@ -833,21 +850,24 @@
   async function loadArchive(reset) {
     const el = $('signals');
     ['mine', 'it', 'all'].forEach(k => $('scope-' + k).classList.toggle('on', sigScope === k)); $('sixBtn').classList.toggle('on', sixOnly);
+    const tb = $('todoBtn'); if (tb) { tb.style.display = ''; tb.classList.toggle('on', todoOnly); }
     if (reset) { archNext = null; el.innerHTML = '<div class="sk box"></div>'; }
     try {
       const d = await getJson('/api/tracker/archive?days=7' + (archNext ? '&before=' + archNext : ''));
-      const sel = r => !sixOnly || r.six;
+      const sel = r => (!sixOnly || r.six) && (!todoOnly || needsResult(r));
       const dayName = s => { const t = new Date(s + 'T12:00:00Z').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }); return t.charAt(0).toUpperCase() + t.slice(1); };
       const html = d.days.map((g, i) => {
-        const items = g.items.filter(sel); if (!items.length) return '';
+        const items = g.items.filter(sel).sort((x, y) => todoOnly ? ((!!y.played - !!x.played) || (y.final4 - x.final4)) : 0); if (!items.length) return '';
         const res = g.results && g.results.settled ? ` · ${g.results.won} vinte su ${g.results.settled}` : '';
         return `<details class="aday"${reset && i === 0 ? ' open' : ''}><summary><b>${esc(dayName(g.day))}</b><span class="muted">${items.length} ${items.length === 1 ? 'segnale' : 'segnali'}${g.avgClvPct !== null ? ` · <span class="${cls(g.avgClvPct)}">${pct(g.avgClvPct, 1)}</span> vs chiusura` : ''}${res}</span></summary>
           ${items.map(r => `<div class="arow"><span class="t">${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>
             <span class="m"><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a>
-              <small>${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${r.final ? ' · ✅ F' : ''}${r.six ? ' 🎯' : ''}${r.final4 ? ' · ⭐ F2+' : ''}${r.final2 ? ' · ✅ F2' : ''}${r.final3 ? ' · ✅ F3' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small>${resEdit(r.id, r.home, r.away, r.result === 'won' || r.result === 'lost')}</span>
+              <small>${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${r.final ? ' · ✅ F' : ''}${r.six ? ' 🎯' : ''}${r.final5 ? ' · 🛡️' : ''}${r.final4 ? ' · ⭐ F2+' : ''}${r.final2 ? ' · ✅ F2' : ''}${r.final3 ? ' · ✅ F3' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small>${resEdit(r.id, r.home, r.away, r.result === 'won' || r.result === 'lost')}</span>
             <span class="v"><b class="${r.clv_pct !== null ? cls(r.clv_pct) : 'muted'}">${r.clv_pct !== null ? pct(r.clv_pct, 1) : '—'}</b><small>${r.result === 'won' ? '✅ vinta ' + esc(r.result_score || '') : r.result === 'lost' ? '❌ persa ' + esc(r.result_score || '') : r.result === 'void' ? 'annullata' : 'risultato da leggere'}</small></span></div>`).join('')}</details>`;
       }).join('');
-      const intro = reset ? `<p class="muted sub">Tutte le partite già giocate, dalla più recente. Niente viene cancellato: servono alle misure di F, F2, F3 e del modello che impara. Il numero colorato è il valore contro la chiusura.</p>` : '';
+      const todoN = d.days.reduce((n, g) => n + g.items.filter(needsResult).length, 0);
+      const intro = reset && todoOnly ? `<p class="muted sub">✏️ <b>${todoN} risultati da scrivere</b> in questi giorni, prima le giocate e le ⭐ F2+. Tocca il nome della partita per vedere il risultato su Google, poi "scrivi il risultato". Senza risultati il saldo vero di F2+ non si può misurare.</p>`
+        : reset ? `<p class="muted sub">${todoN ? `<button class="linkbtn" onclick="toggleTodo()">✏️ ${todoN} risultati da scrivere</button> · ` : ''}Tutte le partite già giocate, dalla più recente. Niente viene cancellato: servono alle misure di F, F2, F3 e del modello che impara. Il numero colorato è il valore contro la chiusura.</p>` : '';
       const more = d.more ? `<button class="sixbtn" id="archMore" onclick="loadArchive(false)">Mostra i 7 giorni prima</button>` : '';
       archNext = d.next;
       if (reset) el.innerHTML = intro + (html || '<div class="empty">Nessuna partita in archivio con questi filtri.</div>') + more;
@@ -857,6 +877,7 @@
   async function loadSignals() {
     const el = $('signals');
     try {
+      { const tb = $('todoBtn'); if (tb && sigTab !== 'archive') tb.style.display = 'none'; }
       if (sigTab === 'archive') return loadArchive(true);
       const [rows, it, bs] = await Promise.all([getJson('/api/tracker/signals?status=pending'), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/italia?s=B').catch(() => null), loadLearnMap()]);
       const aHead = `<h4 class="sechead">Tutti i bookmaker <small class="muted">· strategia A, il test in corso</small></h4>`;

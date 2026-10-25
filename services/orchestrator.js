@@ -157,6 +157,16 @@ async function runDailyAnalysisInner() {
   try { activeKeys = oddsApi.getActiveSportKeys ? await oddsApi.getActiveSportKeys() : null; }
   catch (err) { log.push(`Elenco campionati attivi non disponibile (${err.message}): provo comunque tutti.`); }
   const isActive = code => !activeKeys || activeKeys.has(LEAGUES[code].oddsKey);
+  // budget del giro: i crediti si distribuiscono fino al rinnovo invece di finire a meta' mese (vedi oddsApi.runBudget)
+  const rb = oddsApi.runBudget ? oddsApi.runBudget() : null;
+  const callCost = oddsApi.totalsEnabled && oddsApi.totalsEnabled() ? 2 : 1;
+  let runSpentCredits = 0;
+  const budgetSkipped = [];
+  if (rb) log.push(`Budget crediti di questo giro: ${rb.budget} (rimasti ${rb.remaining}, ${rb.days} giorni al rinnovo).`);
+  const overBudget = code => {
+    if (!rb || runSpentCredits + callCost <= rb.budget) return false;
+    budgetSkipped.push(code); return true;
+  };
 
   const candidates = [], ouCandidates = [];
   const context = {};                          // storico per campionato (nomi per abbinare e chiudere)
@@ -194,12 +204,16 @@ async function runDailyAnalysisInner() {
   const byLeague = {};
   for (const m of fixtures) { const c = m.competition?.code; if (LEAGUES[c]) (byLeague[c] = byLeague[c] || []).push(m); }
 
-  for (const [code, matches] of Object.entries(byLeague)) {
+  // prima i campionati con piu' partite oggi: se il budget finisce, restano fuori quelli che pesano meno
+  for (const [code, matches] of Object.entries(byLeague).sort((a, b) => b[1].length - a[1].length)) {
     if (!isActive(code)) { log.push(`${code}: fuori stagione su The Odds API (${LEAGUES[code].oddsKey}), saltato.`); continue; }
+    const futureMatches = matches.filter(m => new Date(m.utcDate) > new Date());
+    if (!futureMatches.length) { for (const m of matches) await upsertTeamAndFixture(m, code); log.push(`${code}: partite di oggi gia' iniziate, quote non richieste.`); continue; }
     const names = await leagueNames(code);
     if (!names.length) { log.push(`${code}: nessuno storico per abbinare i nomi delle squadre, campionato saltato.`); continue; }
+    if (overBudget(code)) continue;
     let events = [];
-    try { events = await oddsApi.getOddsForCompetition(code); }
+    try { events = await oddsApi.getOddsForCompetition(code); runSpentCredits += callCost; }
     catch (err) { if (/soglia di sicurezza/.test(err.message)) lowCredits = true; log.push(`${code}: quote non disponibili (${err.message}).`); continue; }
     const stats = { withSharp: 0 }; let matched = 0;
     for (const match of matches) {
@@ -228,8 +242,9 @@ async function runDailyAnalysisInner() {
     if (skip) { log.push(`${code}: ${skip}`); continue; }
     const names = await leagueNames(code);
     if (!names.length) { log.push(`${code}: nessuno storico per abbinare i nomi delle squadre, campionato saltato.`); continue; }
+    if (overBudget(code)) continue;
     let events = [];
-    try { events = await oddsApi.getOddsForCompetition(code); }
+    try { events = await oddsApi.getOddsForCompetition(code); runSpentCredits += callCost; }
     catch (err) { if (/soglia di sicurezza/.test(err.message)) lowCredits = true; log.push(`${code}: quote non disponibili (${err.message}).`); continue; }
     await saveSchedule(code, events);
     // controllo "a secco" su TUTTE le partite ricevute (anche quelle dei prossimi giorni, stessa chiamata: nessun credito in più):
@@ -252,6 +267,8 @@ async function runDailyAnalysisInner() {
     }
     log.push(`${code}: ${events.length} partite con quote (${sharpAll} con riferimento: ${pinAll} Pinnacle, ${sharpAll - pinAll} solo exchange), ${upcoming.length} nelle prossime ${WINDOW_HOURS} ore, ${analyzed} riconosciute, ${stats.withSharp} con riferimento nelle prossime ore.`);
   }
+
+  if (budgetSkipped.length) log.push(`Budget del giro esaurito: quote non richieste per ${budgetSkipped.join(', ')} (i crediti restano per i prossimi giorni).`);
 
   // 3) salvataggio (senza doppioni), dal vantaggio più piccolo: nei test i vantaggi grandi erano più spesso errori
   candidates.sort((x, y) => x.edge - y.edge);

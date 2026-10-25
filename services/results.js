@@ -148,7 +148,10 @@ async function settleSignals(pool, { env = process.env, nowMs = Date.now(), http
   const last = (await pool.query(`SELECT MAX(at) AS t FROM results_requests`)).rows[0].t;
   if (last && nowMs - Date.parse(last) < c.everyMin * 60000) return { risultati: 'non ancora' };
   const today = (await pool.query(`SELECT COUNT(*)::int AS n FROM results_requests WHERE at >= date_trunc('day', NOW()) AND COALESCE(src, 'af') = 'af'`)).rows[0].n;
-  const useAF = c.key && today < c.dailyCap;
+  // account API-Football sospeso (dal 16 ottobre 2026 ogni ora la stessa risposta): si riprova solo una volta al giorno
+  const lastAF = c.key ? (await pool.query(`SELECT at, note FROM results_requests WHERE COALESCE(src, 'af') = 'af' ORDER BY id DESC LIMIT 1`)).rows[0] : null;
+  const afPaused = !!(lastAF && /suspend/i.test(lastAF.note || '') && nowMs - Date.parse(lastAF.at) < 24 * 3600000);
+  const useAF = c.key && today < c.dailyCap && !afPaused;
   if (!useAF && !c.fdKey) return { risultati: 'tetto giornaliero' };
   const { rows } = await pool.query(
     `SELECT id, home, away, selection, commence_time, odd FROM italia_signals

@@ -40,7 +40,7 @@ function bestWorst(groups) {
  * Costruisce i consigli a partire dalle righe gia' lette (funzione pura, testabile).
  * a: segnali A chiusi con clv; it: righe italia_signals (strategy I e B).
  */
-function buildAdvice({ a = [], it = [], final = [], final2 = [], final3 = [], final4 = [] } = {}) {
+function buildAdvice({ a = [], it = [], final = [], final2 = [], final3 = [], final4 = [], final5 = [] } = {}) {
   const out = [];
   const iRows = it.filter(r => (r.strategy || 'I') === 'I'), bRows = it.filter(r => r.strategy === 'B');
   const clv = rows => rows.map(r => r.clv_pct).filter(v => v !== null && v !== undefined && v !== '');
@@ -58,6 +58,7 @@ function buildAdvice({ a = [], it = [], final = [], final2 = [], final3 = [], fi
 
   // 2) Le strategie
   out.push(judge('Selezione F (finale candidata)', sF, ' Regole fissate il 17 ottobre, misurate solo sui segnali successivi.'));
+  out.push(judge('Selezione 🛡️ F2+ sicure (quelle da giocare)', summary(clv(final5)), ' Le F2+ che vincono almeno 5 volte su 10 secondo Pinnacle: regole fissate il 24 ottobre alle 22:45.'));
   out.push(judge('Selezione ⭐ F2+ (la principale per i soldi veri)', summary(clv(final4)), ' Entro 3 ore, vantaggio dal 4% in su, una lettura per partita: regole fissate il 24 ottobre sera.'));
   out.push(judge('Selezione F2 (seconda candidata)', summary(clv(final2)), ' Entro 3 ore, vantaggio 4–8%: regole fissate il 18 ottobre.'));
   out.push(judge('Selezione F3 (favoriti con valore)', summary(clv(final3)), ' Quote 1,30–1,60: si vince 6–7 volte su 10. Regole fissate il 18 ottobre sera.'));
@@ -97,7 +98,7 @@ async function getAdvice(pool) {
     it = (await pool.query(`SELECT id, event_id, phase, created_at, commence_time, close_captured_at, edge_pct, strategy, book, odd, selection, clv_pct, netwin_clv_pct FROM italia_signals`)).rows;
   } catch (e) { /* strategia I non ancora attiva */ }
   // nomi leggibili dei libri della I (stessi dell'app) e selezione F
-  const { BOOK_NAMES: names, markFinal, markFinal2, markFinal3, markFinal4, primaryRows } = require('./italia');
+  const { BOOK_NAMES: names, markFinal, markFinal2, markFinal3, markFinal4, markFinal5, primaryRows } = require('./italia');
   const allI = it.filter(r => (r.strategy || 'I') === 'I');
   it = primaryRows(it);   // misure sulla prima uscita; la F2 guarda anche le riletture vicino al calcio d'inizio
   const iOnly = it.filter(r => (r.strategy || 'I') === 'I'), fin = markFinal(iOnly), fin2 = markFinal2(allI);
@@ -106,7 +107,8 @@ async function getAdvice(pool) {
   const fin3 = markFinal3(iOnly), final3 = iOnly.filter(r => fin3.get(r.id) && fin3.get(r.id).final);
   it = it.map(r => ({ ...r, book: names[r.book] || r.book }));
   const fin4 = markFinal4(allI), final4 = allI.filter(r => fin4.get(r.id) && fin4.get(r.id).final);
-  const advice = buildAdvice({ a, it, final, final2, final3, final4 });
+  const fin5 = markFinal5(allI), final5 = allI.filter(r => fin5.get(r.id) && fin5.get(r.id).final);
+  const advice = buildAdvice({ a, it, final, final2, final3, final4, final5 });
   try {
     const L = require('./learner').buildLearning(it.filter(r => r.clv_pct !== null && r.clv_pct !== undefined));
     if (L.ready) {

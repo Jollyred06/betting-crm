@@ -3,14 +3,16 @@
  * Per ogni segnale: ultima quota Pinnacle 1X2 vista prima della partita -> probabilita' onesta (metodo power)
  * -> clv = quota_presa * p_pinnacle_chiusura - 1 (salvato in percentuale in clv_pct, con clv_source = 'pinnacle').
  * Costo: 1 credito di The Odds API per campionato con segnali in finestra (nessun credito se non ce ne sono).
- * Va chiamata ogni 10-30 minuti (POST /api/capture-closing, vedi .github/workflows/chiusura.yml): ogni segnale viene
- * catturato tra 0 e 45 minuti prima del calcio d'inizio e ricatturato se l'ultima cattura e' piu' vecchia di MIN_GAP_MIN:
- * vale l'ultima, la piu' vicina al calcio d'inizio (close_lag_min dice quanti minuti mancavano).
+ * Va chiamata ogni 10 minuti (POST /api/capture-closing da cron-job.org): ogni segnale viene catturato UNA volta sola,
+ * tra 0 e WINDOW_MIN minuti prima del calcio d'inizio (close_lag_min dice quanti minuti mancavano).
+ * 24 ottobre 2026: finestra ridotta da 45 a 20 minuti (variabile CLOSE_WINDOW_MIN su Render). Con la finestra a 45 ogni segnale
+ * si catturava 2-3 volte (un credito ogni volta) e la "chiusura" arrivava in media 18 minuti prima, fino a 41: ora una sola
+ * cattura, piu' vicina alla chiusura vera. Con finestra <= MIN_GAP_MIN la ricattura non puo' piu' avvenire.
  */
 const { h2h, noVigPower, ou, noVigPower2 } = require('./sharpSignals');
 const { saveSnapshot } = require('./pinSnapshots');
 
-const WINDOW_MIN = 45;      // segnali con calcio d'inizio entro 45 minuti
+const WINDOW_MIN = parseInt(process.env.CLOSE_WINDOW_MIN || '20', 10);   // segnali con calcio d'inizio entro 20 minuti (il cron gira ogni 10)
 const MIN_GAP_MIN = 20;     // non ricatturare lo stesso segnale se l'ultima cattura e' recente (ritardi del cron)
 
 async function captureClosing(pool, oddsApi, { windowMin = WINDOW_MIN, minGapMin = MIN_GAP_MIN, now = Date.now() } = {}) {

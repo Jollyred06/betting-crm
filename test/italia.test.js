@@ -187,5 +187,22 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   assert.ok(it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 26, pnlEur: -26 }] }, c4, now).stopped);
   assert.strictEqual(it.budgetCfg({ BUDGET_START: '200', BUDGET_STOP: '150', BEST_MAX_PER_DAY: '3' }).stop, 150);
 }
+// --- nomi senza parole in comune tra le fonti
+assert.ok(it.sameTeam('Athletic Bilbao', 'Athletic Club') && it.sameTeam('Athletic Bilbao', 'Athletic') && !it.sameTeam('Athletic Bilbao', 'Atletico Madrid'));
+// --- F2+ sicure: regole F2+ piu' probabilita' Pinnacle almeno 50%, solo dopo il 24/10 20:45Z
+{
+  const base = { selection: 'home', strategy: 'I', book: 'snai', created_at: '2026-10-24T21:00:00Z', commence_time: '2026-10-24T23:00:00Z', edge_pct: 5, odd: 1.9 };
+  const rows = [{ id: 1, ...base, event_id: 'a', fair_prob: 0.55 }, { id: 2, ...base, event_id: 'b', fair_prob: 0.45 },
+    { id: 3, ...base, event_id: 'c', fair_prob: 0.6, edge_pct: 3 }, { id: 4, ...base, event_id: 'd', fair_prob: 0.6, created_at: '2026-10-24T20:00:00Z', commence_time: '2026-10-24T21:30:00Z' }];
+  const m = it.markFinal5(rows);
+  assert.ok(m.get(1).final && !m.get(2).final && !m.get(3).final);
+  assert.ok(!m.get(4).final && it.markFinal5(rows, { ignoreSince: true }).get(4).final);   // prima delle regole, ma conta all'indietro
+  const ko = '2026-10-25T21:00:00Z', now = Date.parse('2026-10-25T19:00:00Z');
+  const items = [{ id: 1, final4: true, final5: true, play: { odd: 1.9 }, win_prob: 0.55, commence_time: ko }, { id: 2, final4: true, final5: false, play: { odd: 3.4 }, win_prob: 0.32, commence_time: ko }];
+  assert.deepStrictEqual(it.pickBest(items, { nowMs: now }), [2, 1]);
+  assert.deepStrictEqual(it.pickBest(items, { nowMs: now, onlySafe: true }), [1]);
+  assert.strictEqual(it.budgetCfg({}).onlySafe, true);
+  assert.strictEqual(it.budgetCfg({ BEST_ONLY_SAFE: '0' }).onlySafe, false);
+}
 console.log('italia.test.js: tutti i controlli passati');
 })().catch(e => { console.error(e); process.exit(1); });

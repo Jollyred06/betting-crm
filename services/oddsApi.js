@@ -66,6 +66,31 @@ async function getActiveSportKeys() {
   return new Set(resp.data.filter(s => s.active).map(s => s.key));
 }
 
+/**
+ * Budget del singolo giro (24 ottobre 2026). I 500 crediti del mese finivano in 10-12 giorni (20 campionati x 2 giri al giorno
+ * + catture di chiusura), poi la strategia A restava ferma fino al rinnovo. Ora ogni giro spende al massimo:
+ *   (crediti rimasti - MIN_CREDITS - riserva chiusure x giorni al rinnovo) / giorni al rinnovo / giri al giorno
+ * Si ricalcola a ogni giro dai crediti veri: i giorni senza partite lasciano crediti ai successivi, un giro in piu' li toglie.
+ * Variabili su Render: ODDS_RESET_DAY (giorno del mese del rinnovo, predefinito 1), ODDS_RUNS_PER_DAY (2),
+ * ODDS_CLOSE_RESERVE_PER_DAY (4 crediti al giorno tenuti per le chiusure), ODDS_PACING=0 per spegnerlo.
+ * Ritorna null se i crediti non sono noti o il controllo e' spento (in quel caso vale solo MIN_CREDITS).
+ */
+function daysToReset(now = new Date(), resetDay = 1) {
+  const y = now.getUTCFullYear(), m = now.getUTCMonth();
+  let next = Date.UTC(y, m, resetDay);
+  if (next <= now.getTime()) next = Date.UTC(y, m + 1, resetDay);
+  return Math.max(1, Math.ceil((next - now.getTime()) / 86400000));
+}
+function runBudget({ now = new Date(), env = process.env, remaining = credits.remaining } = {}) {
+  if (env.ODDS_PACING === '0' || remaining === null || remaining === undefined || remaining === '') return null;
+  const n = (k, d) => (env[k] !== undefined && env[k] !== '' && !isNaN(Number(env[k])) ? Number(env[k]) : d);
+  const minCredits = n('MIN_CREDITS', MIN_CREDITS);
+  const days = daysToReset(now, n('ODDS_RESET_DAY', 1));
+  const runs = Math.max(1, n('ODDS_RUNS_PER_DAY', 2)), reserve = Math.max(0, n('ODDS_CLOSE_RESERVE_PER_DAY', 4));
+  const available = Number(remaining) - minCredits - reserve * days;
+  return { budget: Math.max(0, Math.floor(available / days / runs)), days, remaining: Number(remaining) };
+}
+
 function getCredits() {
   return credits;
 }
@@ -79,4 +104,4 @@ function getRunRequestCount() { return runCount; }
 function getRunSpent() { return runStartUsed === null || credits.used === null ? 0 : Math.max(0, Number(credits.used) - runStartUsed); }
 function __setClient(c) { client = c; }   // solo per i test
 
-module.exports = { totalsEnabled, getOddsForCompetition, getActiveSportKeys, getCredits, getRequestCount, getRunRequestCount, getRunSpent, resetRun, MIN_CREDITS, SPORT_KEY_MAP, __setClient };
+module.exports = { runBudget, daysToReset, totalsEnabled, getOddsForCompetition, getActiveSportKeys, getCredits, getRequestCount, getRunRequestCount, getRunSpent, resetRun, MIN_CREDITS, SPORT_KEY_MAP, __setClient };
