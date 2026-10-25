@@ -50,6 +50,9 @@ function cfg(env = process.env) {
     // si prendono tutte quelle che partono entro 45 minuti (una richiesta per gruppo di partite, nessuna ripetizione)
     closeTriggerMin: n('ITALIA_CLOSE_TRIGGER_MIN', 15),
     closeWindowMin: n('ITALIA_CLOSE_WINDOW_MIN', 45),
+    // chiusura solo per i segnali con vantaggio da questa soglia in su (0 = tutti). Con 4 si misurano le F2+ e le sicure
+    // spendendo circa un terzo di richieste in meno (25 ottobre 2026: quota odss 500 al mese, rinnovo il 12)
+    closeMinEdge: n('ITALIA_CLOSE_MIN_EDGE', 0),
     maxStaleMin: n('ITALIA_MAX_STALE_MIN', 30),
     // Strategia B: stessa richiesta della I (zero richieste in piu'), libri esteri, edge 2-5%, quota sotto 5, entro 6 ore
     bBooks: (env.B_BOOKS ? env.B_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_B_BOOKS),
@@ -217,6 +220,8 @@ async function ensureTables(pool) {
   await pool.query(`UPDATE italia_signals SET phase = CASE WHEN commence_time - created_at <= INTERVAL '${NEAR_HOURS} hours' THEN 'near' ELSE 'far' END WHERE phase IS NULL`);
   await pool.query(`DROP INDEX IF EXISTS italia_signals_uniq`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS italia_signals_uniq2 ON italia_signals (event_id, selection, strategy, phase)`);
+  // tentativo di chiusura gia' fatto (anche se Pinnacle mancava): la stessa partita non si richiede di nuovo ogni 10 minuti
+  await pool.query(`ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS close_tried_at TIMESTAMPTZ`);
   await pool.query(`CREATE TABLE IF NOT EXISTS italia_requests (
     id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), kind TEXT, ok BOOLEAN, records INT, quota_remaining INT, note TEXT)`);
   ready = true;
@@ -294,8 +299,8 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   const { rows } = await pool.query(
     `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min FROM italia_signals
      WHERE commence_time > to_timestamp($1::double precision / 1000) AND commence_time <= to_timestamp($1::double precision / 1000) + make_interval(mins => $2::int)
-       AND close_captured_at IS NULL`,
-    [nowMs, c.closeWindowMin]);
+       AND close_captured_at IS NULL AND close_tried_at IS NULL AND COALESCE(edge_pct, 0) >= $3`,
+    [nowMs, c.closeWindowMin, c.closeMinEdge]);
   if (!rows.length) return { chiusure: 0 };
   // si aspetta che almeno una partita sia vicina: cosi' una sola richiesta copre il gruppo e la chiusura e' piu' fedele
   if (!rows.some(r => Date.parse(r.commence_time) - nowMs <= c.closeTriggerMin * 60000)) return { chiusure: 0, nota: 'non ancora' };
@@ -304,6 +309,9 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   if (rem !== null && rem <= 3) return { chiusure: 0, nota: 'quota odss finita' };
   const ids = [...new Set(rows.map(r => r.event_id))];
   const records = await fetchOdds(pool, c, { event_id: ids.join(','), bookmakers: 'pinnacle' }, 'close', http);
+  // 25 ottobre 2026: un solo tentativo per segnale. Prima, se Pinnacle mancava, la stessa partita si richiedeva a ogni giro
+  // (ogni 10 minuti) fino al calcio d'inizio: 44 richieste su 154 non avevano catturato niente.
+  await pool.query(`UPDATE italia_signals SET close_tried_at = NOW() WHERE id = ANY($1::int[])`, [rows.map(r => Number(r.id))]);
   let n = 0;
   for (const s of rows) {
     const pin = closingPin(records, s.event_id);

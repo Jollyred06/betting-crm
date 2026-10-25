@@ -238,7 +238,7 @@
         <button id="scope-all" onclick="setScope('all')">Tutte</button>
       </div>
       <button id="sixBtn" class="sixbtn" onclick="toggleSix()">🎯 Solo i più probabili · 6 su 10</button>
-      <button id="todoBtn" class="sixbtn" onclick="toggleTodo()" style="display:none">✏️ Solo risultati da scrivere</button>
+      <button id="todoBtn" class="sixbtn" onclick="toggleTodo()" style="display:none">✏️ Risultati da scrivere (⭐ F2+)</button>
       <div class="seg" role="tablist">
         <button class="tab on" data-s="next" onclick="setTab(this)">⚽ Da giocare</button>
         <button class="tab" data-s="archive" onclick="setTab(this)">🗂️ Archivio</button>
@@ -719,8 +719,11 @@
   // ------------------------------------------------------------------ SEGNALI
   let sixOnly = false;
   try { sixOnly = localStorage.getItem('sixOnly') === '1'; } catch (e) { /* facoltativo */ }
-  let todoOnly = false;
-  function toggleTodo() { todoOnly = !todoOnly; loadArchive(true); }
+  let todoOnly = false, todoAll = false;
+  function toggleTodo() { todoOnly = !todoOnly; todoAll = false; loadArchive(true); }
+  function toggleTodoAll() { todoAll = !todoAll; loadArchive(true); }
+  // da scrivere davvero: solo le ⭐ F2+ e le partite giocate (sono quelle su cui si decide); le altre solo a richiesta
+  const todoKey = r => todoAll || r.final4 || r.played;
   // da scrivere: finita da almeno 2 ore e mezza e senza vinta/persa/annullata (prima le ⭐ F2+ e le giocate)
   const needsResult = r => !['won', 'lost', 'void'].includes(r.result) && Date.parse(r.commence_time) < Date.now() - 150 * 60000;
   function toggleSix() { sixOnly = !sixOnly; try { localStorage.setItem('sixOnly', sixOnly ? '1' : '0'); } catch (e) { /* facoltativo */ } loadSignals(); }
@@ -826,7 +829,8 @@
       <h4>Ultime giocate</h4>` + d.items.slice(0, 20).map(x => `<div class="move"><span>${esc(x.home)} – ${esc(x.away)} · <b>${sel[x.selection] || ''}</b><small>${esc(x.book)} ${num(x.odd, 2)} · ${money(x.stake)}${x.clvPct !== null ? ' · ' + pct(x.clvPct) + ' vs chiusura' : ''}${x.result === 'won' || x.result === 'lost' ? ' · ' + (x.result === 'won' ? 'vinta ' : 'persa ') + esc(x.score || '') : ''}</small>${Date.parse(x.commence_time) < Date.now() ? resEdit(x.signalId, x.home, x.away, x.result === 'won' || x.result === 'lost') : ''}</span><span style="display:flex;gap:10px;align-items:center;"><b class="${x.pnlEur !== null ? cls(x.pnlEur) : 'muted'}">${x.pnlEur !== null ? signedMoney(x.pnlEur) : 'in attesa'}</b><button class="linkbtn" aria-label="Cancella" onclick="deletePlay(${x.id})">✕</button></span></div>`).join('');
   }
   // RISULTATO A MANO per i segnali italiani (le serie minori non le copre nessuna fonte gratuita): gol dei 90 minuti, si puo' correggere
-  const resEdit = (id, home, away, done) => `<button class="linkbtn resbtn" onclick="toggleRes(this)">${done ? '✏️ correggi' : '✏️ scrivi il risultato'}</button><div class="resform" hidden data-sid="${Number(id)}" data-name="${esc((home || '') + ' – ' + (away || ''))}"><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(home || 'casa')}"><span>–</span><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(away || 'trasferta')}"><button onclick="saveItRes(this)">Salva</button></div>`;
+  const resUrl = (h, a, t) => 'https://www.google.com/search?q=' + encodeURIComponent(`${h} ${a} risultato ${t ? new Date(t).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}`.trim());
+  const resEdit = (id, home, away, done, t) => `${done ? '' : `<a class="linkbtn resbtn" href="${resUrl(home, away, t)}" target="_blank" rel="noopener" onclick="rememberSpot()">🔎 vedi il risultato</a>`}<button class="linkbtn resbtn" onclick="toggleRes(this)">${done ? '✏️ correggi' : '✏️ scrivi il risultato'}</button><div class="resform" hidden data-sid="${Number(id)}" data-name="${esc((home || '') + ' – ' + (away || ''))}"><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(home || 'casa')}"><span>–</span><input inputmode="numeric" maxlength="2" placeholder="0" aria-label="Gol ${esc(away || 'trasferta')}"><button onclick="saveItRes(this)">Salva</button></div>`;
   function toggleRes(btn) { const f = btn.nextElementSibling; if (f) { f.hidden = !f.hidden; if (!f.hidden) f.querySelector('input').focus(); } }
   async function saveItRes(btn) {
     const box = btn.closest('.resform'), [a, b] = box.querySelectorAll('input'), name = box.dataset.name, id = Number(box.dataset.sid);
@@ -854,7 +858,7 @@
     if (reset) { archNext = null; el.innerHTML = '<div class="sk box"></div>'; }
     try {
       const d = await getJson('/api/tracker/archive?days=7' + (archNext ? '&before=' + archNext : ''));
-      const sel = r => (!sixOnly || r.six) && (!todoOnly || needsResult(r));
+      const sel = r => (!sixOnly || r.six) && (!todoOnly || (needsResult(r) && todoKey(r)));
       const dayName = s => { const t = new Date(s + 'T12:00:00Z').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }); return t.charAt(0).toUpperCase() + t.slice(1); };
       const html = d.days.map((g, i) => {
         const items = g.items.filter(sel).sort((x, y) => todoOnly ? ((!!y.played - !!x.played) || (y.final4 - x.final4)) : 0); if (!items.length) return '';
@@ -862,12 +866,13 @@
         return `<details class="aday"${reset && i === 0 ? ' open' : ''}><summary><b>${esc(dayName(g.day))}</b><span class="muted">${items.length} ${items.length === 1 ? 'segnale' : 'segnali'}${g.avgClvPct !== null ? ` · <span class="${cls(g.avgClvPct)}">${pct(g.avgClvPct, 1)}</span> vs chiusura` : ''}${res}</span></summary>
           ${items.map(r => `<div class="arow"><span class="t">${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>
             <span class="m"><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a>
-              <small>${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${r.final ? ' · ✅ F' : ''}${r.six ? ' 🎯' : ''}${r.final5 ? ' · 🛡️' : ''}${r.final4 ? ' · ⭐ F2+' : ''}${r.final2 ? ' · ✅ F2' : ''}${r.final3 ? ' · ✅ F3' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small>${resEdit(r.id, r.home, r.away, r.result === 'won' || r.result === 'lost')}</span>
+              <small>${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${r.final ? ' · ✅ F' : ''}${r.six ? ' 🎯' : ''}${r.final5 ? ' · 🛡️' : ''}${r.final4 ? ' · ⭐ F2+' : ''}${r.final2 ? ' · ✅ F2' : ''}${r.final3 ? ' · ✅ F3' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small>${resEdit(r.id, r.home, r.away, r.result === 'won' || r.result === 'lost', r.commence_time)}</span>
             <span class="v"><b class="${r.clv_pct !== null ? cls(r.clv_pct) : 'muted'}">${r.clv_pct !== null ? pct(r.clv_pct, 1) : '—'}</b><small>${r.result === 'won' ? '✅ vinta ' + esc(r.result_score || '') : r.result === 'lost' ? '❌ persa ' + esc(r.result_score || '') : r.result === 'void' ? 'annullata' : 'risultato da leggere'}</small></span></div>`).join('')}</details>`;
       }).join('');
-      const todoN = d.days.reduce((n, g) => n + g.items.filter(needsResult).length, 0);
-      const intro = reset && todoOnly ? `<p class="muted sub">✏️ <b>${todoN} risultati da scrivere</b> in questi giorni, prima le giocate e le ⭐ F2+. Tocca il nome della partita per vedere il risultato su Google, poi "scrivi il risultato". Senza risultati il saldo vero di F2+ non si può misurare.</p>`
-        : reset ? `<p class="muted sub">${todoN ? `<button class="linkbtn" onclick="toggleTodo()">✏️ ${todoN} risultati da scrivere</button> · ` : ''}Tutte le partite già giocate, dalla più recente. Niente viene cancellato: servono alle misure di F, F2, F3 e del modello che impara. Il numero colorato è il valore contro la chiusura.</p>` : '';
+      const todoN = d.days.reduce((n, g) => n + g.items.filter(r => needsResult(r) && (r.final4 || r.played)).length, 0);
+      const todoAllN = d.days.reduce((n, g) => n + g.items.filter(needsResult).length, 0);
+      const intro = reset && todoOnly ? `<p class="muted sub">✏️ <b>${todoN} risultati importanti da scrivere</b> (⭐ F2+ e giocate) in questi giorni. Tocca "🔎 vedi il risultato", poi "✏️ scrivi il risultato". ${todoAll ? `Stai vedendo anche le altre (${todoAllN} in tutto): non servono alle decisioni. <button class="linkbtn" onclick="toggleTodoAll()">Solo quelle importanti</button>` : `Le altre ${todoAllN - todoN} non servono alle decisioni: <button class="linkbtn" onclick="toggleTodoAll()">mostrale lo stesso</button>`}</p>`
+        : reset ? `<p class="muted sub">${todoN ? `<button class="linkbtn" onclick="toggleTodo()">✏️ ${todoN} risultati importanti da scrivere</button> · ` : ''}Tutte le partite già giocate, dalla più recente. Niente viene cancellato: servono alle misure di F, F2, F3 e del modello che impara. Il numero colorato è il valore contro la chiusura.</p>` : '';
       const more = d.more ? `<button class="sixbtn" id="archMore" onclick="loadArchive(false)">Mostra i 7 giorni prima</button>` : '';
       archNext = d.next;
       if (reset) el.innerHTML = intro + (html || '<div class="empty">Nessuna partita in archivio con questi filtri.</div>') + more;
