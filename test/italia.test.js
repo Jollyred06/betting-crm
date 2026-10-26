@@ -30,6 +30,14 @@ assert.deepStrictEqual(Object.keys(s[0].quotes).sort(), ['netwin', 'sisal']);
   assert.strictEqual(it.BOOK_FAMILY.snai, it.BOOK_FAMILY.sisal);
 }
 
+// 1c) campionato con il paese preso da un'altra riga della stessa partita
+{
+  const a1 = rec('e1c', 3, [pin, bk('netwin', 2.00, 3.80, 3.60)], { league: 'Premier League' });
+  const a2 = rec('e1c-x', 3, [bk('codere', 2.0, 3.3, 3.6)], { league: 'Israel - Premier League' });
+  assert.strictEqual(it.findSignals([a1, a2], c, NOW)[0].league, 'Israel - Premier League');
+  assert.ok(it.withCountry('Kazakhstan, Premier League') && !it.withCountry('Premier League') && !it.withCountry('Premier League 2 - Division 1'));
+}
+
 // 2) il primo tempo non conta, anche se ha quote "di valore"
 s = it.findSignals([rec('e2', 3, [bk('pinnacle', 2.9, 2.1, 4.2), bk('netwin', 3.4, 2.2, 4.8)], { period: '1st_half' })], c, NOW);
 assert.strictEqual(s.length, 0, 'righe del primo tempo ignorate');

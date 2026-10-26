@@ -115,17 +115,23 @@ function sameTeam(a, b) {
 }
 const sameMatch = (p, r) => p.commence_time && Date.parse(p.commence_time) === Date.parse(r.commence_time) && sameTeam(p.home_team, r.home_team) && sameTeam(p.away_team, r.away_team);
 
+// Nome del campionato con il paese davanti ("Israel - Premier League", "Kazakhstan, Premier League"): alcuni bookmaker del feed lo scrivono,
+// Pinnacle quasi mai. Se un'altra riga della stessa partita ce l'ha, si usa quello (26 ottobre 2026: su 888sport le partite si trovano per paese).
+const withCountry = l => /^[A-Za-zÀ-ÿ' .]{3,30}( - |, )/.test(String(l || ''));
 /** Per ogni riga con Pinnacle aggiunge i bookmaker che il feed ha messo in un'altra riga della stessa partita (la riga con Pinnacle ha la precedenza). */
 function mergeWithPinnacle(records) {
   const main = mainRecords(records);
   const withPin = main.filter(r => (r.bookmakers || []).some(b => b.key === 'pinnacle'));
   return withPin.map(p => {
     const books = [...p.bookmakers], have = new Set(books.map(b => b.key));
+    let league = p.league;
     for (const r of main) {
-      if (r === p || (r.bookmakers || []).some(b => b.key === 'pinnacle') || !sameMatch(p, r)) continue;
+      if (r === p || !sameMatch(p, r)) continue;
+      if (!withCountry(league) && withCountry(r.league)) league = r.league;   // es. "Israel - Premier League" invece di "Premier League"
+      if ((r.bookmakers || []).some(b => b.key === 'pinnacle')) continue;
       for (const b of r.bookmakers || []) if (!have.has(b.key)) { books.push(b); have.add(b.key); }
     }
-    return { ...p, bookmakers: books };
+    return { ...p, league, bookmakers: books };
   });
 }
 
@@ -736,4 +742,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
