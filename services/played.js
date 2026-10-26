@@ -33,6 +33,9 @@ async function addPlayed(pool, signalId, body = {}) {
   if (err) { const e = new Error(err); e.status = 400; throw e; }
   const s = (await pool.query(`SELECT id FROM italia_signals WHERE id = $1`, [signalId])).rows[0];
   if (!s) { const e = new Error('Segnale non trovato.'); e.status = 404; throw e; }
+  // doppio tocco su "Ho giocato" (26 ottobre 2026: Real Esteli - Managua registrata due volte a 3 secondi): una sola giocata per segnale
+  const dup = (await pool.query(`SELECT id FROM played_bets WHERE signal_id = $1 ORDER BY id LIMIT 1`, [signalId])).rows[0];
+  if (dup) return { id: dup.id, giaRegistrata: true };
   const r = await pool.query(`INSERT INTO played_bets (signal_id, book, odd, stake, note) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
     [signalId, b.book.slice(0, 40), b.odd, b.stake, body.note ? String(body.note).slice(0, 200) : null]);
   return { id: r.rows[0].id };

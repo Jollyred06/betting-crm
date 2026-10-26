@@ -202,6 +202,13 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   const items = [{ id: 1, final4: true, final6: true, play: { odd: 1.9 }, win_prob: 0.55, commence_time: ko }, { id: 2, final4: true, final6: false, final5: true, play: { odd: 2.0 }, win_prob: 0.55, commence_time: ko }];
   assert.deepStrictEqual(it.pickBest(items, { nowMs: now, rule: 'consigliate' }), [1]);
   assert.deepStrictEqual(it.pickBest(items, { nowMs: now, rule: 'sicure' }), [2]);
+  // una sola giocata per partita: due esiti della stessa partita -> resta il piu' conveniente
+  const two = [{ id: 7, event_id: 'z', final4: true, final6: true, play: { odd: 3.6 }, win_prob: 0.3, commence_time: ko }, { id: 8, event_id: 'z', final4: true, final6: true, play: { odd: 4.4 }, win_prob: 0.25, commence_time: ko }];
+  assert.deepStrictEqual(it.pickBest(two, { nowMs: now, rule: 'consigliate' }), [8]);
+  // prima le solide, anche se meno convenienti
+  const ord = [{ id: 11, event_id: 'p', final4: true, final6: true, play: { odd: 4.4 }, win_prob: 0.25, commence_time: ko, solid: { score: 1 } },
+    { id: 12, event_id: 'q', final4: true, final6: true, play: { odd: 3.2 }, win_prob: 0.33, commence_time: ko, solid: { score: 2 } }];
+  assert.deepStrictEqual(it.pickBest(ord, { nowMs: now, rule: 'consigliate' }), [12, 11]);
   assert.strictEqual(it.budgetCfg({}).rule, 'consigliate');
   assert.strictEqual(it.budgetCfg({ BEST_RULE: 'tutte' }).rule, 'tutte');
 }

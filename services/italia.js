@@ -554,9 +554,14 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   if (stopped) return [];
   const room = Math.max(0, maxPerDay - playedToday);
   const value = r => r.play && r.win_prob ? r.play.odd * r.win_prob - 1 : -1;
+  // 26 ottobre 2026: prima le 🟢 solide (2 condizioni su 3, il gruppo migliore nei dati), poi per convenienza
+  const solidOf = r => (r.solid && r.solid.score >= 2 ? 1 : 0);
   const ok = r => rule === 'consigliate' ? r.final6 : (rule === 'sicure' || onlySafe) ? r.final5 : true;
+  // una sola giocata per partita (26 ottobre 2026): se ci sono due esiti della stessa partita (es. X e 2) si tiene il piu' conveniente,
+  // perche' sono giocate legate tra loro (se una vince l'altra perde). Non cambia nessuna misura, solo la lista da giocare.
+  const seen = new Set();
   return items.filter(r => r.final4 && ok(r) && r.play && !r.played && Date.parse(r.commence_time) > nowMs)
-    .sort((a, b) => value(b) - value(a)).slice(0, room).map(r => r.id);
+    .sort((a, b) => (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);
 }
 
 /** Budget dalle giocate vere: partenza + saldo delle chiuse; "in gioco" = puntate ancora senza risultato. */
@@ -685,7 +690,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     ],
     requestsThisMonth: used, quotaRemaining: last && last.quota_remaining !== null ? Number(last.quota_remaining) : null, lastRequest: last,
     recent: latestRows(all).slice(0, 30).map(r => ({
-      id: r.id, created_at: r.created_at, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away,
+      id: r.id, event_id: r.event_id, created_at: r.created_at, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away,
       selection: r.selection, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book, odd: Number(r.odd), edge_pct: Number(r.edge_pct),
       netwin_odd: r.netwin_odd !== null ? Number(r.netwin_odd) : null, clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null,
       min_odd: r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null, in_band: inBand(r.odd),
