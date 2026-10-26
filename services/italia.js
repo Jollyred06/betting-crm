@@ -17,12 +17,22 @@ const { noVigPower } = require('./sharpSignals');
 const BASE = 'https://odss-api.com/api/v1';
 const DEFAULT_BOOKS = ['netwin', '888sport_it', 'sisal', 'snai', 'goldbet', 'eurobet'];
 // Strategia B (selezione B dai dati della A, fonte odss): stessi libri esteri della A tranne quelli peggiori (LeoVegas, Coolbet, GTbets, Betsson).
+// Strategia T (26 ottobre 2026, solo misura): TUTTI i siti giocabili dall'Italia presenti nel feed (playable_it: true),
+// visti in una risposta di prova su Coritiba - Gremio. Stessa richiesta della I: nessuna richiesta in piu' al feed.
+// Serve a capire quali siti hanno piu' spesso la quota migliore (dove aprire i conti) e quanti segnali in piu' darebbero.
+const DEFAULT_T_BOOKS = ['888sport_it', 'snai', 'sisal', 'pokerstars', 'eurobet', 'goldbet', 'netwin', 'eplay24', 'sportium', 'betwin360', 'fastbet', 'zonagioco',
+  'gioca7', 'vincitu', 'stanleybet', 'daznbet', 'betsson', 'williamhill', 'staryes', 'codere', 'bgame', 'sunbet', 'domusbet', 'totosi', 'quigioco', 'perlaplay',
+  'sportbet', 'casinosanremo', 'marathonbet', 'netbet', 'admiralbet', 'starcasino', 'starvegas', 'winamax', 'lottomatica'];
+// Siti della stessa societa' (stesse quote): per contare quanti siti INDIPENDENTI sono d'accordo
+const BOOK_FAMILY = { snai: 'flutter', sisal: 'flutter', pokerstars: 'flutter', eplay24: 'betplay', sportium: 'betplay', betwin360: 'betplay', fastbet: 'altenar', zonagioco: 'altenar',
+  betsson: 'betsson_group', starcasino: 'betsson_group', admiralbet: 'novomatic', starvegas: 'novomatic' };
 const DEFAULT_B_BOOKS = ['onexbet', 'unibet_se', 'unibet_nl', 'williamhill', 'marathonbet', '888sport', 'bet365'];
 const BOOK_NAMES = { netwin: 'Netwin', '888sport_it': '888sport', sisal: 'Sisal', snai: 'Snai', goldbet: 'Goldbet', eurobet: 'Eurobet', lottomatica: 'Lottomatica', pokerstars: 'PokerStars', leovegas: 'LeoVegas', betsson: 'Betsson', bet365: 'bet365', planetwin365: 'Planetwin365',
   onexbet: '1xBet', unibet_se: 'Unibet (SE)', unibet_nl: 'Unibet (NL)', williamhill: 'William Hill', marathonbet: 'Marathonbet', '888sport': '888sport (estero)' };
 const STRATEGIES = {
   I: { letter: 'I', title: 'Quote italiane contro Pinnacle', playable: true },
-  B: { letter: 'B', title: 'Selezione B – libri esteri (da odss)', playable: false }
+  B: { letter: 'B', title: 'Selezione B – libri esteri (da odss)', playable: false },
+  T: { letter: 'T', title: 'Tutti i siti italiani (solo misura)', playable: false }
 };
 const OUT = { home: 'HOME', draw: 'DRAW', away: 'AWAY' };
 // formattatori dell'ora italiana creati una volta sola (crearli a ogni riga riempiva la memoria del server)
@@ -57,12 +67,15 @@ function cfg(env = process.env) {
     // Strategia B: stessa richiesta della I (zero richieste in piu'), libri esteri, edge 2-5%, quota sotto 5, entro 6 ore
     bBooks: (env.B_BOOKS ? env.B_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_B_BOOKS),
     bMinEdge: n('B_MIN_EDGE', 2), bMaxEdge: n('B_MAX_EDGE', 5), bMaxOdd: n('B_MAX_ODD', 5),
-    bEnabled: env.B_ENABLED !== 'false'
+    bEnabled: env.B_ENABLED !== 'false',
+    tBooks: (env.T_BOOKS ? env.T_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_T_BOOKS),
+    tEnabled: env.T_ENABLED !== 'false'
   };
 }
 
 /** Config della strategia richiesta (I o B) nella stessa forma usata da findSignals. */
 function cfgFor(c, strategy) {
+  if (strategy === 'T') return { ...c, books: c.tBooks };   // stesse regole della I, piu' siti italiani
   return strategy === 'B' ? { ...c, books: c.bBooks, minEdge: c.bMinEdge, maxEdge: c.bMaxEdge, maxOdd: c.bMaxOdd } : c;
 }
 
@@ -267,15 +280,16 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   const rem = await lastRemaining(pool);
   if (rem !== null && rem <= c.closeReserve) return { scan: 'quota odss quasi finita' };
   const records = await fetchOdds(pool, c, {
-    bookmakers: [...new Set(['pinnacle', ...c.books, ...(c.bEnabled ? c.bBooks : [])])].join(','),
+    bookmakers: [...new Set(['pinnacle', ...c.books, ...(c.bEnabled ? c.bBooks : []), ...(c.tEnabled ? c.tBooks : [])])].join(','),
     commence_from: new Date(nowMs + c.minLeadMin * 60000).toISOString(),
     commence_to: new Date(nowMs + c.windowHours * 3600000).toISOString()
   }, 'scan', http);
   const found = findSignals(records, c, nowMs);
   const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
+  const foundT = c.tEnabled ? findSignals(records, cfgFor(c, 'T'), nowMs) : [];
   const fresh = [];
   let nuoviB = 0;
-  for (const [strategy, list] of [['I', found], ['B', foundB]]) {
+  for (const [strategy, list] of [['I', found], ['B', foundB], ['T', foundT]]) {
     for (const s of list) {
       const r = await pool.query(
         `INSERT INTO italia_signals (event_id, league, home, away, commence_time, selection, book, odd, fair_prob, edge_pct, pin_h, pin_d, pin_a, netwin_odd, netwin_edge_pct, quotes, strategy, phase)
@@ -285,21 +299,21 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
       if (r.rowCount) {
         // una rilettura di un segnale gia' avvisato non manda un secondo messaggio
         const again = (await pool.query(`SELECT COUNT(*)::int AS n FROM italia_signals WHERE event_id = $1 AND selection = $2 AND strategy = $3`, [s.event_id, s.selection, strategy])).rows[0].n > 1;
-        if (strategy === 'I') { if (!again) fresh.push(s); } else if (!again) nuoviB++;
+        if (strategy === 'I') { if (!again) fresh.push(s); } else if (strategy === 'B' && !again) nuoviB++;
       }
     }
   }
   if (fresh.length && notify) {
     try { await notify(`<b>Quote italiane – prova senza soldi</b>\n\n${fresh.map(x => signalText(x, c.minEdge)).join('\n\n')}\n\n<i>La quota cambia in fretta: controlla sul sito prima di giocare.</i>`); } catch (e) { /* avviso facoltativo */ }
   }
-  return { scan: 'fatta', righe: records.length, candidati: found.length, nuovi: fresh.length, nuoviB };
+  return { scan: 'fatta', righe: records.length, candidati: found.length, nuovi: fresh.length, nuoviB, candidatiT: foundT.length };
 }
 
 async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   const { rows } = await pool.query(
     `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min FROM italia_signals
      WHERE commence_time > to_timestamp($1::double precision / 1000) AND commence_time <= to_timestamp($1::double precision / 1000) + make_interval(mins => $2::int)
-       AND close_captured_at IS NULL AND close_tried_at IS NULL AND COALESCE(edge_pct, 0) >= $3`,
+       AND close_captured_at IS NULL AND close_tried_at IS NULL AND COALESCE(edge_pct, 0) >= $3 AND COALESCE(strategy, 'I') <> 'T'`,
     [nowMs, c.closeWindowMin, c.closeMinEdge]);
   if (!rows.length) return { chiusure: 0 };
   // si aspetta che almeno una partita sia vicina: cosi' una sola richiesta copre il gruppo e la chiusura e' piu' fedele
@@ -722,4 +736,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

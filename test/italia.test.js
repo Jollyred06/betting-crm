@@ -20,6 +20,16 @@ assert.ok(Math.abs(s[0].edge_pct - (3.8 * fair - 1) * 100) < 1e-9, 'edge col met
 assert.strictEqual(s[0].netwin_odd, 3.8);
 assert.deepStrictEqual(Object.keys(s[0].quotes).sort(), ['netwin', 'sisal']);
 
+// 1b) strategia T (solo misura): stessi controlli della I ma con tutti i siti italiani -> Codere 3,85 batte Netwin 3,80
+{
+  const recs = [rec('e1t', 3, [pin, bk('netwin', 2.00, 3.80, 3.60), bk('codere', 2.00, 3.85, 3.60), bk('sisal', 2.05, 3.30, 3.70)])];
+  const sI = it.findSignals(recs, c, NOW), sT = it.findSignals(recs, it.cfgFor(c, 'T'), NOW);
+  assert.strictEqual(sI[0].book, 'netwin'); assert.ok(!('codere' in sI[0].quotes));     // la I non cambia
+  assert.strictEqual(sT[0].book, 'codere'); assert.ok('netwin' in sT[0].quotes && 'codere' in sT[0].quotes);
+  assert.ok(c.tEnabled && it.cfg({ ODSS_API_KEY: 'x', T_ENABLED: 'false' }).tEnabled === false);
+  assert.strictEqual(it.BOOK_FAMILY.snai, it.BOOK_FAMILY.sisal);
+}
+
 // 2) il primo tempo non conta, anche se ha quote "di valore"
 s = it.findSignals([rec('e2', 3, [bk('pinnacle', 2.9, 2.1, 4.2), bk('netwin', 3.4, 2.2, 4.8)], { period: '1st_half' })], c, NOW);
 assert.strictEqual(s.length, 0, 'righe del primo tempo ignorate');
