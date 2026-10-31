@@ -243,6 +243,9 @@ async function ensureTables(pool) {
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS italia_signals_uniq2 ON italia_signals (event_id, selection, strategy, phase)`);
   // tentativo di chiusura gia' fatto (anche se Pinnacle mancava): la stessa partita non si richiede di nuovo ogni 10 minuti
   await pool.query(`ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS close_tried_at TIMESTAMPTZ`);
+  // 31 ottobre 2026: categoria del segnale fissata al momento in cui esce (✅, 🛡️, solidita', coppa...) e regole attive,
+  // cosi' le analisi non dipendono dalle regole cambiate dopo. Si scrive una volta sola e poi non si tocca piu'.
+  await pool.query(`ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS flags JSONB`);
   await pool.query(`CREATE TABLE IF NOT EXISTS italia_requests (
     id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), kind TEXT, ok BOOLEAN, records INT, quota_remaining INT, note TEXT)`);
   ready = true;
@@ -356,6 +359,7 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
   try { await ensureTables(pool); } catch (e) { return { attiva: true, errore: e.message }; }
   try { Object.assign(out, await captureClosing(pool, c, { nowMs, http })); } catch (e) { out.erroreChiusura = e.message; }
   try { Object.assign(out, await scan(pool, c, { nowMs, http, notify })); } catch (e) { out.erroreScansione = e.message; }
+  try { out.timbrati = await stampFlags(pool, c, nowMs); } catch (e) { out.erroreTimbro = e.message; }
   try { Object.assign(out, await require('./results').settleSignals(pool, { env, nowMs, http: resultsHttp, sameTeam })); } catch (e) { out.erroreRisultati = e.message; }
   return out;
 }
@@ -555,6 +559,26 @@ function markFinal6(rows, { ignoreSince = false } = {}) {
   return out;
 }
 
+// ------------------------------------------------------------------------------------------- timbro della categoria
+/** Parte pura (testata): la categoria di un segnale I calcolata con le regole di adesso. */
+function flagsOf(r, f4, f5, f6, c, nowMs = Date.now()) {
+  const sol = solidity(r), g = (m) => !!(m.get(r.id) && m.get(r.id).final);
+  return { v: 1, at: new Date(nowMs).toISOString(), f2plus: g(f4), sicura: g(f5), consigliata: g(f6),
+    motivi: (f6.get(r.id) || {}).reasons || [], solidita: sol.score, vicina: sol.near, liquido: sol.liquid, bookOk: sol.books,
+    coppa: isCup(r.league), favSottile: thinFav(r), margine: pinMarginPct(r),
+    regole: { minEdge: c && c.minEdge, final4: FINAL4, final6: FINAL6, books: c && c.books } };
+}
+
+/** Timbra i segnali I appena usciti (flags ancora vuoto). Le regole guardano lo storico, quindi si caricano gli ultimi 600. */
+async function stampFlags(pool, c, nowMs = Date.now()) {
+  const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY commence_time DESC, id DESC LIMIT 600`)).rows;
+  const todo = all.filter(r => r.flags == null && Date.parse(r.commence_time) > nowMs - 6 * 3600000);
+  if (!todo.length) return 0;
+  const f4 = markFinal4(all), f5 = markFinal5(all), f6 = markFinal6(all);
+  for (const r of todo) await pool.query(`UPDATE italia_signals SET flags = $1 WHERE id = $2 AND flags IS NULL`, [JSON.stringify(flagsOf(r, f4, f5, f6, c, nowMs)), r.id]);
+  return todo.length;
+}
+
 // ------------------------------------------------------------------------------------------- le migliori di oggi e il budget
 /** Config del budget delle giocate vere (si cambia da Render senza toccare il codice). */
 const budgetCfg = (env = process.env) => ({
@@ -746,4 +770,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

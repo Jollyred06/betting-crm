@@ -264,3 +264,16 @@ assert.ok(it.sameTeam('Athletic Bilbao', 'Athletic Club') && it.sameTeam('Athlet
 }
 console.log('italia.test.js: tutti i controlli passati');
 })().catch(e => { console.error(e); process.exit(1); });
+
+// 31 ottobre 2026: timbro della categoria del segnale
+{
+  const I = require('../services/italia');
+  const r = { id: 7, league: 'Spain - Copa del Rey', created_at: '2026-10-31T10:00:00Z', commence_time: '2026-10-31T10:30:00Z', selection: 'home',
+    odd: 2.8, fair_prob: 0.38, edge_pct: 6.4, pin_h: 2.5, pin_d: 3.3, pin_a: 2.9, quotes: { a: [2.8, 3, 3], b: [2.75, 3, 3] } };
+  const f = I.flagsOf(r, new Map([[7, { final: true }]]), new Map(), new Map([[7, { final: true, reasons: [] }]]), { minEdge: 2, books: ['x'] }, Date.parse('2026-10-31T10:05:00Z'));
+  const assert = require('assert');
+  assert.strictEqual(f.consigliata, true); assert.strictEqual(f.sicura, false); assert.strictEqual(f.coppa, true);
+  assert.strictEqual(f.vicina, true); assert.strictEqual(f.bookOk, 2); assert.strictEqual(f.favSottile, false);
+  assert.strictEqual(f.solidita, 3); assert.strictEqual(f.regole.minEdge, 2);
+  console.log('✓ timbro categoria segnale');
+}
