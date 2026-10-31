@@ -117,6 +117,8 @@ const sameMatch = (p, r) => p.commence_time && Date.parse(p.commence_time) === D
 
 // Nome del campionato con il paese davanti ("Israel - Premier League", "Kazakhstan, Premier League"): alcuni bookmaker del feed lo scrivono,
 // Pinnacle quasi mai. Se un'altra riga della stessa partita ce l'ha, si usa quello (26 ottobre 2026: su 888sport le partite si trovano per paese).
+const CUP = /\b(?:super)?(cup|coppa|copa|pokal|puchar|coupe|kupa|kupasi|beker|ta[cç]a|cupa|trophy|shield)\b/i;
+const isCup = l => CUP.test(String(l || ''));
 const withCountry = l => /^[A-Za-zÀ-ÿ' .]{3,30}( - |, )/.test(String(l || ''));
 /** Per ogni riga con Pinnacle aggiunge i bookmaker che il feed ha messo in un'altra riga della stessa partita (la riga con Pinnacle ha la precedenza). */
 function mergeWithPinnacle(records) {
@@ -576,7 +578,9 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   const value = r => r.play && r.win_prob ? r.play.odd * r.win_prob - 1 : -1;
   // 26 ottobre 2026: prima le 🟢 solide (2 condizioni su 3, il gruppo migliore nei dati), poi per convenienza
   const solidOf = r => (r.solid && r.solid.score >= 2 ? 1 : 0);
-  const ok = r => rule === 'consigliate' ? r.final6 : (rule === 'sicure' || onlySafe) ? r.final5 : true;
+  // 30 ottobre 2026: niente partite di coppa nella lista da giocare (formazioni incerte: le ✅ di coppa CLV -3,4% su 15,
+  // quelle di campionato +4,9% su 61). Le misure non cambiano: le coppe restano nei segnali e nell'archivio.
+  const ok = r => !isCup(r.league) && (rule === 'consigliate' ? r.final6 : (rule === 'sicure' || onlySafe) ? r.final5 : true);
   // una sola giocata per partita (26 ottobre 2026): se ci sono due esiti della stessa partita (es. X e 2) si tiene il piu' conveniente,
   // perche' sono giocate legate tra loro (se una vince l'altra perde). Non cambia nessuna misura, solo la lista da giocare.
   const seen = new Set();
@@ -742,4 +746,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
