@@ -204,6 +204,20 @@ function closingPin(records, eventId) {
   return b ? trio(b.outcomes) : null;
 }
 
+/** Quote di tutti i siti (tranne Pinnacle) per una partita alla chiusura: { sito: [1, X, 2] }, oppure null. */
+function closingQuotes(records, eventId) {
+  const r = mergeWithPinnacle(mainRecords(records)).find(x => x.event_id === eventId);
+  if (!r) return null;
+  const out = {};
+  for (const b of r.bookmakers || []) { if (b.key === 'pinnacle') continue; const q = trio(b.outcomes); if (q) out[b.key] = [q.home, q.draw, q.away]; }
+  return Object.keys(out).length ? out : null;
+}
+
+/** Scrive sull'ultima richiesta di quel tipo cosa ha prodotto (solo registro: non blocca mai). */
+async function noteRequest(pool, kind, info) {
+  try { await pool.query(`UPDATE italia_requests SET info = $2 WHERE id = (SELECT MAX(id) FROM italia_requests WHERE kind = $1)`, [kind, JSON.stringify(info)]); } catch (e) { /* solo registro */ }
+}
+
 /** Ora italiana (0-23) per decidere se e' il momento di scansionare. */
 function romeHour(nowMs) {
   return Number(ROME_HOUR.format(new Date(nowMs))) % 24;
@@ -249,8 +263,12 @@ async function ensureTables(pool) {
   // 31 ottobre 2026: categoria del segnale fissata al momento in cui esce (✅, 🛡️, solidita', coppa...) e regole attive,
   // cosi' le analisi non dipendono dalle regole cambiate dopo. Si scrive una volta sola e poi non si tocca piu'.
   await pool.query(`ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS flags JSONB`);
+  // 1° novembre 2026: quote dei siti italiani alla chiusura (stessa richiesta di Pinnacle, nessun costo in piu')
+  await pool.query(`ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS close_quotes JSONB`);
   await pool.query(`CREATE TABLE IF NOT EXISTS italia_requests (
     id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), kind TEXT, ok BOOLEAN, records INT, quota_remaining INT, note TEXT)`);
+  // 1° novembre 2026: cosa ha fatto ogni richiesta (partite viste, segnali trovati, chiusure prese)
+  await pool.query(`ALTER TABLE italia_requests ADD COLUMN IF NOT EXISTS info JSONB`);
   ready = true;
 }
 
@@ -320,7 +338,9 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   if (fresh.length && notify) {
     try { await notify(`<b>Quote italiane – prova senza soldi</b>\n\n${fresh.map(x => signalText(x, c.minEdge)).join('\n\n')}\n\n<i>La quota cambia in fretta: controlla sul sito prima di giocare.</i>`); } catch (e) { /* avviso facoltativo */ }
   }
-  return { scan: 'fatta', righe: records.length, candidati: found.length, nuovi: fresh.length, nuoviB, candidatiT: foundT.length };
+  const partite = new Set(mainRecords(records).map(r => r.event_id)).size;
+  await noteRequest(pool, 'scan', { righe: records.length, partite, candidatiI: found.length, nuoviI: fresh.length, candidatiB: foundB.length, nuoviB, candidatiT: foundT.length });
+  return { scan: 'fatta', righe: records.length, partite, candidati: found.length, nuovi: fresh.length, nuoviB, candidatiT: foundT.length };
 }
 
 async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
@@ -338,7 +358,8 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   const rem = await lastRemaining(pool);
   if (rem !== null && rem <= 3) return { chiusure: 0, nota: 'quota odss finita' };
   const ids = [...new Set(rows.map(r => r.event_id))];
-  const records = await fetchOdds(pool, c, { event_id: ids.join(','), bookmakers: 'pinnacle' }, 'close', http);
+  // stessa richiesta: Pinnacle per la chiusura + i siti italiani, per sapere se la quota era ancora prendibile al calcio d'inizio
+  const records = await fetchOdds(pool, c, { event_id: ids.join(','), bookmakers: [...new Set(['pinnacle', ...c.books, ...c.myBooks, ...(c.tEnabled ? c.tBooks : [])])].join(',') }, 'close', http);
   // 25 ottobre 2026: un solo tentativo per segnale. Prima, se Pinnacle mancava, la stessa partita si richiedeva a ogni giro
   // (ogni 10 minuti) fino al calcio d'inizio: 44 richieste su 154 non avevano catturato niente.
   await pool.query(`UPDATE italia_signals SET close_tried_at = NOW() WHERE id = ANY($1::int[])`, [rows.map(r => Number(r.id))]);
@@ -349,10 +370,11 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
     const fair = noVigPower(pin)[s.selection];
     const lag = Math.max(0, Math.round((Date.parse(s.commence_time) - nowMs) / 60000));
     await pool.query(
-      `UPDATE italia_signals SET close_pin_h=$2, close_pin_d=$3, close_pin_a=$4, closing_fair_prob=$5, clv_pct=$6, netwin_clv_pct=$7, close_lag_min=$8, close_captured_at=NOW() WHERE id=$1`,
-      [s.id, pin.home, pin.draw, pin.away, fair, (Number(s.odd) * fair - 1) * 100, s.netwin_odd ? (Number(s.netwin_odd) * fair - 1) * 100 : null, lag]);
+      `UPDATE italia_signals SET close_pin_h=$2, close_pin_d=$3, close_pin_a=$4, closing_fair_prob=$5, clv_pct=$6, netwin_clv_pct=$7, close_lag_min=$8, close_captured_at=NOW(), close_quotes=$9 WHERE id=$1`,
+      [s.id, pin.home, pin.draw, pin.away, fair, (Number(s.odd) * fair - 1) * 100, s.netwin_odd ? (Number(s.netwin_odd) * fair - 1) * 100 : null, lag, (() => { const q = closingQuotes(records, s.event_id); return q ? JSON.stringify(q) : null; })()]);
     n++;
   }
+  await noteRequest(pool, 'close', { partite: ids.length, segnali: rows.length, chiusure: n, conQuoteItaliane: rows.filter(s => closingQuotes(records, s.event_id)).length });
   return { chiusure: n };
 }
 
@@ -613,7 +635,7 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   // una sola giocata per partita (26 ottobre 2026): se ci sono due esiti della stessa partita (es. X e 2) si tiene il piu' conveniente,
   // perche' sono giocate legate tra loro (se una vince l'altra perde). Non cambia nessuna misura, solo la lista da giocare.
   const seen = new Set();
-  return items.filter(r => r.final4 && ok(r) && r.play && !r.played && Date.parse(r.commence_time) > nowMs)
+  return items.filter(r => r.final4 && ok(r) && r.play && !r.played && !r.skipped && Date.parse(r.commence_time) > nowMs)
     .sort((a, b) => (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);
 }
 
@@ -717,6 +739,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const played = strategy === 'I' ? await require('./played').playedSignalIds(pool) : new Map();
   // una giocata vale per la partita e l'esito, anche se la scheda mostrata e' la rilettura
   const playedByKey = new Map(all.filter(r => played.get(Number(r.id))).map(r => [sigKey(r), played.get(Number(r.id))]));
+  const skipped = strategy === 'I' ? await require('./played').skippedSignalIds(pool) : new Map();
+  const skippedByKey = new Map(all.filter(r => skipped.get(Number(r.id))).map(r => [sigKey(r), skipped.get(Number(r.id))]));
   const SEL_IDX = { home: 0, draw: 1, away: 2 };
   // 1° novembre 2026: quote di TUTTI i siti dove Christian ha il conto (MY_BOOKS). Le quote dei siti fuori dalla I (es. Fastbet)
   // arrivano dalla riga T della stessa partita e della stessa lettura (stessa richiesta al feed, nessun costo in piu').
@@ -767,6 +791,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       pin_margin: pinMarginPct(r), thin: pinMarginPct(r) !== null && pinMarginPct(r) >= FINAL6.thinMarginPct, solid: solidity(r),
       six: !!(fin.get(firstOf.get(sigKey(r))) || {}).final && isSix(r),
       alt: strategy === 'I' ? altOdds(r) : null, played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null,
+      skipped: skipped.get(Number(r.id)) || skippedByKey.get(sigKey(r)) || null,
       // dove giocarlo: il bookmaker consigliato (888sport o Snai) con la quota piu' alta, solo se almeno la minima
       play: (() => { const a = strategy === 'I' ? altOdds(r) : null, m = r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null;
         const best = Object.entries(a || {}).filter(([, v]) => m && v >= m).sort((x, y) => y[1] - x[1])[0];
@@ -785,4 +810,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

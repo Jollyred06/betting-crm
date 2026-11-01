@@ -141,6 +141,7 @@
   .okq { color:var(--ok); font-weight:600; } .noq { text-decoration:line-through; }
   .alt { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:13px; margin-top:4px; } .alt .ok { color:var(--ok); } .alt .no { color:var(--muted); text-decoration:line-through; }
   .playbtn { margin-top:8px; border:1.5px solid var(--ink); background:none; color:var(--ink); border-radius:999px; padding:6px 14px; font-weight:700; font-size:13.5px; cursor:pointer; }
+  .played.no { color:var(--muted); } .skipbtn { border-color:var(--line); color:var(--muted); }
   .played { margin-top:8px; font-size:13.5px; color:var(--ok); font-weight:600; }
   .bestbox { margin:0 0 18px; } .ticket.bestt { border-color:var(--ok); box-shadow:0 0 0 1.5px var(--ok) inset; }
   .budget { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 12px; padding:10px 14px; margin:0 0 10px; border:1px solid var(--line); border-radius:12px; background:var(--surface); font-size:14.5px; }
@@ -795,7 +796,7 @@
             ${it && r.play && !r.played && Date.parse(r.commence_time) > Date.now() ? `<div class="avail">🔍 Su ${esc(r.play.book)} cerca <b>${esc(r.home)}</b> (lente in alto) · <a class="tlink" href="https://www.google.com/search?q=${encodeURIComponent(r.play.book + ' ' + r.home + ' ' + r.away)}" target="_blank" rel="noopener" onclick="rememberSpot()">cerca la partita</a></div>` : ''}
             ${it && r.min_odd && r.play && !r.played && Date.parse(r.commence_time) - 30 * 60000 > Date.now() ? `<div class="avail">⏱️ <b>Gioca da adesso fino alle ${new Date(Date.parse(r.commence_time) - 30 * 60000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</b> (30 minuti prima del calcio d'inizio), solo se su ${esc(r.play.book)} la quota è almeno <b>${num(r.min_odd, 2)}</b></div>` : ''}
             ${it && r.min_odd ? `<div class="avail">${r.play && !r.played && Date.parse(r.commence_time) > Date.now() ? 'Quote viste dal CRM' : `Prima di giocare controlla sul sito: quota almeno <b>${num(r.min_odd, 2)}</b>`}${r.alt && Object.keys(r.alt).length > 1 ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''}</div>` : ''}
-            ${it ? (r.played ? `<div class="played">✅ Giocata: <b>${num(r.played.odd, 2)}</b> su ${esc(r.played.book)}</div>` : `<button class="playbtn" onclick="openPlay(${Number(r.id)})">✍️ Ho giocato</button><div class="playform" id="pf-${Number(r.id)}"></div>`) : ''}
+            ${it ? (r.played ? `<div class="played">✅ Giocata: <b>${num(r.played.odd, 2)}</b> su ${esc(r.played.book)}</div>` : r.skipped ? `<div class="played no">🚫 Non giocata: ${esc(r.skipped.label)} <button class="linkbtn" onclick="undoSkip(${Number(r.skipped.id)})">annulla</button></div>` : `<button class="playbtn" onclick="openPlay(${Number(r.id)})">✍️ Ho giocato</button> <button class="playbtn skipbtn" onclick="openSkip(${Number(r.id)})">🚫 Non giocata</button><div class="playform" id="pf-${Number(r.id)}"></div>`) : ''}
             <div class="foot">${chip}${r.final6 ? '<span class="chip fin">✅ consigliata</span>' : ''}${r.solid && r.solid.score >= 2 ? `<span class="chip fin" title="${[r.solid.near ? 'letta a meno di 1 ora' : '', r.solid.liquid ? 'mercato liquido' : '', r.solid.agree ? r.solid.books + ' siti italiani sopra il prezzo' : ''].filter(Boolean).join(', ')}">🟢 solida</span>` : ''}${r.final4 && !r.final6 && r.thin && r.win_prob >= 0.5 ? '<span class="chip">⚠️ favorito in mercato sottile</span>' : ''}${r.final6 && /\b(?:super)?(cup|coppa|copa|pokal|puchar|coupe|kupa|kupasi|beker|ta[cç]a|cupa|trophy|shield)\b/i.test(r.league || '') ? '<span class="chip">⚠️ coppa: non in lista</span>' : ''}${r.final5 ? '<span class="chip">🛡️ sicura</span>' : ''}${r.final4 ? '<span class="chip fin">⭐ F2+</span>' : ''}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.six ? '<span class="chip fin">🎯 6 su 10</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.final3 ? '<span class="chip fin">✅ F3</span>' : ''}${r.again ? '<span class="chip">🔄 quota riletta vicino alla partita</span>' : ''}${learnMap[r.id] ? `<span class="chip${learnMap[r.id].pick ? ' fin' : ''}">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
           </div>
         </article>`;
@@ -855,6 +856,30 @@
       r.played = { book: $('pb-' + id).value, odd }; loadSignals();
     } catch (e) { $('pm-' + id).textContent = 'Errore: ' + e.message; }
   }
+  // 🚫 NON GIOCATA: il motivo serve a sapere quante occasioni si riescono davvero a giocare (senza, i numeri sembrano migliori)
+  const SKIP_LABELS = { quota: '📉 Quota scesa', trovata: '🔍 Partita non trovata', tempo: '⏰ Non avevo tempo' };
+  function openSkip(id) {
+    const box = $('pf-' + id); if (!box) return;
+    if (box.dataset.skip === '1') { box.innerHTML = ''; box.dataset.skip = ''; return; }
+    box.dataset.skip = '1';
+    box.innerHTML = `<div class="pf"><span class="muted">Perché non l'hai giocata?</span><div class="pfb">${Object.entries(SKIP_LABELS).map(([k, l]) => `<button class="linkbtn" onclick="saveSkip(${id}, '${k}')">${l}</button>`).join('')}</div><div class="muted" id="pm-${id}"></div></div>`;
+  }
+  async function saveSkip(id, reason) {
+    if (!(await ensureKey())) return;
+    try {
+      const res = await fetch('/api/tracker/skipped/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+      const d = await res.json().catch(() => ({}));
+      if (res.status === 401) { lock(); return; }
+      if (!res.ok) { const m = $('pm-' + id); if (m) m.textContent = d.error || 'Errore ' + res.status; return; }
+      loadSignals();
+    } catch (e) { const m = $('pm-' + id); if (m) m.textContent = 'Errore: ' + e.message; }
+  }
+  async function undoSkip(sid) {
+    if (!(await ensureKey())) return;
+    const res = await fetch('/api/tracker/skipped/' + sid, { method: 'DELETE', headers: { 'x-run-key': key } });
+    if (res.status === 401) { lock(); return; }
+    loadSignals();
+  }
   async function deletePlay(id) {
     if (!confirm('Cancello questa giocata?')) return;
     if (!(await ensureKey())) return;
@@ -871,7 +896,8 @@
         <div><dt>Saldo vero</dt><dd class="${d.settled ? cls(d.pnlEur) : ''}">${d.settled ? signedMoney(d.pnlEur) + ` (${d.won} vinte su ${d.settled})` : 'nessun risultato ancora'}</dd></div>
         <div><dt>Valore delle tue quote vs chiusura</dt><dd class="${d.measured ? cls(d.avgClvPct) : ''}">${d.measured ? pct(d.avgClvPct) + `, positive ${num(d.positivePct, 0)}%` : 'da misurare'}</dd></div>
         <div><dt>Guadagno atteso (senza fortuna)</dt><dd class="${d.measured ? cls(d.expectedEur) : ''}">${d.measured ? signedMoney(d.expectedEur) : '—'}</dd></div>
-        <div><dt>Quota presa rispetto al segnale</dt><dd>${d.avgSlipPct !== null ? pct(d.avgSlipPct) : '—'}${d.okMinPct !== null ? ` · sopra la minima ${num(d.okMinPct, 0)}%` : ''}</dd></div></dl>
+        <div><dt>Quota presa rispetto al segnale</dt><dd>${d.avgSlipPct !== null ? pct(d.avgSlipPct) : '—'}${d.okMinPct !== null ? ` · sopra la minima ${num(d.okMinPct, 0)}%` : ''}</dd></div>
+        ${d.skipped && d.skipped.count ? `<div><dt>Non giocate</dt><dd>${d.skipped.count} · ${d.skipped.byReason.map(b => esc(b.label) + ' ' + b.n).join(', ')}${d.skipped.playablePct !== null ? ` · riuscite ${num(d.skipped.playablePct, 0)}%` : ''}</dd></div>` : ''}</dl>
       <h4>Ultime giocate</h4>` + d.items.slice(0, 20).map(x => `<div class="move"><span>${esc(x.home)} – ${esc(x.away)} · <b>${sel[x.selection] || ''}</b><small>${esc(x.book)} ${num(x.odd, 2)} · ${money(x.stake)}${x.clvPct !== null ? ' · ' + pct(x.clvPct) + ' vs chiusura' : ''}${x.result === 'won' || x.result === 'lost' ? ' · ' + (x.result === 'won' ? 'vinta ' : 'persa ') + esc(x.score || '') : ''}</small>${Date.parse(x.commence_time) < Date.now() ? resEdit(x.signalId, x.home, x.away, x.result === 'won' || x.result === 'lost') : ''}</span><span style="display:flex;gap:10px;align-items:center;"><b class="${x.pnlEur !== null ? cls(x.pnlEur) : 'muted'}">${x.pnlEur !== null ? signedMoney(x.pnlEur) : 'in attesa'}</b><button class="linkbtn" aria-label="Cancella" onclick="deletePlay(${x.id})">✕</button></span></div>`).join('');
   }
   // RISULTATO A MANO per i segnali italiani (le serie minori non le copre nessuna fonte gratuita): gol dei 90 minuti, si puo' correggere

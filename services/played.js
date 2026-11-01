@@ -76,12 +76,52 @@ function summarize(rows, minEdgePct = 2) {
   };
 }
 
+// ------------------------------------------------------------------------------------------- non giocate (1° novembre 2026)
+/**
+ * Segnali che si volevano giocare ma non si e' riusciti: senza questo dato i numeri sembrano migliori della realta'.
+ * Motivi: quota scesa sotto la minima, partita non trovata sul sito, nessun tempo per giocarla.
+ */
+const SKIP_REASONS = { quota: 'quota scesa', trovata: 'partita non trovata', tempo: 'non avevo tempo' };
+let skipReady = false;
+async function ensureSkipped(pool) {
+  if (skipReady) return;
+  await pool.query(`CREATE TABLE IF NOT EXISTS skipped_bets (id SERIAL PRIMARY KEY, signal_id INT NOT NULL, reason TEXT NOT NULL, book TEXT, odd_seen NUMERIC(8,3), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS skipped_bets_signal ON skipped_bets (signal_id)`);
+  skipReady = true;
+}
+async function addSkipped(pool, signalId, body = {}) {
+  await ensureSkipped(pool);
+  const reason = String(body.reason || '');
+  if (!SKIP_REASONS[reason]) { const e = new Error('Scegli il motivo.'); e.status = 400; throw e; }
+  const s = (await pool.query(`SELECT id FROM italia_signals WHERE id = $1`, [signalId])).rows[0];
+  if (!s) { const e = new Error('Segnale non trovato.'); e.status = 404; throw e; }
+  const odd = Number(String(body.odd || '').replace(',', '.'));
+  const r = await pool.query(`INSERT INTO skipped_bets (signal_id, reason, book, odd_seen) VALUES ($1,$2,$3,$4) RETURNING id`,
+    [signalId, reason, body.book ? String(body.book).slice(0, 40) : null, odd > 1 && odd < 100 ? odd : null]);
+  return { id: r.rows[0].id };
+}
+async function deleteSkipped(pool, id) { await ensureSkipped(pool); return { deleted: (await pool.query(`DELETE FROM skipped_bets WHERE id = $1`, [id])).rowCount }; }
+async function skippedSignalIds(pool) {
+  try { await ensureSkipped(pool); return new Map((await pool.query(`SELECT id, signal_id, reason FROM skipped_bets ORDER BY id`)).rows.map(r => [Number(r.signal_id), { id: Number(r.id), reason: r.reason, label: SKIP_REASONS[r.reason] || r.reason }])); }
+  catch (e) { return new Map(); }
+}
+
 async function getPlayed(pool) {
   await ensurePlayed(pool);
   const { rows } = await pool.query(
     `SELECT p.*, s.home, s.away, s.selection, s.commence_time, s.odd AS signal_odd, s.book AS signal_book, s.fair_prob, s.closing_fair_prob, s.result, s.result_score
      FROM played_bets p JOIN italia_signals s ON s.id = p.signal_id ORDER BY p.created_at DESC LIMIT 500`);
-  return summarize(rows);
+  const out = summarize(rows);
+  try {
+    await ensureSkipped(pool);
+    const sk = (await pool.query(`SELECT k.*, s.home, s.away, s.selection, s.commence_time, s.clv_pct FROM skipped_bets k JOIN italia_signals s ON s.id = k.signal_id ORDER BY k.created_at DESC LIMIT 500`)).rows;
+    const by = {}; for (const r of sk) by[r.reason] = (by[r.reason] || 0) + 1;
+    // quota di giocabilita': delle giocate tentate, quante sono riuscite
+    out.skipped = { count: sk.length, byReason: Object.entries(by).map(([k, n]) => ({ reason: k, label: SKIP_REASONS[k] || k, n })),
+      playablePct: out.count + sk.length ? 100 * out.count / (out.count + sk.length) : null,
+      items: sk.slice(0, 20).map(r => ({ id: r.id, signalId: r.signal_id, at: r.created_at, home: r.home, away: r.away, selection: r.selection, reason: r.reason, label: SKIP_REASONS[r.reason] || r.reason, clvPct: r.clv_pct !== null ? Number(r.clv_pct) : null })) };
+  } catch (e) { out.skipped = { count: 0, byReason: [], playablePct: null, items: [] }; }
+  return out;
 }
 
 /** Id dei segnali gia' giocati (per segnarli nell'app). */
@@ -90,4 +130,4 @@ async function playedSignalIds(pool) {
   catch (e) { return new Map(); }
 }
 
-module.exports = { PLAYABLE, ensurePlayed, validate, addPlayed, deletePlayed, summarize, getPlayed, playedSignalIds };
+module.exports = { SKIP_REASONS, ensureSkipped, addSkipped, deleteSkipped, skippedSignalIds, PLAYABLE, ensurePlayed, validate, addPlayed, deletePlayed, summarize, getPlayed, playedSignalIds };

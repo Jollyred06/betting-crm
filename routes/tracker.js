@@ -43,6 +43,17 @@ router.delete('/played/:id', async (req, res) => {
   try { res.json({ success: true, ...(await require('../services/played').deletePlayed(pool, Number(req.params.id))) }); }
   catch (err) { res.status(500).json({ error: err.message }); }
 });
+// Non giocate (con il motivo): scrittura e cancellazione con la chiave
+router.post('/skipped/:signalId', async (req, res) => {
+  if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json({ success: true, ...(await require('../services/played').addSkipped(pool, Number(req.params.signalId), req.body || {})) }); }
+  catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
+router.delete('/skipped/:id', async (req, res) => {
+  if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json({ success: true, ...(await require('../services/played').deleteSkipped(pool, Number(req.params.id))) }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
 // Segnali I e B per l'analisi settimanale automatica: sola lettura, niente chiavi e niente dati personali (le giocate vere restano fuori)
 router.get('/italia-export', async (req, res) => {
   try {

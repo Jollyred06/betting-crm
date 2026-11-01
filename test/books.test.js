@@ -32,3 +32,14 @@ for (let i = 0; i < 12; i++) pres.push({ id: 3000 + i, event_id: 'r' + i, select
 assert.ok(buildBooks(pres, { my: ['snai'], nowMs: NOW }).alerts.some(a => a.kind === 'sparisce'));
 assert.strictEqual(verdictOf(band([1, 2])), 'pochi');
 console.log('books.test.js: tutti i controlli passati');
+// quote dei siti italiani alla chiusura (stessa richiesta di Pinnacle)
+{
+  const I = require('../services/italia');
+  const rec = (id, books) => ({ event_id: id, market: '1x2', home_team: 'A', away_team: 'B', commence_time: '2026-11-01T15:00:00Z', bookmakers: books });
+  const bk = (key, h, d, a) => ({ key, outcomes: { HOME: h, DRAW: d, AWAY: a } });
+  const q = I.closingQuotes([rec('e1', [bk('pinnacle', 2, 3.4, 3.9), bk('snai', 1.95, 3.3, 3.8)]), rec('e2', [bk('888sport_it', 1.9, 3.2, 4)])], 'e1');
+  assert.deepStrictEqual(q.snai, [1.95, 3.3, 3.8]); assert.ok(!q.pinnacle && q['888sport_it']);   // anche la riga separata dello stesso match
+  assert.strictEqual(I.closingQuotes([], 'x'), null);
+  assert.deepStrictEqual(Object.keys(require('../services/played').SKIP_REASONS), ['quota', 'trovata', 'tempo']);
+  console.log('quote italiane alla chiusura e motivi delle non giocate: ok');
+}
