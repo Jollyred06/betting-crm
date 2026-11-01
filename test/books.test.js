@@ -176,3 +176,14 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(r.length, 2); assert.ok(Math.abs(r.find(x => x.line === 2.5).fairOver - 0.506) < 0.01);
   console.log('Over/Under di Pinnacle: ok');
 }
+// 🏠 fattore campo: niente 2 nei mercati sottili tra le ⭐
+{
+  const I = require('../services/italia');
+  const base = { final4: true, final6: true, play: { book: 'Snai', odd: 2.5 }, win_prob: 0.42, odd: 2.5, league: 'Serie C', commence_time: '2099-01-01T12:00:00Z' };
+  const items = [{ ...base, id: 1, event_id: 'a', selection: 'away', pin_margin: 9 }, { ...base, id: 2, event_id: 'b', selection: 'away', pin_margin: 4 }, { ...base, id: 3, event_id: 'c', selection: 'home', pin_margin: 9 }];
+  assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', noAwayThin: true }).sort(), [2, 3]);
+  assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', noAwayThin: false }).length, 3);
+  assert.strictEqual(I.isAwayThin({ selection: 'away', pin_h: 2.2, pin_d: 3.2, pin_a: 3.0 }), true);    // margine circa 9%
+  assert.strictEqual(I.budgetCfg({}).noAwayThin, true); assert.strictEqual(I.budgetCfg({ BEST_AWAY_THIN: 'true' }).noAwayThin, false);
+  console.log('fattore campo: ok');
+}

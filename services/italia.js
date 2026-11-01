@@ -671,6 +671,20 @@ const markFinal9 = (rows, o) => markPaper(rows, r => [
   ...(liquidOf(r, FINAL9.maxMarginPct) ? [] : ['mercato sottile']),
   ...(Number(r.odd) <= FINAL9.maxOdd ? [] : ['quota sopra 3,50'])], FINAL9.since, o);
 
+// ------------------------------------------------------------------------------------------- 🏠 fattore campo (1° novembre 2026)
+/**
+ * Regola fissata il 1° novembre 2026 alle 21:20 (ora italiana), PRIMA dei risultati successivi, sui 363 segnali I chiusi:
+ * nei mercati sottili (margine Pinnacle dal 6%, campionati minori) la squadra in TRASFERTA vince meno di quanto dice Pinnacle
+ * (37 vinte su 46,1 attese, saldo -40,86 euro), mentre casa e pareggio vincono di piu'. Su tutte le partite: 2 usciti 109 contro 121,5 attesi.
+ * Nei mercati liquidi la trasferta va bene (17 su 13,9). Quindi: fuori dalla lista da giocare il 2 nei mercati sottili. Si misura tutto lo stesso.
+ */
+const AWAY_THIN = { since: '2026-11-01T20:20:00Z', thinMarginPct: 6 };
+function isAwayThin(r) {
+  if (r.selection !== 'away') return false;
+  const m = r.pin_margin !== undefined ? r.pin_margin : pinMarginPct(r);
+  return m !== null && m !== undefined && Number(m) >= AWAY_THIN.thinMarginPct;
+}
+
 // ------------------------------------------------------------------------------------------- 👥 consenso dei siti (1° novembre 2026)
 const CONSENSUS = { since: '2026-11-01T16:00:00Z', minEdgePct: 2, agreeMin: 4, isolatedRatio: 1.08, minSites: 3 };
 /** Parte pura (testata): quanti siti italiani pagano sopra il prezzo giusto e quanto la quota sta sopra la mediana degli altri. */
@@ -713,7 +727,9 @@ const budgetCfg = (env = process.env) => ({
   rule: ['consigliate', 'sicure', 'tutte'].includes(env.BEST_RULE) ? env.BEST_RULE : 'consigliate',
   onlySafe: env.BEST_RULE === 'sicure',
   // 1° novembre 2026: nella lista da giocare niente quote sopra 3,50 (F2+ fino a 3,50: +5..+8% contro la chiusura; sopra: -3,1% su 17)
-  maxOdd: Number(env.BEST_MAX_ODD) > 1 ? Number(env.BEST_MAX_ODD) : 3.5
+  maxOdd: Number(env.BEST_MAX_ODD) > 1 ? Number(env.BEST_MAX_ODD) : 3.5,
+  // 1° novembre 2026: niente 2 (trasferta) nei mercati sottili; BEST_AWAY_THIN=true su Render per rimetterle
+  noAwayThin: env.BEST_AWAY_THIN !== 'true'
 });
 
 /**
@@ -735,7 +751,7 @@ function winCheck(rows, minN = 30) {
  * Solo F2+ non ancora iniziate, giocabili su 888sport o Snai a quota almeno minima, non gia' giocate;
  * ordinate per valore della quota consigliata, al massimo maxPerDay meno quelle gia' giocate oggi. Niente se il budget e' allo stop.
  */
-function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null, maxOdd = 3.5 } = {}) {
+function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null, maxOdd = 3.5, noAwayThin = false } = {}) {
   if (stopped) return [];
   const room = Math.max(0, maxPerDay - playedToday);
   const value = r => r.play && r.win_prob ? r.play.odd * r.win_prob - 1 : -1;
@@ -743,7 +759,8 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   const solidOf = r => (r.solid && r.solid.score >= 2 ? 1 : 0);
   // 30 ottobre 2026: niente partite di coppa nella lista da giocare (formazioni incerte: le ✅ di coppa CLV -3,4% su 15,
   // quelle di campionato +4,9% su 61). Le misure non cambiano: le coppe restano nei segnali e nell'archivio.
-  const ok = r => !isCup(r.league) && !(Number(r.odd) > maxOdd) && !(r.play && r.play.odd > maxOdd) && (rule === 'consigliate' ? r.final6 : (rule === 'sicure' || onlySafe) ? r.final5 : true);
+  // 1° novembre 2026 (21:20): niente trasferte nei mercati sottili (vedi AWAY_THIN)
+  const ok = r => !(noAwayThin && isAwayThin(r)) && !isCup(r.league) && !(Number(r.odd) > maxOdd) && !(r.play && r.play.odd > maxOdd) && (rule === 'consigliate' ? r.final6 : (rule === 'sicure' || onlySafe) ? r.final5 : true);
   // una sola giocata per partita (26 ottobre 2026): se ci sono due esiti della stessa partita (es. X e 2) si tiene il piu' conveniente,
   // perche' sono giocate legate tra loro (se una vince l'altra perde). Non cambia nessuna misura, solo la lista da giocare.
   const seen = new Set();
@@ -919,7 +936,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final8: !!(p8.map.get(r.id) || {}).final, final9: !!(p9.map.get(r.id) || {}).final,
       pin_margin: pinMarginPct(r), thin: pinMarginPct(r) !== null && pinMarginPct(r) >= FINAL6.thinMarginPct, solid: solidity(r),
       six: !!(fin.get(firstOf.get(sigKey(r))) || {}).final && isSix(r),
-      alt: strategy === 'I' ? altOdds(r) : null, consensus: strategy === 'I' ? consOf(r) : null, played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null,
+      alt: strategy === 'I' ? altOdds(r) : null, consensus: strategy === 'I' ? consOf(r) : null, awayThin: isAwayThin(r), played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null,
       skipped: skipped.get(Number(r.id)) || skippedByKey.get(sigKey(r)) || null,
       // dove giocarlo: il bookmaker consigliato (888sport o Snai) con la quota piu' alta, solo se almeno la minima
       play: (() => { const a = strategy === 'I' ? altOdds(r) : null, m = r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null;
@@ -934,13 +951,17 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     out.budget = budget;
     const bc = budgetCfg(env);
     out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule; out.myBooks = c.myBooks.map(k => BOOK_NAMES[k] || k);
-    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd });
-    out.bestMaxOdd = bc.maxOdd;
+    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd, noAwayThin: bc.noAwayThin });
+    out.bestMaxOdd = bc.maxOdd; out.bestNoAwayThin = bc.noAwayThin;
     // vinte contro attese della lista da giocare (stesse regole: selezione, niente coppe, quota fino al massimo)
     const ruleRows = bc.rule === 'consigliate' ? fin6Rows : bc.rule === 'sicure' ? fin5Rows : fin4Rows;
-    out.bestCheck = winCheck(ruleRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd));
+    out.bestCheck = winCheck(ruleRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd && !(bc.noAwayThin && isAwayThin(r))));
+    // 🏠 fattore campo sulla carta: le ✅ fino alla quota massima, con e senza le trasferte nei mercati sottili
+    const hf = ruleRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd), t0 = Date.parse(AWAY_THIN.since);
+    const grp = l => { const now = l.filter(r => Date.parse(r.created_at) >= t0); return { ...oddsStats(now), results: R.resultStats(now), retro: { ...oddsStats(l), results: R.resultStats(l) } }; };
+    out.homeField = { rules: AWAY_THIN, active: bc.noAwayThin, kept: grp(hf.filter(r => !isAwayThin(r))), awayThin: grp(hf.filter(isAwayThin)) };
   }
   return out;
 }
 
-module.exports = { planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
