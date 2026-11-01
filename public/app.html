@@ -995,7 +995,7 @@
             <div class="pick"><span>${it && r.play ? `Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
             ${it && r.best && r.play && live ? `<div class="todo-line">${isNow(r) ? '<span class="chip now">⏱️ Ora è il momento</span> ' : ''}quota minima <b>${num(r.min_odd, 2)}</b></div>` : ''}
             ${it && r.play && live && !r.played && !r.skipped ? `<div class="ochips">${consChip(r)}</div>` : ''}
-            ${it && !r.play && !r.played ? `<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>` : ''}
+            ${it && !r.play && !r.played ? `<div class="todo-line no">⛔ Non giocabile sui tuoi siti${live && !r.skipped ? ': se l\'hai giocata altrove (es. ' + esc(r.book) + '), segnala qui sotto' : ''}</div>${live || r.skipped ? playActions(r) : ''}` : ''}
             ${it && (r.best || r.played || r.skipped) ? playActions(r) : ''}
             ${it && !r.best && !r.played && !r.skipped && r.play && live ? `<div class="notbest">⚠️ Non è tra le ⭐ da giocare: se la giochi lo stesso, segnala qui sotto (conta nel budget).</div>${playActions(r)}` : ''}
             ${r.result === 'won' || r.result === 'lost' ? `<div class="foot"><span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span></div>` : ''}
@@ -1057,7 +1057,7 @@
     box.dataset.kind = 'play';
     // proposta: il bookmaker consigliato con la quota piu' alta sopra la minima, altrimenti quello del segnale
     const ok = Object.entries(r.alt || {}).filter(([, v]) => !r.min_odd || v >= r.min_odd).sort((a, b) => b[1] - a[1])[0];
-    const PLAY_BOOKS = playBooks(), book = ok ? ok[0] : (PLAY_BOOKS.includes(r.book) ? r.book : PLAY_BOOKS[0]), odd = ok ? ok[1] : r.odd;
+    const PLAY_BOOKS = [...new Set([...playBooks(), r.book].filter(Boolean))], book = ok ? ok[0] : (PLAY_BOOKS.includes(r.book) ? r.book : PLAY_BOOKS[0]), odd = ok ? ok[1] : r.odd;
     box.innerHTML = `<div class="pf"><label>Sito<select class="f-book">${PLAY_BOOKS.map(b => `<option${b === book ? ' selected' : ''}>${b}</option>`).join('')}</select></label>
       <label>Quota presa<input class="f-odd" type="number" inputmode="decimal" step="0.01" value="${odd}"></label>
       <label>Puntata €<input class="f-stake" type="number" inputmode="decimal" step="0.5" value="2"></label>
