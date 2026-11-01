@@ -226,6 +226,7 @@
   @media (prefers-reduced-motion: reduce) { .band { animation:none; } .fill { transition:none; } .sk { animation:none; } }
   .ocheck { padding:12px 0; border-top:1px solid var(--line); } .ocheck:first-child { border-top:0; } .ocheck small { display:block; color:var(--muted); margin:2px 0 8px; }
   .ochips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; } .ochips:empty { display:none; } .chip.warnc { border-color:var(--warn); color:var(--ink); }
+  .minline { margin-top:8px; display:inline-block; padding:6px 12px; border-radius:10px; border:1.5px solid var(--ok); font-size:15px; } .minline b { font-size:17px; } .minline.low { border-color:var(--bad); }
 </style>
 </head>
 <body>
@@ -861,13 +862,19 @@
     const iso = ratio > 1.08 ? `<span class="chip warnc" title="Quota molto sopra gli altri siti: controlla che ci sia ancora prima di puntare">⚠️ quota isolata +${num((ratio - 1) * 100, 0)}%</span>` : '';
     return `<span class="chip${k.above >= 4 ? ' fin' : ''}" title="Siti italiani che pagano sopra il prezzo giusto">👥 ${k.above} su ${k.sites} d'accordo</span>${iso}`;
   }
+  // 🎯 quota minima sempre in vista: sotto questa quota il segnale non ha piu' valore
+  function minLine(r) {
+    if (!r || !r.min_odd) return '';
+    const cur = r.play ? r.play.odd : r.odd, ok = cur >= r.min_odd;
+    return `<div class="minline${ok ? '' : ' low'}">🎯 Gioca solo da <b>${num(r.min_odd, 2)}</b> in su${ok ? '' : ' · ora è sotto'}</div>`;
+  }
   function oggiRow(r) {
     const t = Date.parse(r.commence_time), until = new Date(t - 30 * 60000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     return `<article class="orow${isNow(r) ? ' now' : ''}">
       <div class="ot"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>
-        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`} · solo se la quota è almeno <b>${num(r.min_odd, 2)}</b></div>
+        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}
         <div class="ochips">${consChip(r)}</div>
         ${playActions(r)}</div>
       <div class="oq">${num(r.play ? r.play.odd : r.odd, 2)}</div></article>`;
@@ -993,7 +1000,8 @@
           <div class="tmain">
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="pick"><span>${it && r.play ? `Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
-            ${it && r.best && r.play && live ? `<div class="todo-line">${isNow(r) ? '<span class="chip now">⏱️ Ora è il momento</span> ' : ''}quota minima <b>${num(r.min_odd, 2)}</b></div>` : ''}
+            ${it && r.best && r.play && live && isNow(r) ? `<div class="todo-line"><span class="chip now">⏱️ Ora è il momento</span></div>` : ''}
+            ${it && r.min_odd && live && !r.played && !r.skipped ? minLine(r) : ''}
             ${it && r.play && live && !r.played && !r.skipped ? `<div class="ochips">${consChip(r)}</div>` : ''}
             ${it && !r.play && !r.played ? `<div class="todo-line no">⛔ Non giocabile sui tuoi siti${live && !r.skipped ? ': se l\'hai giocata altrove (es. ' + esc(r.book) + '), segnala qui sotto' : ''}</div>${live || r.skipped ? playActions(r) : ''}` : ''}
             ${it && (r.best || r.played || r.skipped) ? playActions(r) : ''}
