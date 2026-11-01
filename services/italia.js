@@ -335,7 +335,6 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
     commence_from: new Date(nowMs + c.minLeadMin * 60000).toISOString(),
     commence_to: new Date(nowMs + c.windowHours * 3600000).toISOString()
   }, 'scan', http);
-  // ⚡ quote maggiorate: i prezzi di Pinnacle di tutte le partite viste restano a disposizione (nessuna richiesta in piu')
   if (!pinBoardDropped) { pinBoardDropped = true; try { await pool.query('DROP TABLE IF EXISTS pin_board'); } catch (e) { /* facoltativo */ } }   // quote maggiorate tolte il 1° novembre
   const found = findSignals(records, c, nowMs);
   const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
