@@ -192,6 +192,7 @@
   .oempty { color:var(--muted); background:var(--surface); border:1.5px dashed var(--line); border-radius:16px; padding:16px; font-size:14.5px; }
   .otodo { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-weight:600; } .otodo small { color:var(--muted); font-weight:500; }
   .primary.wide { width:100%; margin-top:12px; }
+  .oplay { display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); } .oplay:last-child { border-bottom:0; } .oplay b { display:block; font-weight:600; } .oplay small { color:var(--muted); font-size:13px; } .ores { display:flex; flex-direction:column; align-items:flex-end; gap:4px; text-align:right; white-space:nowrap; } .chip.live { border-color:#2a9df4; color:#2a9df4; }
   .pact { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; } .pact .playbtn { margin-top:0; } .pact .playform { flex-basis:100%; }
   .chipbtn { border:1.5px solid var(--line); background:var(--surface); border-radius:999px; padding:7px 12px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink); } .skipr { flex-wrap:wrap; gap:8px; }
   details.tdet { border:0; padding:0; margin-top:6px; } details.tdet > summary { min-height:0; padding:4px 0; font-size:13px; font-weight:600; color:var(--muted); list-style:none; } details.tdet > summary::before { content:'▸ '; } details.tdet[open] > summary::before { content:'▾ '; }
@@ -833,6 +834,9 @@
       const b = d.budget || { start: 100, balance: 100, pnl: 0, stop: 60, playedToday: 0, maxPerDay: 5 }, ck = d.bestCheck;
       const best = (d.best || []).map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
       const todo = P && P.items ? P.items.filter(x => !['won', 'lost', 'void'].includes(x.result) && Date.parse(x.commence_time) < Date.now() - 150 * 60000) : [];
+      // le giocate di oggi (anche finite) e quelle delle prossime partite, dalla prima che si gioca
+      const romeDay = ms => new Date(ms).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }), today = romeDay(Date.now());
+      const mine = (P && P.items || []).filter(x => romeDay(Date.parse(x.commence_time)) === today || Date.parse(x.commence_time) > Date.now()).sort((a, b) => Date.parse(a.commence_time) - Date.parse(b.commence_time)).slice(0, 10);
       // avvisi: solo quelli che chiedono di fare qualcosa (rossi e gialli), al massimo 3
       const alerts = [];
       if (ck && ck.level === 'allarme') alerts.push({ lv: 'bad', t: 'Le vinte sono troppo sotto le attese', s: `${ck.won} vinte su ${ck.n}, attese ${num(ck.expected, 1)}. Fermati e mandami il backup.` });
@@ -857,6 +861,8 @@
             : best.length ? best.map(oggiRow).join('')
             : `<div class="oempty">${room ? 'Nessuna partita da giocare adesso. Compaiono da sole quando mancano meno di 3 ore e la quota è giusta: il CRM controlla ogni 3 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata.' : 'Hai già fatto le giocate di oggi.'}</div>`}
         </section>
+        ${mine.length ? `<section class="block"><h3>🎯 Le tue giocate <small class="muted">· oggi e prossime</small></h3><div class="card3">${mine.map(x => { const t = Date.parse(x.commence_time), st = x.result === 'won' ? `<span class="chip won">vinta ${esc(x.score || '')}</span>` : x.result === 'lost' ? `<span class="chip lost">persa ${esc(x.score || '')}</span>` : x.result === 'void' ? '<span class="chip">annullata</span>' : Date.now() < t ? `<span class="muted">alle ${dt(x.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>` : Date.now() < t + 115 * 60000 ? '<span class="chip live">● in corso</span>' : '<span class="muted">finita, risultato in arrivo</span>';
+            return `<div class="oplay"><div><b>${esc(x.home)} – ${esc(x.away)}</b><small>${esc({ home: '1', draw: 'X', away: '2' }[x.selection] || '')} su ${esc(x.book)} a ${num(x.odd, 2)} · ${money(x.stake)} · <a class="tlink" href="${liveUrl(x.home, x.away)}" rel="noopener" onclick="rememberSpot()">🔎 su Google</a></small></div><div class="ores">${st}${x.pnlEur !== null ? `<b class="${cls(x.pnlEur)}">${signedMoney(x.pnlEur)}</b>` : ''}</div></div>`; }).join('')}</div></section>` : ''}
         ${todo.length ? `<section class="block"><h3>✏️ Da segnare</h3><div class="card3">${todo.slice(0, 6).map(x => `<div class="otodo">${esc(x.home)} – ${esc(x.away)}<small>${esc(x.book)} ${num(x.odd, 2)}</small></div>`).join('')}<button class="primary wide" onclick="show('bankroll')">Segna i risultati</button></div><p class="muted">Quelle delle serie maggiori si chiudono da sole entro domattina.</p></section>` : ''}
         ${alerts.length ? `<section class="block"><h3>Avvisi</h3><div class="list card3">${alerts.slice(0, 3).map(a => `<div>${sdot(a.lv)}<div><b>${esc(a.t)}</b><span class="muted">${esc(a.s)}</span></div></div>`).join('')}</div></section>` : ''}`;
       lastLoad = Date.now();
@@ -981,7 +987,11 @@
     const note = hidden > 0 ? `<p class="muted hidnote">${hidden} ${hidden === 1 ? 'segnale nascosto' : 'segnali nascosti'} dai filtri (${[sigScope === 'mine' ? 'non giocabili sui tuoi siti' : '', sixOnly ? 'non 🎯 6 su 10' : ''].filter(Boolean).join(' o ')}). <button class="linkbtn" onclick="sixOnly=false;try{localStorage.setItem('sixOnly','0')}catch(e){};setScope('it')">Mostrali</button></p>` : '';
     if (!list.length) return top + (note ? head + note : '');
     // gli altri segnali non si giocano: nascosti finche' non li chiedi (meno confusione)
-    if (it && !showOthers) return top + `<button class="sixbtn" onclick="showOthers=true;loadSignals()">Mostra anche gli altri ${list.length} segnali · solo da guardare</button>`;
+    if (it && !showOthers) {
+      const mineList = list.filter(r => r.played || r.skipped), rest = list.length - mineList.length;
+      return top + (mineList.length ? `<h4 class="sechead">🎯 Le tue giocate</h4>` + mineList.map(r => ticket(r, chip)).join('') : '')
+        + (rest ? `<button class="sixbtn" onclick="showOthers=true;loadSignals()">Mostra anche gli altri ${rest} segnali · solo da guardare</button>` : '');
+    }
     return top + head + note + list.map(r => ticket(r, chip)).join('') + (it ? `<button class="sixbtn" onclick="showOthers=false;loadSignals()">Nascondi gli altri segnali</button>` : '') + tail;
   }
   // i siti dove hai il conto (MY_BOOKS su Render) per primi, poi gli altri piu' comuni
