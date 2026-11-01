@@ -112,6 +112,7 @@ console.log('riepilogo: ok');
   history.refreshCurrentSeason = async () => ({ ok: true, partite: 10 });
   const NAMES = { SA: ['Inter', 'Milan', 'Roma', 'Verona'], PL: ['Arsenal', 'Chelsea'], T1: ['Galatasaray', 'Fenerbahce'], G1: ['Olympiakos', 'AEK'], B1: ['Club Brugge', 'Anderlecht'] };
   history.loadMatches = async (pl, code) => { const n = NAMES[code] || ['X', 'Y']; return [{ home: n[0], away: n[1] }, ...(n[2] ? [{ home: n[2], away: n[3] }] : [])]; };
+  process.env.A_ENABLED = 'true';   // strategia A in archivio dal 1° novembre: qui si prova la logica
   const { runDailyAnalysis } = require('../services/orchestrator');
   const out = await runDailyAnalysis();
   assert.strictEqual(inserted.length, 2, JSON.stringify(inserted));                       // Milan a 4.20 (SA) + Fenerbahce a 4.20 (T1, partite dalle quote)

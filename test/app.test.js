@@ -1,3 +1,4 @@
+process.env.A_ENABLED = 'true';   // strategia A in archivio dal 1° novembre: qui si prova la logica dei controlli
 // App unica: controlli di salute, chiave, e tutta la pagina (Home, Segnali, Strategie, Bankroll, Altro) con un finto browser su dati reali.
 const assert = require('assert'), fs = require('fs'), path = require('path'), vm = require('vm');
 const Module = require('module'), origLoad = Module._load;

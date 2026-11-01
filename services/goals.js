@@ -212,12 +212,15 @@ async function getGoals(pool, env = process.env) {
   const c = require('./italia').cfg(env);
   const w = (await pool.query(`SELECT event_id, league, home, away, commence_time, exp_goals, valanga, draw_prob, margin_pct, goals, result_score FROM goal_watch WHERE first_seen >= $1 ORDER BY commence_time DESC`, [RULES.since])).rows;
   const done = w.filter(r => r.goals !== null);
-  const band = (lo, hi) => { const s = done.filter(r => Number(r.exp_goals) >= lo && Number(r.exp_goals) < hi); return { lo, hi, ...overStats(s.map(r => r.goals)) }; };
+  const band = (lo, hi) => { const s = done.filter(r => r.exp_goals !== null && Number(r.exp_goals) >= lo && Number(r.exp_goals) < hi); return { lo, hi, ...overStats(s.map(r => r.goals)) }; };
   const val = w.filter(r => r.valanga);
   const sig = (await pool.query(`SELECT strategy, line, side, odd, edge_pct, result FROM goal_signals WHERE created_at >= $1`, [RULES.since])).rows;
   const sstat = list => { const s = list.filter(r => r.result); const pnl = s.reduce((a, r) => a + (r.result === 'won' ? 2 * (Number(r.odd) - 1) : -2), 0);
     return { signals: list.length, settled: s.length, won: s.filter(r => r.result === 'won').length, pnlEur: pnl }; };
+  let pinOU = null;
+  try { pinOU = await require('./ouPinnacle').getPinOU(pool); } catch (e) { /* facoltativo */ }
   return {
+    pinOU,
     rules: { since: RULES.since, formula: FORMULA, valanga: VALANGA, gstar: GSTAR }, reference: REFERENCE,
     watched: w.length, settled: done.length, all: overStats(done.map(r => r.goals)),
     formula: [band(0, 2.5), band(2.5, 3), band(3, 99)],

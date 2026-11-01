@@ -1,3 +1,4 @@
+process.env.A_ENABLED = 'true';   // strategia A in archivio dal 1° novembre: qui si prova la logica dei controlli
 // Dati della pagina tracker: verdetto onesto, segnali con nomi e scelta leggibile, lettura del log dell'ultimo giro.
 const assert = require('assert');
 const Module = require('module'), origLoad = Module._load;

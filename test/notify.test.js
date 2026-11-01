@@ -1,3 +1,4 @@
+process.env.A_ENABLED = 'true';   // strategia A in archivio dal 1° novembre: qui si prova la sua logica
 // Avvisi Telegram: testo del messaggio, invio con un finto Telegram, ricerca del chat id, e avviso dopo il salvataggio dei segnali.
 const assert = require('assert'), Module = require('module'), origLoad = Module._load;
 const sent = []; let telegramFail = null, updates = { result: [] };

@@ -1,3 +1,4 @@
+process.env.A_ENABLED = 'true';   // strategia A in archivio dal 1° novembre: qui si prova la sua logica
 // Giro giornaliero con Over/Under spento e acceso: spento non cambia nulla, acceso salva segnali separati (market OU2.5, strategy A_sharp_ou).
 const assert = require('assert'), Module = require('module'), origLoad = Module._load;
 Module._load = function (request) {

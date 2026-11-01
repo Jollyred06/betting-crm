@@ -152,6 +152,12 @@ async function runDailyAnalysisInner() {
     }
   } catch (err) { log.push(`Controllo delle tappe non riuscito: ${err.message}`); }
 
+  // 1° novembre 2026: strategia A in archivio (siti esteri, quote alte, 30 vinte su 110 con 35,9 attese). Non chiede piu' quote:
+  // i crediti di The Odds API vanno alle Over/Under di Pinnacle (services/ouPinnacle.js). Si riaccende con A_ENABLED=true su Render.
+  if (process.env.A_ENABLED !== 'true') {
+    log.push('Strategia A in archivio: nessuna quota richiesta (i crediti The Odds API vanno alle Over/Under di Pinnacle).');
+    return { log, totalValueBetsFound: 0, fixturesAnalyzed: 0, footballDataRequestsUsed: footballData.getRequestCount(), oddsApiRequestsUsed: 0 };
+  }
   // 2) campionati in stagione su The Odds API (elenco gratuito)
   let activeKeys = null;
   try { activeKeys = oddsApi.getActiveSportKeys ? await oddsApi.getActiveSportKeys() : null; }

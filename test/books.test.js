@@ -163,3 +163,16 @@ console.log('books.test.js: tutti i controlli passati');
   assert.ok(c.reserve < 60 && c.reserve >= 16);                         // a fine ciclo la riserva si accorcia
   console.log('piano richieste odss: ok');
 }
+// 📊 Over/Under di Pinnacle con The Odds API
+{
+  const O = require('../services/ouPinnacle'), G = require('../services/goals');
+  const now = Date.parse('2026-11-01T18:00:00Z');
+  const b = O.dailyBudget(488, 0, now); assert.strictEqual(b.days, 30); assert.strictEqual(b.perDay, 15);
+  assert.strictEqual(O.dailyBudget(473, 15, now).over, true);
+  assert.strictEqual(O.dailyBudget(25, 0, now).perDay, 0);              // sotto la scorta: niente letture
+  const ev = [{ id: 'x', home_team: 'A', away_team: 'B', commence_time: '2026-11-01T20:00:00Z', bookmakers: [{ key: 'pinnacle', markets: [{ key: 'totals', outcomes: [
+    { name: 'Over', price: 1.9, point: 2.5 }, { name: 'Under', price: 1.95, point: 2.5 }, { name: 'Over', price: 2.8, point: 3.5 }, { name: 'Under', price: 1.42, point: 3.5 }] }] }] }];
+  const r = O.parsePinTotals(ev, G.noVig2);
+  assert.strictEqual(r.length, 2); assert.ok(Math.abs(r.find(x => x.line === 2.5).fairOver - 0.506) < 0.01);
+  console.log('Over/Under di Pinnacle: ok');
+}

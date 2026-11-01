@@ -133,9 +133,11 @@ async function getHealth(pool, now = new Date(), env = process.env) {
     const n = romeParts(now), l = romeParts(run.at);
     const missedToday = n.mins >= 11 * 60 + 20 && !(l.ymd === n.ymd && l.mins >= 10 * 60 + 50);     // dopo le 11:20 deve esserci un giro di oggi, partito verso le 11:00
     // Risparmio crediti: con i crediti quasi finiti (o A_PAUSED=true su Render) la strategia A e' in pausa di proposito: niente allarmi rossi.
+    const archived = env.A_ENABLED !== 'true';
     const paused = env.A_PAUSED === 'true' || (run.credits && Number(run.credits.remaining) <= 100);
     if (!run.success) push('bad', 'Ultimo giro fallito', run.error || 'errore sconosciuto');
     else if (paused && (missedToday || hours > 26)) push('info', 'Strategia A in pausa', `Crediti di The Odds API quasi finiti: i giri della strategia A sono fermi di proposito e ripartono il 1° del mese con i crediti nuovi. Le strategie I, B e F continuano da sole (usano odss-api.com). Ultimo giro ${hoursLabel(hours)} fa.`);
+    else if (archived && (missedToday || hours > 26)) push('info', 'Strategia A in archivio', `Dal 1° novembre la strategia A non chiede piu' quote: i crediti di The Odds API vanno alle Over/Under di Pinnacle. Il giro delle 11 serve solo a chiudere i vecchi segnali. Ultimo giro ${hoursLabel(hours)} fa.`);
     else if (missedToday && hours <= 26) push('bad', 'Il giro di oggi non è partito', 'Alle 11:00 non risulta nessun giro. Apri la cronologia del job su cron-job.org: di solito è il server gratuito di Render ancora addormentato. Rimedio: aggiungi un job "sveglia" alle 10:55.');
     else if (hours > 26) push('bad', 'Il giro automatico non parte', `L'ultimo giro è di ${hoursLabel(hours)} fa: il job delle 11:00 su cron-job.org potrebbe essere fermo. Controllalo.`);
     else push('ok', 'Giro automatico', `Ultimo giro ${hoursLabel(hours)} fa.`);

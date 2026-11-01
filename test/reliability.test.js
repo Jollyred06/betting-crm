@@ -1,3 +1,4 @@
+process.env.A_ENABLED = 'true';   // strategia A in archivio dal 1° novembre: qui si prova la sua logica
 // Affidabilità: quote complete per segnale, salvataggio con ripiego, giro di riserva, controllo di sistema, backup e chiave nell'intestazione.
 const assert = require('assert'), Module = require('module'), origLoad = Module._load;
 const handlers = {};

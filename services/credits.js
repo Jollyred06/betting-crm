@@ -35,6 +35,17 @@ async function getCredits(pool, env = process.env, nowMs = Date.now()) {
     // l'ultimo giro e' di un mese passato: il 1° i crediti si sono ricaricati, il numero vecchio non vale piu'
     const stale = row && new Date(row.run_at).toISOString().slice(0, 7) !== new Date(nowMs).toISOString().slice(0, 7);
     if (stale) r = null;
+    // dal 1° novembre i crediti vanno alle Over/Under di Pinnacle: il conto piu' recente arriva da li'
+    try {
+      const o = (await q(`SELECT remaining, at FROM ou_requests WHERE remaining IS NOT NULL ORDER BY id DESC LIMIT 1`))[0];
+      if (o) {
+        const today = (await q(`SELECT COUNT(*)::int AS n FROM ou_requests WHERE paid AND at >= date_trunc('day', NOW())`))[0].n;
+        const b = require('./ouPinnacle').dailyBudget(Number(o.remaining), today, nowMs);
+        out.push({ key: 'oddsapi', name: 'The Odds API (Over/Under di Pinnacle)', remaining: Number(o.remaining), unit: 'crediti', usedToday: today, perDay: b.perDay, lastAt: o.at,
+          level: Number(o.remaining) <= 20 ? 'warn' : 'ok', text: `${o.remaining} crediti rimasti (si ricaricano il 1°): oggi ${today} su ${b.perDay} al giorno, 1 credito per campionato letto. Strategia A in archivio.` });
+        return;
+      }
+    } catch (e) { /* tabella non ancora creata */ }
     out.push({ key: 'oddsapi', name: 'The Odds API (strategia A / Over-Under)', remaining: r, unit: 'crediti', lastAt: row ? row.run_at : null,
       level: r === null ? 'info' : r <= 50 ? 'bad' : r <= 120 ? 'warn' : 'ok',
       text: stale ? 'Ricaricati il 1° del mese (500): il nuovo conto compare al primo giro della strategia A.' : r === null ? (env.A_PAUSED === 'true' ? 'In pausa (A_PAUSED): nessun credito usato.' : 'Nessun giro registrato.') : `${r} crediti rimasti questo mese (si ricaricano il 1°).` });

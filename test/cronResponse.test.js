@@ -1,3 +1,4 @@
+process.env.A_ENABLED = 'true';   // strategia A in archivio dal 1° novembre: qui si prova la sua logica
 // Le risposte chiamate da cron-job.org devono essere minuscole (il servizio scarta quelle grandi e segna il giro come fallito).
 const assert = require('assert'), Module = require('module'), origLoad = Module._load;
 const handlers = {};
