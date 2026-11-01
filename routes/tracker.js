@@ -106,9 +106,16 @@ router.get('/backup.json', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida' });
   try {
     const b = await require('../services/backup').buildBackup(pool);
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="backup_betting_crm_${b.creato.slice(0, 10)}.json"`);
-    res.send(JSON.stringify(b));
+    const name = `backup_betting_crm_${b.creato.slice(0, 10)}.json`, body = Buffer.from(JSON.stringify(b));
+    // compressa di base (circa un decimo del peso); ?plain=1 per il file normale
+    if (req.query.plain === '1') {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+      return res.send(body);
+    }
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}.gz"`);
+    res.send(require('zlib').gzipSync(body, { level: 9 }));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

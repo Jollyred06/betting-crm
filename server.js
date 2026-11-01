@@ -46,6 +46,7 @@ app.use('/api/tracker', trackerRouter);
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server avviato sulla porta ${PORT}`);
+  cache.warm({ port: PORT, delayMs: 8000 });   // all'avvio (aggiornamento o risveglio di Render) le pagine principali si preparano subito
   // sicurezza Supabase: chiude l'accesso dall'API pubblica a tutte le tabelle (anche a quelle create dopo, a ogni avvio e ogni 6 ore)
   const { enableRls } = require('./db/secure'), pool = require('./db/pool');
   const run = () => enableRls(pool).then(r => { if (r.attivata && r.attivata.length) console.log('RLS attivata su:', r.attivata.join(', ')); if (r.errore) console.log('RLS non attivata:', r.errore); });

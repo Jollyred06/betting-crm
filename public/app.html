@@ -1019,7 +1019,7 @@
     run:     { path: '/api/run-daily?detail=1',     method: 'POST', title: 'Analisi', icon: 'play', label: 'Esegui analisi ora', desc: 'Cerca i segnali di oggi. Lo fa già da solo ogni giorno alle 11:00.', cost: 'Usa fino a circa 10 crediti delle quote', confirm: 'Consuma fino a circa 10 crediti delle quote (su 500 al mese). Continuare?' },
     settle:  { path: '/api/settle-pending',         method: 'POST', title: 'Chiusura risultati', icon: 'check', label: 'Chiudi i risultati ora', desc: 'Registra vinta o persa per le partite finite.' },
     system:  { path: '/api/system-check',          method: 'POST', title: 'Controllo di sistema', icon: 'shield', label: 'Controllo di sistema', desc: 'Verifica database, chiavi, servizi esterni, Telegram e giro giornaliero. Poi dice cosa non va.' },
-    backup:  { path: '/api/tracker/backup.json',    method: 'GET',  title: 'Copia di sicurezza', icon: 'download', download: true, filename: 'backup_betting_crm.json', label: 'Scarica la copia di sicurezza', desc: 'Tutti i segnali, il bankroll, le tappe e i log in un file. Conservala ogni tanto.' },
+    backup:  { path: '/api/tracker/backup.json',    method: 'GET',  title: 'Copia di sicurezza', icon: 'download', download: true, filename: 'backup_betting_crm.json.gz', label: 'Scarica la copia di sicurezza', desc: 'Lo specchio di tutto: segnali, giocate con il saldo dopo ognuna, bankroll, richieste e riepilogo dei numeri. File compresso (.gz), da mandare in chat così com\'è.' },
     csv:     { path: '/api/tracker/export.csv',     method: 'GET',  title: 'Segnali in CSV', icon: 'download', download: true, label: 'Scarica i segnali (CSV)', desc: 'Per mandarli in chat all\'analisi di ogni tappa.' },
     weekly:  { path: '/api/weekly-report?detail=1', method: 'POST', title: 'Riepilogo settimanale', icon: 'file', label: 'Mostra e invia il riepilogo settimanale', desc: 'Lo invia anche come messaggio, se collegato.' },
     refresh: { path: '/api/admin/refresh-history',  method: 'POST', title: 'Aggiornamento storico', icon: 'refresh', label: 'Aggiorna lo storico partite', desc: 'Scarica i risultati recenti.' },
@@ -1058,7 +1058,7 @@
     try {
       const r = await fetch(a.path, { method: a.method, headers: { 'x-run-key': key } });
       if (a.download && r.ok) {
-        const link = document.createElement('a'); link.href = URL.createObjectURL(await r.blob()); link.download = a.filename || 'segnali_tracker.csv'; link.click();
+        const link = document.createElement('a'); link.href = URL.createObjectURL(await r.blob()); link.download = a.filename ? a.filename.replace('backup_betting_crm.', 'backup_betting_crm_' + new Date().toISOString().slice(0, 10) + '.') : 'segnali_tracker.csv'; link.click();
         $('result').innerHTML = '<div class="info">File scaricato: lo trovi nella cartella Download.' + (a.filename ? ' Conservalo in un posto sicuro.' : ' Caricalo in chat.') + '</div>'; return;
       }
       const d = await r.json().catch(() => ({}));

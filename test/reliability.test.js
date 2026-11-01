@@ -103,10 +103,20 @@ process.env.RUN_SECRET_KEY = 'k';
 
   // ---------- backup
   const { buildBackup } = require('../services/backup');
-  const bpool = { query: async sql => { if (/FROM teams/.test(sql)) throw new Error('relation "teams" does not exist'); return { rows: /value_bets ORDER/.test(sql) ? [{ id: 1 }, { id: 2 }] : [] }; } };
-  const b = await buildBackup(bpool, new Date('2026-10-05T10:00:00Z'));
-  assert.strictEqual(b.righe.value_bets, 2); assert.strictEqual(b.tabelle.teams, null); assert.ok(b.errori.length === 1 && /teams/.test(b.errori[0]));      // una tabella che manca non blocca il resto
-  assert.strictEqual(b.creato, '2026-10-05T10:00:00.000Z'); assert.ok(Object.keys(b.tabelle).includes('milestone_snapshots') && Object.keys(b.tabelle).includes('bankroll_log') && !Object.keys(b.tabelle).includes('historical_matches'));
+  // versione 2: tutte le tabelle trovate da sole (tranne gli archivi che si riscaricano), senza limiti di righe
+  const tabs = ['bankroll_log', 'historical_matches', 'milestone_snapshots', 'played_bets', 'teams', 'value_bets', 'xg_matches'];
+  const bpool = { query: async sql => {
+    if (/information_schema/.test(sql)) return { rows: tabs.map(t => ({ table_name: t })) };
+    if (/FROM "teams"/.test(sql)) throw new Error('relation "teams" does not exist');
+    if (/FROM "value_bets"/.test(sql)) return { rows: [{ id: 1 }, { id: 2 }] };
+    if (/LIMIT/.test(sql)) throw new Error('niente limiti nella copia');
+    return { rows: [] }; } };
+  const b = await buildBackup(bpool, new Date('2026-10-05T10:00:00Z'), { withSummary: false });
+  assert.strictEqual(b.versione, 2); assert.strictEqual(b.righe.value_bets, 2); assert.strictEqual(b.tabelle.teams, null); assert.ok(b.errori.some(e => /teams/.test(e)));      // una tabella che manca non blocca il resto
+  assert.strictEqual(b.creato, '2026-10-05T10:00:00.000Z'); assert.ok(Object.keys(b.tabelle).includes('milestone_snapshots') && Object.keys(b.tabelle).includes('played_bets') && !Object.keys(b.tabelle).includes('historical_matches') && !Object.keys(b.tabelle).includes('xg_matches'));
+  // movimenti: saldo dopo ogni giocata, in ordine di tempo
+  const mv = require('../services/backup').movements([{ at: '2026-10-02T10:00:00Z', pnlEur: -2, home: 'A', away: 'B' }, { at: '2026-10-01T10:00:00Z', pnlEur: 2.6, home: 'C', away: 'D' }, { at: '2026-10-03T10:00:00Z', pnlEur: null, home: 'E', away: 'F' }], 100);
+  assert.deepStrictEqual(mv.map(x => x.saldoDopo), [102.6, 100.6, 100.6]); assert.strictEqual(mv[0].partita, 'C – D');
   console.log('copia di sicurezza: ok');
 
   // ---------- chiave nell'intestazione
