@@ -30,10 +30,13 @@ async function getCredits(pool, env = process.env, nowMs = Date.now()) {
   await safe(async () => {
     const row = (await q(`SELECT run_at, log_text FROM run_logs WHERE log_text LIKE '%crediti usati nel mese%' ORDER BY run_at DESC LIMIT 1`))[0];
     const m = row && /crediti usati nel mese: (\d+), rimasti: (\d+)/.exec(row.log_text || '');
-    const r = m ? Number(m[2]) : null;
+    let r = m ? Number(m[2]) : null;
+    // l'ultimo giro e' di un mese passato: il 1° i crediti si sono ricaricati, il numero vecchio non vale piu'
+    const stale = row && new Date(row.run_at).toISOString().slice(0, 7) !== new Date(nowMs).toISOString().slice(0, 7);
+    if (stale) r = null;
     out.push({ key: 'oddsapi', name: 'The Odds API (strategia A / Over-Under)', remaining: r, unit: 'crediti', lastAt: row ? row.run_at : null,
       level: r === null ? 'info' : r <= 50 ? 'bad' : r <= 120 ? 'warn' : 'ok',
-      text: r === null ? (env.A_PAUSED === 'true' ? 'In pausa (A_PAUSED): nessun credito usato.' : 'Nessun giro registrato.') : `${r} crediti rimasti questo mese (si ricaricano il 1°).` });
+      text: stale ? 'Ricaricati il 1° del mese (500): il nuovo conto compare al primo giro della strategia A.' : r === null ? (env.A_PAUSED === 'true' ? 'In pausa (A_PAUSED): nessun credito usato.' : 'Nessun giro registrato.') : `${r} crediti rimasti questo mese (si ricaricano il 1°).` });
   });
 
   await safe(async () => {
