@@ -388,6 +388,7 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
   try { Object.assign(out, await scan(pool, c, { nowMs, http, notify })); } catch (e) { out.erroreScansione = e.message; }
   try { out.timbrati = await stampFlags(pool, c, nowMs); } catch (e) { out.erroreTimbro = e.message; }
   try { Object.assign(out, await require('./results').settleSignals(pool, { env, nowMs, http: resultsHttp, sameTeam })); } catch (e) { out.erroreRisultati = e.message; }
+  try { Object.assign(out, await require('./highlightly').settleFromHighlightly(pool, { env, nowMs })); } catch (e) { out.erroreHighlightly = e.message; }
   return out;
 }
 

@@ -13,7 +13,9 @@ const nameOf = t => (t && (t.name || t.displayName || t.shortName)) || '';
 /** Punteggio finale di una partita di Highlightly in forma "2-1", oppure null se non e' finita o manca. */
 function finalScore(m) {
   const st = m && m.state, desc = String((st && (st.description || st.status)) || m.status || '').toLowerCase();
-  const done = /finished|full time|ft|ended|after penalties|after extra/.test(desc);
+  // solo i 90 minuti: con supplementari o rigori il punteggio non e' quello della scommessa, si lascia a mano
+  if (/extra|penalt|aet|pen\b/.test(desc)) return null;
+  const done = /finished|full time|\bft\b|ended/.test(desc);
   const s = (st && st.score && (st.score.current || st.score.fulltime)) || (m.score && (m.score.current || m.score.fulltime)) || null;
   if (!done || !s) return null;
   const txt = typeof s === 'string' ? s : (s.home !== undefined ? `${s.home}-${s.away}` : '');
@@ -21,12 +23,26 @@ function finalScore(m) {
   return g ? `${g[1]}-${g[2]}` : null;
 }
 
+/**
+ * Trova la partita di Highlightly per un nostro segnale: prima con tutte e due le squadre; se non basta,
+ * stesso orario (entro 20 minuti) e almeno una squadra uguale (i nomi delle serie minori sono scritti in modi diversi).
+ */
+function findMatch(s, matches, sameTeam) {
+  const both = matches.filter(x => sameTeam(s.home, nameOf(x.homeTeam)) && sameTeam(s.away, nameOf(x.awayTeam)));
+  if (both.length === 1) return both[0];
+  const t = Date.parse(s.commence_time);
+  if (!Number.isFinite(t)) return both[0] || null;
+  const near = x => { const d = Date.parse(x.date || x.startDate || ''); return Number.isFinite(d) && Math.abs(d - t) <= 20 * 60000; };
+  const timed = (both.length ? both : matches.filter(x => sameTeam(s.home, nameOf(x.homeTeam)) || sameTeam(s.away, nameOf(x.awayTeam)))).filter(near);
+  return timed.length === 1 ? timed[0] : null;   // piu' di un candidato: meglio non indovinare
+}
+
 /** Parte pura (testata): abbina le partite di Highlightly ai segnali di quel giorno. */
 function coverage(matches, signals, sameTeam) {
   const events = new Map();
   for (const s of signals) if (!events.has(s.event_id)) events.set(s.event_id, s);
   const rows = [...events.values()].map(s => {
-    const m = matches.find(x => sameTeam(s.home, nameOf(x.homeTeam)) && sameTeam(s.away, nameOf(x.awayTeam)));
+    const m = findMatch(s, matches, sameTeam);
     return { league: s.league, match: `${s.home} – ${s.away}`, found: !!m, score: m ? finalScore(m) : null };
   });
   const missingLeagues = {};
@@ -54,10 +70,70 @@ async function check(pool, { env = process.env, http = axios, nowMs = Date.now()
   }
   if (!matches) { const out = { ok: false, giorno: d, motivo: 'Highlightly non risponde con questa chiave', errori: errors }; last = { at: nowMs, out }; return out; }
   const I = require('./italia');
-  const { rows } = await pool.query(`SELECT event_id, league, home, away FROM italia_signals WHERE commence_time >= $1::date AND commence_time < $1::date + INTERVAL '1 day'`, [d]);
+  const { rows } = await pool.query(`SELECT event_id, league, home, away, commence_time FROM italia_signals WHERE commence_time >= $1::date AND commence_time < $1::date + INTERVAL '1 day'`, [d]);
   const out = { ok: true, giorno: d, fonte: base, ...coverage(matches, rows, I.sameTeam) };
   last = { at: nowMs, out };
   return out;
 }
 
-module.exports = { check, coverage, finalScore };
+/** Tutte le partite di un giorno (a pagine da 100). */
+async function fetchDay(key, day, http) {
+  let lastErr = null;
+  for (const b of BASES) {
+    try {
+      const all = [];
+      for (let offset = 0; offset < 3000; offset += 100) {
+        const r = await http.get(`${b}/matches`, { params: { date: day, timezone: 'Etc/UTC', limit: 100, offset }, headers: { 'x-rapidapi-key': key }, timeout: 30000 });
+        const page = arr(r.data); all.push(...page);
+        if (page.length < 100) break;
+      }
+      return all;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('nessuna risposta');
+}
+
+/**
+ * RISULTATI AUTOMATICI DA HIGHLIGHTLY (1° novembre 2026). Gira a ogni giro dopo football-data, solo sui segnali ancora senza risultato
+ * degli ultimi 3 giorni. Ogni giorno si legge al massimo due volte (dalle 6 del giorno dopo, poi di nuovo dopo 10 ore per le partite
+ * della sera): circa 20 richieste al giorno sulle 100 del piano gratuito. Il risultato vale per tutte le righe della stessa partita.
+ */
+async function settleFromHighlightly(pool, { env = process.env, http = axios, nowMs = Date.now() } = {}) {
+  const key = env.HIGHLIGHTLY_KEY;
+  if (!key) return { highlightly: 'chiave non impostata' };
+  const R = require('./results'), I = require('./italia');
+  await R.ensureResults(pool);
+  const { rows } = await pool.query(`SELECT id, event_id, selection, home, away, league, commence_time FROM italia_signals
+    WHERE (result IS NULL OR result = 'notfound') AND commence_time < to_timestamp($1::double precision / 1000) - INTERVAL '150 minutes'
+      AND commence_time > to_timestamp($1::double precision / 1000) - INTERVAL '3 days'`, [nowMs]);
+  if (!rows.length) return { highlightly: 'niente da chiudere' };
+  const days = [...new Set(rows.map(r => new Date(r.commence_time).toISOString().slice(0, 10)))].sort();
+  let lette = 0, chiuse = 0; const fatti = [];
+  for (const day of days) {
+    const tries = (await pool.query(`SELECT at FROM results_requests WHERE src = 'hl' AND day = $1 ORDER BY id DESC`, [day])).rows;
+    const dayEnd = Date.parse(day + 'T00:00:00Z') + 86400000;
+    const due = tries.length === 0 ? nowMs >= dayEnd + 5 * 3600000 || nowMs - Date.parse(day) > 30 * 3600000
+      : tries.length === 1 ? nowMs - Date.parse(tries[0].at) >= 10 * 3600000 : false;
+    if (!due) continue;
+    let matches;
+    try { matches = await fetchDay(key, day, http); }
+    catch (e) { await R.logRequestPublic(pool, day, false, 0, (e.response && e.response.status) || e.message, 'hl'); continue; }
+    lette += matches.length;
+    const sigs = rows.filter(r => new Date(r.commence_time).toISOString().slice(0, 10) === day);
+    const byEvent = new Map(); for (const s of sigs) if (!byEvent.has(s.event_id)) byEvent.set(s.event_id, s);
+    let n = 0;
+    for (const s of byEvent.values()) {
+      const m = findMatch(s, matches, I.sameTeam), sc = m && finalScore(m);
+      if (!sc) continue;
+      const [h, a] = sc.split('-').map(Number);
+      const all = (await pool.query(`SELECT id, selection FROM italia_signals WHERE event_id = $1`, [s.event_id])).rows;
+      for (const r of all) await pool.query(`UPDATE italia_signals SET result = $2, result_score = $3, settled_at = NOW() WHERE id = $1 AND (result IS NULL OR result = 'notfound')`, [r.id, R.outcome(r.selection, h, a), sc]);
+      n++;
+    }
+    chiuse += n; fatti.push(day);
+    await R.logRequestPublic(pool, day, true, matches.length, `${n} partite chiuse su ${byEvent.size}`, 'hl');
+  }
+  return fatti.length ? { highlightly: 'fatto', giorni: fatti, partiteLette: lette, partiteChiuse: chiuse } : { highlightly: 'non ancora' };
+}
+
+module.exports = { check, coverage, finalScore, findMatch, settleFromHighlightly };

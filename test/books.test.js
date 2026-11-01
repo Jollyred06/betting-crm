@@ -53,3 +53,14 @@ console.log('books.test.js: tutti i controlli passati');
   assert.deepStrictEqual([c.nostrePartite, c.trovate, c.conRisultato], [2, 1, 1]); assert.ok(/Tercera/.test(c.campionatiMancanti[0]));
   console.log('prova Highlightly (abbinamento): ok');
 }
+// Highlightly: abbinamento con orario quando i nomi sono scritti diversamente, niente supplementari
+{
+  const H = require('../services/highlightly'), I = require('../services/italia');
+  const ms = [{ homeTeam: { name: 'CD Lugo' }, awayTeam: { name: 'Racing Club Ferrol B' }, date: '2026-10-31T15:00:00Z', state: { description: 'Finished', score: { current: '1 - 0' } } },
+    { homeTeam: { name: 'Other' }, awayTeam: { name: 'Team' }, date: '2026-10-31T15:00:00Z' }];
+  const m = H.findMatch({ home: 'Lugo', away: 'Ferrol Reserves', commence_time: '2026-10-31T15:05:00Z' }, ms, I.sameTeam);
+  assert.ok(m && m.homeTeam.name === 'CD Lugo');
+  assert.strictEqual(H.findMatch({ home: 'Lugo', away: 'X', commence_time: '2026-10-31T18:00:00Z' }, ms, I.sameTeam), null);   // orario lontano: no
+  assert.strictEqual(H.finalScore({ state: { description: 'Finished after extra time', score: { current: '2 - 1' } } }), null);
+  console.log('Highlightly (orario, supplementari): ok');
+}

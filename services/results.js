@@ -228,11 +228,13 @@ async function settleItaliaManual(pool, id, homeGoals, awayGoals, { voided = fal
 /** Stato per l'app: attivo, ultimo esito, eventuale messaggio del piano. */
 async function resultsStatus(pool, env = process.env) {
   const c = rcfg(env);
-  if (!c.key && !c.fdKey) return { active: false, text: 'Risultati automatici spenti: manca la variabile APIFOOTBALL_KEY su Render.' };
+  if (!c.key && !c.fdKey && !env.HIGHLIGHTLY_KEY) return { active: false, text: 'Risultati automatici spenti: manca la variabile APIFOOTBALL_KEY su Render.' };
   try {
     await ensureResults(pool);
     const last = src => pool.query(`SELECT at, ok, fixtures, note FROM results_requests WHERE COALESCE(src, 'af') = $1 ORDER BY id DESC LIMIT 1`, [src]).then(x => x.rows[0]);
     const r = c.key ? await last('af') : null, f = c.fdKey ? await last('fd') : null;
+    const h = env.HIGHLIGHTLY_KEY ? await last('hl') : null;
+    if (h && h.ok) return { active: true, ok: true, text: `✅ Risultati automatici da Highlightly (ultima lettura: ${h.fixtures} partite, ${h.note || ''}) e football-data.org. Le partite che mancano si scrivono a mano.` };
     if (!r && !f) return { active: true, ok: null, text: 'Risultati automatici: in attesa della prima partita finita.' };
     if (r && r.ok) return { active: true, ok: true, text: `✅ Risultati automatici attivi (ultima lettura: ${r.fixtures} partite).` };
     const why = !c.key ? 'manca APIFOOTBALL_KEY' : /suspend/i.test(r.note || '') ? 'account sospeso' : /access to this date/i.test(r.note || '') ? 'il piano gratuito legge solo ieri e oggi' : (r.note || 'non risponde');
@@ -251,4 +253,4 @@ function resultStats(list, stake = STAKE) {
   return { settled: done.length, won: won.length, lost: done.length - won.length, pnlEur: pnl, roiPct: done.length ? 100 * pnl / (stake * done.length) : null };
 }
 
-module.exports = { settleItaliaManual, rcfg, outcome, matchFixture, settle, fromFootballData, apiError, ensureResults, settleSignals, resultsStatus, resultStats, STAKE };
+module.exports = { logRequestPublic: (...a) => logRequest(...a), settleItaliaManual, rcfg, outcome, matchFixture, settle, fromFootballData, apiError, ensureResults, settleSignals, resultsStatus, resultStats, STAKE };
