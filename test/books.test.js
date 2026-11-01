@@ -133,3 +133,12 @@ console.log('books.test.js: tutti i controlli passati');
   const st = G.overStats([0, 1, 2, 3, 4, null]); assert.strictEqual(st.n, 5); assert.strictEqual(st.over[2.5], 40);
   console.log('gol (formula, Valanga, Over/Under): ok');
 }
+// 🔍 controllo dei risultati scritti a mano
+{
+  const R = require('../services/results');
+  assert.strictEqual(R.verifyStatus('2-1', '2-1'), 'ok');
+  assert.strictEqual(R.verifyStatus('2-1', '1-2'), 'diff');
+  assert.strictEqual(R.verifyStatus('2-1', null), null);
+  assert.strictEqual(R.verifyStatus('rinviata', '1-1'), null);
+  console.log('controllo risultati a mano: ok');
+}

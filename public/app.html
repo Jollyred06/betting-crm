@@ -224,6 +224,7 @@
   @media (prefers-reduced-motion: reduce) { .dot.on { animation:none; } }
   .legend { display:flex; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:13px; margin:0 0 10px; } .legend .dot { margin-right:5px; width:9px; height:9px; animation:none; }
   @media (prefers-reduced-motion: reduce) { .band { animation:none; } .fill { transition:none; } .sk { animation:none; } }
+  .ocheck { padding:12px 0; border-top:1px solid var(--line); } .ocheck:first-child { border-top:0; } .ocheck small { display:block; color:var(--muted); margin:2px 0 8px; }
 </style>
 </head>
 <body>
@@ -896,6 +897,8 @@
         ${mine.length ? `<section class="block"><h3>🎯 Le tue giocate <small class="muted">· oggi e prossime</small></h3><div class="card3">${mine.map(x => { const t = Date.parse(x.commence_time), st = x.result === 'won' ? `<span class="chip won">vinta ${esc(x.score || '')}</span>` : x.result === 'lost' ? `<span class="chip lost">persa ${esc(x.score || '')}</span>` : x.result === 'void' ? '<span class="chip">annullata</span>' : Date.now() < t ? `<span class="muted">alle ${dt(x.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>` : Date.now() < t + 115 * 60000 ? '<span class="chip live">● in corso</span>' : '<span class="muted">finita, risultato in arrivo</span>';
             return `<div class="oplay"><div><b>${esc(x.home)} – ${esc(x.away)}</b><small>${esc({ home: '1', draw: 'X', away: '2' }[x.selection] || '')} su ${esc(x.book)} a ${num(x.odd, 2)} · ${money(x.stake)} · <a class="tlink" href="${liveUrl(x.home, x.away)}" rel="noopener" onclick="rememberSpot()">🔎 su Google</a></small></div><div class="ores">${st}${x.pnlEur !== null ? `<b class="${cls(x.pnlEur)}">${signedMoney(x.pnlEur)}</b>` : ''}</div></div>`; }).join('')}</div></section>` : ''}
         ${todo.length ? `<section class="block"><h3>✏️ Da segnare</h3><div class="card3">${todo.slice(0, 6).map(x => `<div class="otodo">${esc(x.home)} – ${esc(x.away)}<small>${esc(x.book)} ${num(x.odd, 2)}</small></div>`).join('')}<button class="primary wide" onclick="show('bankroll')">Segna i risultati</button></div><p class="muted">Quelle delle serie maggiori si chiudono da sole entro domattina.</p></section>` : ''}
+        ${(d.checks || []).length ? `<section class="block"><h3>🔍 Risultati da ricontrollare</h3><div class="card3">${d.checks.map(x => `<div class="ocheck"><b>${esc(x.match)}</b><small>Hai scritto <b>${esc(x.mine)}</b>, per ${esc(x.src || 'la fonte ufficiale')} è <b>${esc(x.official)}</b> (90 minuti). <a class="tlink" href="${resUrl(x.home, x.away, x.commence_time)}" target="_blank" rel="noopener">🔎 verifica</a></small>
+            <div class="pact"><button class="playbtn" onclick="fixCheck(${x.id}, '${esc(x.official)}', this)">Usa ${esc(x.official)}</button><button class="playbtn skipbtn" onclick="keepCheck(${x.id}, this)">Il mio è giusto</button></div></div>`).join('')}</div></section>` : ''}
         ${alerts.length ? `<section class="block"><h3>Avvisi</h3><div class="list card3">${alerts.slice(0, 3).map(a => `<div>${sdot(a.lv)}<div><b>${esc(a.t)}</b><span class="muted">${esc(a.s)}</span></div></div>`).join('')}</div></section>` : ''}`;
       lastLoad = Date.now();
     } catch (e) {
@@ -1117,6 +1120,28 @@
         <div><dt>Quota presa rispetto al segnale</dt><dd>${d.avgSlipPct !== null ? pct(d.avgSlipPct) : '—'}${d.okMinPct !== null ? ` · sopra la minima ${num(d.okMinPct, 0)}%` : ''}</dd></div>
         ${d.skipped && d.skipped.count ? `<div><dt>Non giocate</dt><dd>${d.skipped.count} · ${d.skipped.byReason.map(b => esc(b.label) + ' ' + b.n).join(', ')}${d.skipped.playablePct !== null ? ` · riuscite ${num(d.skipped.playablePct, 0)}%` : ''}</dd></div>` : ''}</dl>
       <h4>Ultime giocate</h4>` + d.items.slice(0, 20).map(x => `<div class="move"><span>${esc(x.home)} – ${esc(x.away)} · <b>${sel[x.selection] || ''}</b><small>${esc(x.book)} ${num(x.odd, 2)} · ${money(x.stake)}${x.clvPct !== null ? ' · ' + pct(x.clvPct) + ' vs chiusura' : ''}${x.result === 'won' || x.result === 'lost' ? ' · ' + (x.result === 'won' ? 'vinta ' : 'persa ') + esc(x.score || '') : ''}</small>${Date.parse(x.commence_time) < Date.now() ? resEdit(x.signalId, x.home, x.away, x.result === 'won' || x.result === 'lost') : ''}</span><span style="display:flex;gap:10px;align-items:center;"><b class="${x.pnlEur !== null ? cls(x.pnlEur) : 'muted'}">${x.pnlEur !== null ? signedMoney(x.pnlEur) : 'in attesa'}</b><button class="linkbtn" aria-label="Cancella" onclick="deletePlay(${x.id})">✕</button></span></div>`).join('');
+  }
+  // 🔍 risultato scritto a mano diverso da quello ufficiale: si sceglie quale tenere (il CRM non cambia niente da solo)
+  async function fixCheck(id, sc, btn) {
+    const [hg, ag] = String(sc).split('-').map(Number);
+    if (!(await ensureKey())) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/tracker/italia/' + id + '/result', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ homeGoals: hg, awayGoals: ag }) });
+      if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova.'); btn.disabled = false; return; }
+      if (!r.ok) { const d = await r.json().catch(() => ({})); alert('Errore: ' + (d.error || r.status)); btn.disabled = false; return; }
+      btn.closest('.ocheck').innerHTML = '✅ corretto in ' + esc(sc); refreshViews && refreshViews();
+    } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
+  }
+  async function keepCheck(id, btn) {
+    if (!(await ensureKey())) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/tracker/italia/' + id + '/keep', { method: 'POST', headers: { 'x-run-key': key } });
+      if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova.'); btn.disabled = false; return; }
+      if (!r.ok) { alert('Errore: ' + r.status); btn.disabled = false; return; }
+      btn.closest('.ocheck').innerHTML = '✅ tenuto il tuo risultato'; refreshViews && refreshViews();
+    } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
   }
   // RISULTATO A MANO per i segnali italiani (le serie minori non le copre nessuna fonte gratuita): gol dei 90 minuti, si puo' correggere
   const resUrl = (h, a, t) => 'https://www.google.com/search?q=' + encodeURIComponent(`${h} ${a} risultato ${t ? new Date(t).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}`.trim());

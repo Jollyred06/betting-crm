@@ -109,14 +109,23 @@ async function settleFromHighlightly(pool, { env = process.env, http = axios, no
       AND commence_time > to_timestamp($1::double precision / 1000) - INTERVAL '3 days'`, [nowMs]);
   // ⚽ anche le partite viste per i gol (stesse pagine: nessuna richiesta in piu' per i giorni gia' da leggere)
   const G = require('./goals'), watchRows = await G.pendingWatch(pool, nowMs);
-  if (!rows.length && !watchRows.length) return { highlightly: 'niente da chiudere' };
-  const days = [...new Set([...rows, ...watchRows].map(r => new Date(r.commence_time).toISOString().slice(0, 10)))].sort();
+  // 🔍 risultati scritti a mano (o da altre fonti) ancora da confrontare con quello ufficiale, ultimi 3 giorni
+  const checkRows = (await pool.query(`SELECT DISTINCT ON (event_id) id, event_id, home, away, league, commence_time, result_score FROM italia_signals
+    WHERE result_score ~ '^[0-9]+-[0-9]+$' AND verify IS NULL AND COALESCE(result_src, 'mano') <> 'hl'
+      AND commence_time > to_timestamp($1::double precision / 1000) - INTERVAL '3 days' ORDER BY event_id, id`, [nowMs])).rows;
+  if (!rows.length && !watchRows.length && !checkRows.length) return { highlightly: 'niente da chiudere' };
+  const dayOf = r => new Date(r.commence_time).toISOString().slice(0, 10);
+  const mainDays = new Set([...rows, ...watchRows].map(dayOf));
+  const days = [...new Set([...mainDays, ...checkRows.map(dayOf)])].sort();
   let lette = 0, chiuse = 0; const fatti = [];
   for (const day of days) {
     const tries = (await pool.query(`SELECT at FROM results_requests WHERE src = 'hl' AND day = $1 ORDER BY id DESC`, [day])).rows;
     const dayEnd = Date.parse(day + 'T00:00:00Z') + 86400000;
-    const due = tries.length === 0 ? nowMs >= dayEnd + 5 * 3600000 || nowMs - Date.parse(day) > 30 * 3600000
-      : tries.length === 1 ? nowMs - Date.parse(tries[0].at) >= 10 * 3600000 : false;
+    const first = nowMs >= dayEnd + 5 * 3600000 || nowMs - Date.parse(day) > 30 * 3600000;
+    const due = mainDays.has(day)
+      ? (tries.length === 0 ? first : tries.length === 1 ? nowMs - Date.parse(tries[0].at) >= 10 * 3600000 : false)
+      // giorno con solo controlli: una lettura in piu' al massimo (tre in tutto), mai prima di 6 ore dall'ultima
+      : (tries.length === 0 ? first : tries.length < 3 && nowMs - Date.parse(tries[0].at) >= 6 * 3600000);
     if (!due) continue;
     const room = DAILY_CAP - await usedToday(pool);
     if (room < 10) { fatti.push(`${day}: tetto giornaliero`); break; }
@@ -132,7 +141,7 @@ async function settleFromHighlightly(pool, { env = process.env, http = axios, no
       if (!sc) continue;
       const [h, a] = sc.split('-').map(Number);
       const all = (await pool.query(`SELECT id, selection FROM italia_signals WHERE event_id = $1`, [s.event_id])).rows;
-      for (const r of all) await pool.query(`UPDATE italia_signals SET result = $2, result_score = $3, settled_at = NOW() WHERE id = $1 AND (result IS NULL OR result = 'notfound')`, [r.id, R.outcome(r.selection, h, a), sc]);
+      for (const r of all) await pool.query(`UPDATE italia_signals SET result = $2, result_score = $3, settled_at = NOW(), result_src = 'hl' WHERE id = $1 AND (result IS NULL OR result = 'notfound')`, [r.id, R.outcome(r.selection, h, a), sc]);
       n++;
     }
     let ng = 0;
@@ -140,8 +149,15 @@ async function settleFromHighlightly(pool, { env = process.env, http = axios, no
       const m = findMatch(w, matches, I.sameTeam), sc = m && finalScore(m);
       if (sc) { try { await G.setWatchScore(pool, w.event_id, sc); ng++; } catch (e) { /* facoltativo */ } }
     }
+    let nc = 0;
+    for (const w of checkRows.filter(r => dayOf(r) === day)) {
+      const m = findMatch(w, matches, I.sameTeam), sc = m && finalScore(m), st = R.verifyStatus(w.result_score, sc);
+      if (!st) continue;
+      await pool.query(`UPDATE italia_signals SET verify = $2 WHERE event_id = $1`, [w.event_id, JSON.stringify({ status: st, mine: w.result_score, official: sc, src: 'Highlightly', at: new Date(nowMs).toISOString() })]);
+      nc++;
+    }
     chiuse += n; fatti.push(day);
-    await R.logRequestPublic(pool, day, true, matches.length, `${n} partite chiuse su ${byEvent.size}, gol ${ng} pagine=${matches.pages || 1}`, 'hl');
+    await R.logRequestPublic(pool, day, true, matches.length, `${n} partite chiuse su ${byEvent.size}, gol ${ng}, controlli ${nc} pagine=${matches.pages || 1}`, 'hl');
   }
   return fatti.length ? { highlightly: 'fatto', giorni: fatti, partiteLette: lette, partiteChiuse: chiuse } : { highlightly: 'non ancora' };
 }

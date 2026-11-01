@@ -832,8 +832,9 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const altOdds = r => { const q = quotesOf(r), out = {};
     for (const k of c.myBooks) { const v = q[k] && Number(q[k][SEL_IDX[r.selection]]); if (v > 1) out[BOOK_NAMES[k] || k] = v; }
     return Object.keys(out).length ? out : null; };
+  const checks = strategy === 'I' ? await R.pendingChecks(pool).catch(() => []) : [];
   const out = {
-    ...base, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
+    ...base, checks, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
     final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows), results: R.resultStats(finRows),
       six: { ...oddsStats(finRows.filter(isSix)), minProb: SIX_MIN_PROB, results: R.resultStats(finRows.filter(isSix)) } } : null,
     final2: strategy === 'I' ? { ...oddsStats(fin2Rows), rules: FINAL2, stake: STAKE, expectedEur: expectedEur(fin2Rows), results: R.resultStats(fin2Rows) } : null,

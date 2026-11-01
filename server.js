@@ -40,7 +40,7 @@ app.use('/api', (req, res, next) => {
   if (req.method === 'GET' || /auth-check/.test(req.path)) return next();
   // 1° novembre 2026: una giocata, una non giocata o un risultato cambiano solo segnali e giocate. Si butta solo quello e si
   // riprepara solo quello, piu' tardi: prima si ricalcolava TUTTO subito e il server restava occupato per secondi (tocchi lenti).
-  if (/^\/tracker\/(played|skipped|italia\/\d+\/result)/.test(req.path)) {
+  if (/^\/tracker\/(played|skipped|italia\/\d+\/(result|keep))/.test(req.path)) {
     const re = /^\/api\/tracker\/(italia|played|archive|books)/;
     cache.clearMatching(re);
     res.on('finish', () => { cache.clearMatching(re); cache.warm({ port: PORT, delayMs: 8000, paths: ['/api/tracker/italia', '/api/tracker/played'] }); });

@@ -89,7 +89,8 @@ function apiError(data) {
 let ready = false;
 async function ensureResults(pool) {
   if (ready) return;
-  for (const col of ['result TEXT', 'result_score TEXT', 'settled_at TIMESTAMPTZ', 'af_fixture_id BIGINT']) {
+  // result_src: chi ha scritto il risultato (mano / hl / fd / af); verify: il controllo dei risultati scritti a mano (1° novembre 2026)
+  for (const col of ['result TEXT', 'result_score TEXT', 'settled_at TIMESTAMPTZ', 'af_fixture_id BIGINT', 'result_src TEXT', 'verify JSONB']) {
     await pool.query(`ALTER TABLE italia_signals ADD COLUMN IF NOT EXISTS ${col}`);
   }
   await pool.query(`CREATE TABLE IF NOT EXISTS results_requests (
@@ -170,7 +171,7 @@ async function settleSignals(pool, { env = process.env, nowMs = Date.now(), http
       const m = matchFixture(s, list, sameTeam, c.toleranceMin);
       const out = m && settle(s, m);
       if (!out) continue;
-      await pool.query(`UPDATE italia_signals SET result = $2, result_score = $3, settled_at = NOW(), af_fixture_id = $4 WHERE id = $1`,
+      await pool.query(`UPDATE italia_signals SET result = $2, result_score = $3, settled_at = NOW(), af_fixture_id = $4, result_src = 'auto' WHERE id = $1`,
         [s.id, out.result, out.score, m.fixture.id]);
       chiusi++;
     }
@@ -214,15 +215,39 @@ async function settleItaliaManual(pool, id, homeGoals, awayGoals, { voided = fal
   const rows = (await pool.query(`SELECT id, selection FROM italia_signals WHERE event_id = $1`, [s.event_id])).rows;
   // partita rinviata o annullata: la giocata viene rimborsata dal bookmaker, quindi non conta (ne' vinta ne' persa)
   if (voided) {
-    for (const r of rows) await pool.query(`UPDATE italia_signals SET result = 'void', result_score = 'rinviata', settled_at = NOW() WHERE id = $1`, [r.id]);
+    for (const r of rows) await pool.query(`UPDATE italia_signals SET result = 'void', result_score = 'rinviata', settled_at = NOW(), result_src = 'mano', verify = NULL WHERE id = $1`, [r.id]);
     return { updated: rows.length, result: 'void', score: 'rinviata' };
   }
   const h = Number(homeGoals), a = Number(awayGoals);
   for (const r of rows) {
-    await pool.query(`UPDATE italia_signals SET result = $2, result_score = $3, settled_at = NOW() WHERE id = $1`, [r.id, outcome(r.selection, h, a), `${h}-${a}`]);
+    await pool.query(`UPDATE italia_signals SET result = $2, result_score = $3, settled_at = NOW(), result_src = 'mano', verify = NULL WHERE id = $1`, [r.id, outcome(r.selection, h, a), `${h}-${a}`]);
   }
   const mine = rows.find(r => Number(r.id) === Number(id));
   return { updated: rows.length, result: mine ? outcome(mine.selection, h, a) : null, score: `${h}-${a}` };
+}
+
+/**
+ * CONTROLLO DEI RISULTATI SCRITTI A MANO (1° novembre 2026). Parte pura (testata): confronta il punteggio scritto con quello ufficiale.
+ * Non cambia mai il risultato da solo: se non combacia, l'app chiede a Christian quale tenere.
+ */
+function verifyStatus(mine, official) {
+  if (!official || !/^\d+-\d+$/.test(String(mine || ''))) return null;
+  return String(mine).replace(/\s/g, '') === official ? 'ok' : 'diff';
+}
+/** Il punteggio scritto a mano era giusto: si tiene e non si ricontrolla piu'. */
+async function keepManual(pool, id) {
+  await ensureResults(pool);
+  const s = (await pool.query(`SELECT event_id FROM italia_signals WHERE id = $1`, [id])).rows[0];
+  if (!s) { const e = new Error('Segnale non trovato.'); e.status = 404; throw e; }
+  await pool.query(`UPDATE italia_signals SET verify = COALESCE(verify, '{}'::jsonb) || jsonb_build_object('status', 'kept', 'keptAt', NOW()) WHERE event_id = $1`, [s.event_id]);
+  return { kept: true };
+}
+/** Partite con il risultato scritto diverso da quello ufficiale, ancora da decidere. */
+async function pendingChecks(pool) {
+  await ensureResults(pool);
+  const { rows } = await pool.query(`SELECT DISTINCT ON (event_id) id, event_id, home, away, league, commence_time, result_score, verify FROM italia_signals
+    WHERE verify->>'status' = 'diff' AND result_score = verify->>'mine' ORDER BY event_id, id`);
+  return rows.map(r => ({ id: r.id, match: `${r.home} – ${r.away}`, home: r.home, away: r.away, league: r.league, commence_time: r.commence_time, mine: r.result_score, official: r.verify.official, src: r.verify.src }));
 }
 
 /** Stato per l'app: attivo, ultimo esito, eventuale messaggio del piano. */
@@ -253,4 +278,4 @@ function resultStats(list, stake = STAKE) {
   return { settled: done.length, won: won.length, lost: done.length - won.length, pnlEur: pnl, roiPct: done.length ? 100 * pnl / (stake * done.length) : null };
 }
 
-module.exports = { logRequestPublic: (...a) => logRequest(...a), settleItaliaManual, rcfg, outcome, matchFixture, settle, fromFootballData, apiError, ensureResults, settleSignals, resultsStatus, resultStats, STAKE };
+module.exports = { verifyStatus, keepManual, pendingChecks, logRequestPublic: (...a) => logRequest(...a), settleItaliaManual, rcfg, outcome, matchFixture, settle, fromFootballData, apiError, ensureResults, settleSignals, resultsStatus, resultStats, STAKE };
