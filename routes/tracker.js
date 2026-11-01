@@ -73,6 +73,10 @@ router.get('/italia-export', async (req, res) => {
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// ⚡ quote maggiorate: prezzo giusto di Pinnacle delle partite viste nell'ultimo giro (nessun credito)
+router.get('/boost', async (req, res) => {
+  try { res.json(await require('../services/boost').search(pool, req.query.q, require('../services/italia').sameTeam)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 // 💳 crediti di tutte le piattaforme (solo numeri)
 router.get('/credits', async (req, res) => {
   try { res.json(await require('../services/credits').getCredits(pool)); } catch (err) { res.status(500).json({ error: err.message }); }

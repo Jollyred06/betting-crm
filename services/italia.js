@@ -334,6 +334,8 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
     commence_from: new Date(nowMs + c.minLeadMin * 60000).toISOString(),
     commence_to: new Date(nowMs + c.windowHours * 3600000).toISOString()
   }, 'scan', http);
+  // ⚡ quote maggiorate: i prezzi di Pinnacle di tutte le partite viste restano a disposizione (nessuna richiesta in piu')
+  try { await require('./boost').saveBoard(pool, mergeWithPinnacle(records), trio); } catch (e) { /* facoltativo */ }
   const found = findSignals(records, c, nowMs);
   const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
   const foundT = c.tEnabled ? findSignals(records, cfgFor(c, 'T'), nowMs) : [];
