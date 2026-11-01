@@ -1019,15 +1019,16 @@
     const r = sigById[id], odd = parseFloat(String(q('.f-odd').value).replace(',', '.')), stake = parseFloat(String(q('.f-stake').value).replace(',', '.')), book = q('.f-book').value;
     if (r && r.min_odd && odd < r.min_odd && !confirm(`La quota ${num(odd, 2)} è sotto la minima ${num(r.min_odd, 2)}: il segnale non avrebbe valore. Salvo lo stesso?`)) return;
     if (!(await ensureKey())) return;
-    if (btn) { btn.disabled = true; btn.textContent = 'Salvo…'; }
+    // subito sulla scheda (senza aspettare il server); se il salvataggio non riesce si torna indietro e si avvisa
+    if (r) r.played = { book, odd };
+    refreshViews();
     try {
       const res = await fetch('/api/tracker/played/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book, odd, stake }) });
       const d = await res.json().catch(() => ({}));
-      if (res.status === 401) { lock(); q('.f-msg').textContent = 'La chiave non è più valida: riprova.'; if (btn) { btn.disabled = false; btn.textContent = 'Salva'; } return; }
-      if (!res.ok) { q('.f-msg').textContent = d.error || 'Errore ' + res.status; if (btn) { btn.disabled = false; btn.textContent = 'Salva'; } return; }
-      if (r) r.played = { book, odd };
-      refreshViews(); softRefresh();
-    } catch (e) { q('.f-msg').textContent = 'Errore: ' + e.message; if (btn) { btn.disabled = false; btn.textContent = 'Salva'; } }
+      if (res.status === 401) lock();
+      if (!res.ok) { if (r) r.played = null; refreshViews(); alert(res.status === 401 ? 'La chiave non è più valida: riprova.' : 'Giocata non salvata: ' + (d.error || 'errore ' + res.status)); return; }
+      softRefresh();
+    } catch (e) { if (r) r.played = null; refreshViews(); alert('Giocata non salvata (connessione): ' + e.message); }
   }
   // 🚫 NON GIOCATA: il motivo serve a sapere quante occasioni si riescono davvero a giocare (senza, i numeri sembrano migliori)
   const SKIP_LABELS = { quota: '📉 Quota scesa', trovata: '🔍 Partita non trovata', tempo: '⏰ Non avevo tempo' };
@@ -1039,15 +1040,17 @@
   }
   async function saveSkip(id, reason, btn) {
     if (!(await ensureKey())) return;
-    const msg = btn ? btn.closest('.playform').querySelector('.f-msg') : $('pm-' + id);
+    const r = sigById[id];
+    if (r) r.skipped = { id: null, reason, label: SKIP_TEXT[reason] || reason };
+    refreshViews();   // subito sulla scheda
     try {
       const res = await fetch('/api/tracker/skipped/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
       const d = await res.json().catch(() => ({}));
-      if (res.status === 401) { lock(); return; }
-      if (!res.ok) { if (msg) msg.textContent = d.error || 'Errore ' + res.status; return; }
-      const r = sigById[id]; if (r) r.skipped = { id: d.id, reason, label: SKIP_TEXT[reason] || reason };
-      refreshViews(); softRefresh();
-    } catch (e) { if (msg) msg.textContent = 'Errore: ' + e.message; }
+      if (res.status === 401) lock();
+      if (!res.ok) { if (r) r.skipped = null; refreshViews(); alert('Non salvata: ' + (d.error || 'errore ' + res.status)); return; }
+      if (r && r.skipped) r.skipped.id = d.id;
+      softRefresh();
+    } catch (e) { if (r) r.skipped = null; refreshViews(); alert('Non salvata (connessione): ' + e.message); }
   }
   // ridisegna subito la pagina aperta con i dati gia' in memoria (Oggi e Segnali condividono le stesse schede)
   function refreshViews() { if (curPage === 'home') loadOggi(); else loadSignals(); }
@@ -1057,6 +1060,7 @@
   let softTimer = null;
   function softRefresh() { clearTimeout(softTimer); softTimer = setTimeout(() => { memo.clear(); refreshViews(); }, 6000); }
   async function undoSkip(sid) {
+    if (!sid) { alert('Un attimo: sto ancora salvando.'); return; }
     if (!(await ensureKey())) return;
     const res = await fetch('/api/tracker/skipped/' + sid, { method: 'DELETE', headers: { 'x-run-key': key } });
     if (res.status === 401) { lock(); return; }

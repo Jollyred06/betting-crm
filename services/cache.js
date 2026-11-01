@@ -10,6 +10,8 @@ const store = new Map();
 let hits = 0, misses = 0;
 
 const clear = () => store.clear();
+/** Butta solo le pagine toccate da un salvataggio (es. una giocata cambia segnali e giocate, non le strategie). */
+const clearMatching = re => { for (const k of [...store.keys()]) if (re.test(k)) store.delete(k); };
 const stats = () => ({ voci: store.size, hits, misses, ripreparate: warmed });
 const wantsGzip = req => /\bgzip\b/.test(req.headers['accept-encoding'] || '');
 
@@ -78,4 +80,4 @@ function warm({ port = process.env.PORT || 3000, delayMs = 3000, paths = WARM_PA
 }
 const clearAndWarm = opts => { clear(); warm(opts); };
 
-module.exports = { clear, clearAndWarm, warm, stats, middleware, staticGzip, WARM_PATHS };
+module.exports = { clear, clearMatching, clearAndWarm, warm, stats, middleware, staticGzip, WARM_PATHS };
