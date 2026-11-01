@@ -192,6 +192,7 @@
   .oempty { color:var(--muted); background:var(--surface); border:1.5px dashed var(--line); border-radius:16px; padding:16px; font-size:14.5px; }
   .otodo { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-weight:600; } .otodo small { color:var(--muted); font-weight:500; }
   .primary.wide { width:100%; margin-top:12px; }
+  .notbest { margin-top:8px; font-size:12.5px; color:var(--muted); }
   .oplay { display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); } .oplay:last-child { border-bottom:0; } .oplay b { display:block; font-weight:600; } .oplay small { color:var(--muted); font-size:13px; } .ores { display:flex; flex-direction:column; align-items:flex-end; gap:4px; text-align:right; white-space:nowrap; } .chip.live { border-color:#2a9df4; color:#2a9df4; }
   .pact { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; } .pact .playbtn { margin-top:0; } .pact .playform { flex-basis:100%; }
   .chipbtn { border:1.5px solid var(--line); background:var(--surface); border-radius:999px; padding:7px 12px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink); } .skipr { flex-wrap:wrap; gap:8px; }
@@ -947,6 +948,7 @@
             ${it && r.best && r.play && live ? `<div class="todo-line">${isNow(r) ? '<span class="chip now">⏱️ Ora è il momento</span> ' : ''}quota minima <b>${num(r.min_odd, 2)}</b></div>` : ''}
             ${it && !r.play && !r.played ? `<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>` : ''}
             ${it && (r.best || r.played || r.skipped) ? playActions(r) : ''}
+            ${it && !r.best && !r.played && !r.skipped && r.play && live ? `<div class="notbest">⚠️ Non è tra le ⭐ da giocare: se la giochi lo stesso, segnala qui sotto (conta nel budget).</div>${playActions(r)}` : ''}
             ${r.result === 'won' || r.result === 'lost' ? `<div class="foot"><span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span></div>` : ''}
             <details class="tdet"><summary>dettagli</summary>
               <div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
