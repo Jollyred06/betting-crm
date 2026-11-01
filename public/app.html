@@ -677,6 +677,17 @@
       ${B.alerts.map(a => `<div class="callout ${a.level === 'bad' ? 'warn' : 'ok'}">${esc(a.text)}</div>`).join('')}
       ${top.map(row).join('')}${rest.length ? `<details><summary>Altri ${rest.length} siti con poche occasioni</summary>${rest.map(row).join('')}</details>` : ''}</div>`;
   }
+  // 🔒 7 su 10 e 💧 Liquidi: due prove sulla carta dal 1° novembre (non si giocano)
+  function paperCard(i) {
+    if (!i || !i.final8 || !i.final9) return '';
+    const row = (ico, name, rule, f) => `<div class="strat"><div class="sh"><div class="letter" style="font-size:24px">${ico}</div><div><b>${name}</b><span>${rule}</span></div></div>
+      <dl class="facts"><div><dt>Da oggi</dt><dd>${f.signals} segnali · ${f.measured >= 5 ? `<span class="${cls(f.avgClvPct)}">${itStat(f)}</span>` : 'ancora pochi'}</dd></div>
+        <div><dt>Risultati veri</dt><dd>${resVsExp(f.results)}</dd></div>
+        ${f.retro && f.retro.measured ? `<div><dt>Stesse regole all'indietro</dt><dd class="muted">${f.retro.signals} segnali · ${itStat(f.retro)}${f.retro.results && f.retro.results.settled ? ' · ' + resVsExp(f.retro.results) : ''}</dd></div>` : ''}</dl></div>`;
+    return `<details class="fold"><summary><span>🧪 Prove sulla carta</span><small>non si giocano: tra qualche settimana vediamo se battono le ⭐</small></summary>
+      ${row('🔒', '7 su 10', 'Le ⭐ F2+ che Pinnacle dà vincenti dal 65% (quota circa 1,30–1,55), niente coppe', i.final8)}
+      ${row('💧', 'Liquidi', 'Le ⭐ F2+ solo nei mercati più liquidi (margine Pinnacle sotto l\'8%), quota fino a 3,50, niente coppe', i.final9)}</details>`;
+  }
   function final6Card(i) {
     const f = i && i.final6; if (!f) return '';
     const rt = f.retro;
@@ -761,7 +772,7 @@
   async function loadItalia() {
     try {
       const [i, b, L, BK] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null)]);
-      $('italia').innerHTML = ruleCard(i) + booksCard(BK) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+      $('italia').innerHTML = ruleCard(i) + booksCard(BK) + paperCard(i) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
         + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }

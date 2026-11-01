@@ -81,7 +81,9 @@ async function getTraining(pool) {
     { key: 'F3', title: 'Selezione F3 (favoriti)', rows: pick(I.markFinal3) },
     { key: 'F2+', title: 'Selezione ⭐ F2+', rows: pick(I.markFinal4, rows) },
     { key: 'F2+C', title: 'Selezione ✅ F2+ consigliate', rows: pick(I.markFinal6, rows) },
-    { key: 'F2+S', title: 'Selezione 🛡️ F2+ sicure', rows: pick(I.markFinal5, rows) }
+    { key: 'F2+S', title: 'Selezione 🛡️ F2+ sicure', rows: pick(I.markFinal5, rows) },
+    { key: 'P7', title: 'Prova 🔒 7 su 10', rows: pick(I.markFinal8, rows) },
+    { key: 'PL', title: 'Prova 💧 Liquidi', rows: pick(I.markFinal9, rows) }
   ];
   return { start: START, stopAtPct: STOP_AT * 100, selections: sel.map(s => ({ key: s.key, title: s.title, ...trainSelection(s.rows) })) };
 }

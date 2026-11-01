@@ -88,3 +88,17 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.winCheck(mk(40, 12, 0.5)).level, 'allarme');      // 12 vinte su 20 attese: z = -2,5
   console.log('lista: quota massima e vinte contro attese: ok');
 }
+// 🧪 prove sulla carta: 🔒 7 su 10 e 💧 Liquidi
+{
+  const I = require('../services/italia');
+  const base = { created_at: '2026-11-02T10:00:00Z', commence_time: '2026-11-02T12:00:00Z', edge_pct: 5, league: 'Serie A', selection: 'home', event_id: 'e' };
+  const fav = { ...base, id: 1, odd: 1.45, fair_prob: 0.72, pin_h: 1.36, pin_d: 4.6, pin_a: 6 };            // margine alto (12%)
+  const liq = { ...base, id: 2, event_id: 'f', odd: 2.6, fair_prob: 0.40, pin_h: 2.45, pin_d: 3.3, pin_a: 3.0 }; // margine ~4%
+  const old = { ...liq, id: 3, event_id: 'g', created_at: '2026-10-30T10:00:00Z', commence_time: '2026-10-30T12:00:00Z' };
+  const rows = [fav, liq, old], m8 = I.markFinal8(rows), m9 = I.markFinal9(rows);
+  assert.strictEqual(m8.get(1).final, true); assert.strictEqual(m8.get(2).final, false);
+  assert.strictEqual(m9.get(1).final, false); assert.strictEqual(m9.get(2).final, true);
+  assert.strictEqual(m9.get(3).final, false); assert.strictEqual(I.markFinal9(rows, { ignoreSince: true }).get(3).final, true);
+  assert.strictEqual(I.markFinal9([{ ...liq, league: 'Coppa Italia' }]).get(2).final, false);
+  console.log('prove sulla carta 🔒 e 💧: ok');
+}

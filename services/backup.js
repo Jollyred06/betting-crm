@@ -27,7 +27,7 @@ async function summary(pool) {
   const out = {}, safe = async (k, f) => { try { out[k] = await f(); } catch (e) { out[k] = { errore: e.message }; } };
   await safe('selezioni', async () => {
     const d = await require('./italia').getItalia(pool);
-    const pick = ['total', 'results', 'final', 'final2', 'final3', 'final4', 'final5', 'final6', 'final7', 'budget', 'bestRule', 'myBooks', 'quotaRemaining', 'requestsThisMonth'];
+    const pick = ['total', 'results', 'final', 'final2', 'final3', 'final4', 'final5', 'final6', 'final7', 'final8', 'final9', 'budget', 'bestRule', 'myBooks', 'quotaRemaining', 'requestsThisMonth'];
     return Object.fromEntries(pick.filter(k => d[k] !== undefined).map(k => [k, d[k]]));
   });
   await safe('bookmaker', async () => { const b = await require('./books').getBooks(pool); return { ...b, books: b.books.map(({ presence, ...x }) => x) }; });

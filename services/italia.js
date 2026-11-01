@@ -608,6 +608,34 @@ function markFinal6(rows, { ignoreSince = false } = {}) {
   return out;
 }
 
+// ------------------------------------------------------------------------------------------- due prove sulla carta (1° novembre 2026)
+/**
+ * Regole fissate il 1° novembre 2026 alle 14:30 (ora italiana), PRIMA di vedere i segnali successivi. Solo misura: non si giocano.
+ * 🔒 7 SU 10: le ⭐ F2+ molto probabili (Pinnacle dal 65%, quota circa 1,30–1,55), niente coppe. Misura se il difetto dei favoriti
+ *    nei mercati sottili vale anche quando sono molto favoriti (all'indietro: 7 vinte su 9, 6,3 attese, CLV +4,4%).
+ * 💧 LIQUIDI: le ⭐ F2+ nei mercati piu' liquidi (margine Pinnacle sotto l'8%: il quarto piu' liquido delle nostre, la mediana e' 10%),
+ *    quota fino a 3,50, niente coppe: dove Pinnacle sbaglia meno (all'indietro: 16 segnali, CLV +7,8%).
+ */
+const FINAL8 = { since: '2026-11-01T13:30:00Z', minProb: 0.65 };
+const FINAL9 = { since: '2026-11-01T13:30:00Z', maxMarginPct: 8, maxOdd: 3.5 };
+const liquidOf = (r, max) => { const m = pinMarginPct(r); return m !== null && m < max; };
+function markPaper(rows, extra, since, { ignoreSince = false } = {}) {
+  const f4 = markFinal4(rows, { ignoreSince: true }), t0 = Date.parse(since), out = new Map();
+  for (const r of rows) {
+    const reasons = [...((f4.get(r.id) || {}).reasons || [])];
+    if (!ignoreSince && Date.parse(r.created_at) < t0) reasons.push('prima delle regole');
+    if (isCup(r.league)) reasons.push('coppa');
+    reasons.push(...extra(r));
+    out.set(r.id, { final: reasons.length === 0, reasons });
+  }
+  return out;
+}
+const markFinal8 = (rows, o) => markPaper(rows, r => [
+  ...(Number(r.fair_prob) >= FINAL8.minProb ? [] : ['probabilita\' di vincita sotto il 65%'])], FINAL8.since, o);
+const markFinal9 = (rows, o) => markPaper(rows, r => [
+  ...(liquidOf(r, FINAL9.maxMarginPct) ? [] : ['mercato sottile']),
+  ...(Number(r.odd) <= FINAL9.maxOdd ? [] : ['quota sopra 3,50'])], FINAL9.since, o);
+
 // ------------------------------------------------------------------------------------------- timbro della categoria
 /** Parte pura (testata): la categoria di un segnale I calcolata con le regole di adesso. */
 function flagsOf(r, f4, f5, f6, c, nowMs = Date.now()) {
@@ -768,6 +796,9 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const fin6Rows = all.filter(r => fin6.get(r.id) && fin6.get(r.id).final);
   const retro6 = strategy === 'I' ? markFinal6(all, { ignoreSince: true }) : new Map();
   const retro6Rows = all.filter(r => retro6.get(r.id) && retro6.get(r.id).final);
+  const paper = (mark) => { const f = strategy === 'I' ? mark(all) : new Map(), rt = strategy === 'I' ? mark(all, { ignoreSince: true }) : new Map();
+    return { map: f, rows: all.filter(r => f.get(r.id) && f.get(r.id).final), retro: all.filter(r => rt.get(r.id) && rt.get(r.id).final) }; };
+  const p8 = paper(markFinal8), p9 = paper(markFinal9);
   // la rilettura eredita l'etichetta F e F3 della prima uscita (stessa partita, stesso esito)
   const firstOf = new Map(rows.map(r => [sigKey(r), r.id]));
   const fin3 = strategy === 'I' ? markFinal3(rows) : new Map();
@@ -806,6 +837,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       retro: { ...oddsStats(retro5Rows), results: R.resultStats(retro5Rows) } } : null,
     final6: strategy === 'I' ? { ...oddsStats(fin6Rows), rules: FINAL6, stake: STAKE, expectedEur: expectedEur(fin6Rows), results: R.resultStats(fin6Rows),
       retro: { ...oddsStats(retro6Rows), results: R.resultStats(retro6Rows) } } : null,
+    final8: strategy === 'I' ? { ...oddsStats(p8.rows), rules: FINAL8, stake: STAKE, expectedEur: expectedEur(p8.rows), results: R.resultStats(p8.rows),
+      retro: { ...oddsStats(p8.retro), results: R.resultStats(p8.retro) } } : null,
+    final9: strategy === 'I' ? { ...oddsStats(p9.rows), rules: FINAL9, stake: STAKE, expectedEur: expectedEur(p9.rows), results: R.resultStats(p9.rows),
+      retro: { ...oddsStats(p9.retro), results: R.resultStats(p9.retro) } } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
     byOdds: [
       { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
@@ -825,6 +860,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final4: !!(fin4.get(r.id) || {}).final,
       final5: !!(fin5.get(r.id) || {}).final,
       final6: !!(fin6.get(r.id) || {}).final,
+      final8: !!(p8.map.get(r.id) || {}).final, final9: !!(p9.map.get(r.id) || {}).final,
       pin_margin: pinMarginPct(r), thin: pinMarginPct(r) !== null && pinMarginPct(r) >= FINAL6.thinMarginPct, solid: solidity(r),
       six: !!(fin.get(firstOf.get(sigKey(r))) || {}).final && isSix(r),
       alt: strategy === 'I' ? altOdds(r) : null, played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null,
@@ -851,4 +887,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
