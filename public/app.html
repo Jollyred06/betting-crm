@@ -171,6 +171,35 @@
   .modal.open { display:flex; } .sheet { background:var(--surface); border-radius:22px 22px 0 0; padding:22px 20px 26px; width:min(100%,560px); }
   .sheet h3 { margin-bottom:6px; } .sheet .btns { display:flex; gap:10px; margin-top:6px; }
 
+  /* ---------- 1° novembre 2026: grafica piu' pulita, pallini di stato */
+  .sdot { display:inline-block; width:11px; height:11px; border-radius:50%; flex:none; margin-top:6px; background:var(--muted); box-shadow:0 0 0 3px color-mix(in srgb, var(--muted) 18%, transparent); }
+  .sdot.ok { background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); } .sdot.warn { background:var(--warn); box-shadow:0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent); }
+  .sdot.bad { background:var(--bad); box-shadow:0 0 0 3px color-mix(in srgb, var(--bad) 20%, transparent); } .sdot.info { background:transparent; border:2px solid var(--muted); box-shadow:none; }
+  .pill .sdot { margin-top:0; }
+  .card3 { background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:16px; box-shadow:0 1px 2px rgba(10,40,25,.05), 0 6px 18px rgba(10,40,25,.05); }
+  .ostate { display:flex; gap:10px; align-items:center; padding:12px 16px; border-radius:14px; margin:0 0 14px; font-size:16px; background:color-mix(in srgb, var(--ok) 10%, var(--surface)); }
+  .ostate.warn { background:color-mix(in srgb, var(--warn) 14%, var(--surface)); } .ostate.bad { background:color-mix(in srgb, var(--bad) 13%, var(--surface)); } .ostate .sdot { margin-top:0; }
+  .obank { margin:0 0 28px; } .olabel { color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.08em; font-weight:600; }
+  .omoney { font:800 clamp(46px,14vw,62px)/1 var(--display); color:var(--ink); margin:6px 0 2px; } .odelta { font-weight:700; }
+  .ostop { display:flex; align-items:center; gap:10px; margin:14px 0 6px; font-size:12.5px; color:var(--muted); } .ostopbar { flex:1; height:8px; border-radius:6px; background:var(--tint); overflow:hidden; } .ostopbar i { display:block; height:100%; background:var(--ok); border-radius:6px; }
+  .ometa { display:flex; flex-wrap:wrap; justify-content:space-between; gap:6px 14px; font-size:13.5px; color:var(--muted); margin-top:8px; } .ometa .sdot { margin:0 6px 0 0; width:9px; height:9px; vertical-align:middle; }
+  h3 small { font:500 13px var(--body); }
+  .orow { display:flex; gap:12px; align-items:flex-start; background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:14px; margin-bottom:10px; box-shadow:0 1px 2px rgba(10,40,25,.05); }
+  .orow.now { border-color:var(--ok); box-shadow:0 0 0 1.5px var(--ok) inset; }
+  .ot { width:50px; flex:none; text-align:center; } .ot b { display:block; font:800 22px/1 var(--display); color:var(--ink); } .ot span { font-size:12px; color:var(--muted); }
+  .om { flex:1; min-width:0; } .oteams { font-weight:700; line-height:1.25; } .opick { margin-top:4px; font-size:15px; } .omin { font-size:13px; color:var(--muted); margin-top:3px; }
+  .oq { font:800 26px/1 var(--display); color:var(--ink); background:var(--tint); padding:6px 9px; border-radius:10px; }
+  .oempty { color:var(--muted); background:var(--surface); border:1.5px dashed var(--line); border-radius:16px; padding:16px; font-size:14.5px; }
+  .otodo { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-weight:600; } .otodo small { color:var(--muted); font-weight:500; }
+  .primary.wide { width:100%; margin-top:12px; }
+  .pact { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; } .pact .playbtn { margin-top:0; } .pact .playform { flex-basis:100%; }
+  .chipbtn { border:1.5px solid var(--line); background:var(--surface); border-radius:999px; padding:7px 12px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink); } .skipr { flex-wrap:wrap; gap:8px; }
+  details.tdet { border:0; padding:0; margin-top:6px; } details.tdet > summary { min-height:0; padding:4px 0; font-size:13px; font-weight:600; color:var(--muted); list-style:none; } details.tdet > summary::before { content:'▸ '; } details.tdet[open] > summary::before { content:'▾ '; }
+  details.fold.quiet { background:transparent; border-style:dashed; } details.fold.quiet > summary span { font-size:17px; color:var(--muted); }
+  .rule1 { border-color:var(--ok); } .rhead { font:700 21px/1.1 var(--display); color:var(--ink); }
+  .rrow { display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--line); } .rrow b { display:block; font-weight:600; } .rrow span { display:block; font-weight:700; font-size:16px; } .rrow small { display:block; color:var(--muted); font-size:13px; }
+  #playedBox .move b { white-space:nowrap; } #playedBox .resbtn { font-size:12.5px; opacity:.8; }
+  .ticket { border-radius:16px; box-shadow:0 1px 2px rgba(10,40,25,.05); } .stub b { font-size:24px; }
   .nav { position:fixed; left:50%; transform:translateX(-50%); bottom:calc(12px + env(safe-area-inset-bottom)); width:min(94vw,460px); display:flex; gap:2px; padding:6px; z-index:10;
     background:color-mix(in srgb, var(--surface) 86%, transparent); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border:1px solid var(--line); border-radius:24px; box-shadow:0 8px 28px rgba(8,30,20,.16); }
   .nav button { flex:1; border:0; background:none; border-radius:18px; padding:8px 0 6px; color:var(--muted); font-size:11px; font-weight:600; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:2px; }
@@ -198,18 +227,22 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div><div class="brand">Betting CRM</div><div class="tag">Segnali di carta, senza soldi veri</div></div>
+    <div><div class="brand">Betting CRM</div><div class="tag">Value betting · 2 € a giocata</div></div>
     <div class="pill" id="statusPill"><i class="cm info"></i><span>Controllo</span></div>
   </header>
 
   <!-- HOME -->
   <main id="pane-home">
+    <div id="oggi"><div class="sk l1"></div><div class="sk box"></div><div class="sk box"></div></div>
+    <details class="fold quiet"><summary><span>Dettagli</span><small>tutti i consigli, prossimi segnali, sistema e crediti</small></summary>
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
-    <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Consigli automatici sui risultati, aggiornati a ogni apertura. Niente giudizi su pochi dati.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
-    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani giocabili sui tuoi siti. In alto le ⭐ da giocare: le altre sono solo da guardare.</p><div id="today"><div class="sk box"></div></div>
+    <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Tutti i consigli automatici. In Oggi vedi solo quelli rossi e gialli.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
+    <section class="block today"><h3>⚽ Prossimi segnali</h3><p class="muted sub">I prossimi segnali giocabili sui tuoi siti. Si giocano solo le ⭐ in Oggi.</p><div id="today"><div class="sk box"></div></div>
       <button class="ghost" onclick="show('signals')">Tutti i segnali →</button></section>
-    <section class="block"><h3>Bankroll di carta</h3><p class="muted sub">Strategia A (libri esteri, 2 € a segnale). Il bankroll dei segnali italiani è nella scheda Bankroll, sotto "allenamento".</p><div id="bankMini"></div></section>
-    <details class="fold"><summary><span>Strategia A · test di ottobre</span><small>verdetto, numeri e tappe</small></summary>
+    <section class="block"><h3>💳 Crediti</h3><p class="muted sub">Quanto resta su ogni piattaforma collegata. Il CRM rallenta da solo se i crediti non bastano fino alla ricarica.</p><div id="credits" class="list"><div class="sk box"></div></div></section>
+    <section class="block"><h3>Controlli</h3><div id="checks" class="list"></div></section>
+    <details class="fold"><summary><span>Strategia A · test di ottobre</span><small>verdetto, numeri, tappe, bankroll di carta</small></summary>
+    <section class="block"><div id="bankMini"></div></section>
     <section id="verdict" class="hero"><div class="sk l1"></div><div class="sk l2"></div><div class="sk l3"></div><div class="sk box"></div></section>
     <div class="upd" id="updLine"></div>
     <section class="block">
@@ -222,11 +255,8 @@
       <p id="strongLine" class="muted"></p>
     </section>
     <section class="block"><h3>Tappe</h3><div id="milestones"></div></section>
-    </details>
-    <details class="fold"><summary><span>Stato del sistema</span><small>controlli e prossime partite</small></summary>
-    <section class="block"><h3>Controlli</h3><div id="checks" class="list"></div></section>
-    <section class="block"><h3>💳 Crediti</h3><p class="muted sub">Quanto resta su ogni piattaforma collegata. Il CRM rallenta da solo se i crediti non bastano fino alla ricarica.</p><div id="credits" class="list"><div class="sk box"></div></div></section>
     <section class="block"><h3>Prossime partite</h3><div id="schedule"></div></section>
+    </details>
     </details>
   </main>
 
@@ -234,30 +264,31 @@
   <main id="pane-signals" style="display:none;">
     <section class="block">
       <h3>Segnali</h3>
+      <div class="seg" role="tablist">
+        <button class="tab on" data-s="next" onclick="setTab(this)">⚽ Da giocare</button>
+        <button class="tab" data-s="archive" onclick="setTab(this)">🗂️ Archivio</button>
+      </div>
+      <button id="todoBtn" class="sixbtn" onclick="toggleTodo()" style="display:none">✏️ Risultati da scrivere (⭐ F2+)</button>
+      <div id="signals"></div>
+      <details class="fold quiet filters"><summary><span>Filtri</span><small>quali segnali mostrare</small></summary>
       <div class="scope" role="group" aria-label="Quali segnali">
         <button id="scope-mine" class="on" onclick="setScope('mine')">🎯 I miei siti</button>
         <button id="scope-it" onclick="setScope('it')">🇮🇹 Tutti italiani</button>
         <button id="scope-all" onclick="setScope('all')">Tutte</button>
       </div>
       <button id="sixBtn" class="sixbtn" onclick="toggleSix()">🎯 Solo i più probabili · 6 su 10</button>
-      <button id="todoBtn" class="sixbtn" onclick="toggleTodo()" style="display:none">✏️ Risultati da scrivere (⭐ F2+)</button>
-      <div class="seg" role="tablist">
-        <button class="tab on" data-s="next" onclick="setTab(this)">⚽ Da giocare</button>
-        <button class="tab" data-s="archive" onclick="setTab(this)">🗂️ Archivio</button>
-      </div>
-      <div id="signals"></div>
+      </details>
     </section>
   </main>
 
   <!-- STRATEGIE -->
   <main id="pane-strategies" style="display:none;">
     <section class="block">
-      <h3>Strategie</h3>
-      <p class="muted sub">Tutte in prova sulla carta. <b>⭐ F2+</b> è quella da giocare dal 1° novembre (2 € l'una); <b>F</b>, <b>F2</b> e <b>F3</b> restano in misura, <b>I</b> i bookmaker italiani, <b>B</b> la prova delle regole B sui libri esteri, <b>A</b> il test di ottobre.</p>
+      <h3>Analisi</h3>
+      <p class="muted sub">In alto la regola che giochi e i suoi numeri. Sotto, i bookmaker. Tutto il resto è nell'archivio: si misura ma non si gioca.</p>
       <div id="italia"></div>
-      <div id="strategies"></div>
     </section>
-    <details class="fold"><summary><span>Provate e scartate</span><small>idee che non battevano il mercato</small></summary><div id="discarded"></div></details>
+    <details class="fold quiet"><summary><span>Strategia A e scartate</span><small>il test di ottobre e le idee che non battevano il mercato</small></summary><div id="strategies"></div><h4>Provate e scartate</h4><div id="discarded"></div></details>
   </main>
 
   <!-- BANKROLL -->
@@ -267,6 +298,7 @@
       <p class="muted sub">I segnali che hai giocato davvero, con la quota presa. Il CRM misura da solo se le tue quote battono la chiusura.</p>
       <div id="playedBox"><div class="sk box"></div></div>
     </section>
+    <details class="fold quiet"><summary><span>Allenamento e strumenti</span><small>bankroll di allenamento, strategia A, gestione del saldo di carta</small></summary>
     <section class="block train">
       <h3>🏋️ Bankroll di allenamento</h3>
       <p class="muted sub">Sulla carta, nessun soldo vero. Tre casse da 500 € per ogni selezione, con tre modi di puntare sugli stessi segnali. Si ferma da sola se perde il 25%.</p>
@@ -294,6 +326,7 @@
       </div>
       <p class="muted">Sono soldi di carta: il saldo si muove da solo di 2€ per ogni segnale che si chiude. Qui puoi solo ripartire da un altro importo.</p>
     </section>
+    </details>
   </main>
 
   <!-- ALTRO -->
@@ -355,10 +388,10 @@
 </div>
 
 <nav class="nav" aria-label="Navigazione">
-  <button id="nav-home" class="on" onclick="show('home')" aria-label="Home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>Home</button>
+  <button id="nav-home" class="on" onclick="show('home')" aria-label="Oggi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>Oggi</button>
   <button id="nav-signals" onclick="show('signals')" aria-label="Segnali"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>Segnali</button>
-  <button id="nav-strategies" onclick="show('strategies')" aria-label="Strategie"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Strategie</button>
-  <button id="nav-bankroll" onclick="show('bankroll')" aria-label="Bankroll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h11v2M3 7v11a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-7a3 3 0 0 0-3-3H3zM17 14h.01"/></svg>Bankroll</button>
+  <button id="nav-strategies" onclick="show('strategies')" aria-label="Analisi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Analisi</button>
+  <button id="nav-bankroll" onclick="show('bankroll')" aria-label="Giocate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h11v2M3 7v11a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3v-7a3 3 0 0 0-3-3H3zM17 14h.01"/></svg>Giocate</button>
   <button id="nav-more" onclick="show('more')" aria-label="Altro"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg>Altro</button>
 </nav>
 
@@ -616,6 +649,21 @@
   // risultati veri di una selezione con le vinte attese accanto (se le vinte sono molte meno delle attese, le probabilita' sbagliano)
   const resVsExp = r => !r || !r.settled ? 'ancora nessuno' : `${r.won} vinte su ${r.settled} · saldo carta <span class="${cls(r.pnlEur)}">${signedMoney(r.pnlEur)}</span>`;
   // 📊 BOOKMAKER: quale sito conviene, con gli stessi numeri delle strategie (segnali I e T)
+  // ✅ LA REGOLA CHE GIOCHI: tre numeri e un pallino ciascuno, niente altro
+  function ruleCard(i) {
+    const f = i && (i.bestRule === 'sicure' ? i.final5 : i.bestRule === 'tutte' ? i.final4 : i.final6), ck = i && i.bestCheck, b = i && i.budget;
+    if (!f) return '';
+    const vl = f.measured < 20 || !f.clvCi95 ? 'info' : f.clvCi95[0] > 0 ? 'ok' : f.clvCi95[1] < 0 ? 'bad' : 'warn';
+    const cl = !ck || ck.level === 'pochi' ? 'info' : ck.level === 'allarme' ? 'bad' : ck.level === 'attenzione' ? 'warn' : 'ok';
+    const bl = !b ? 'info' : b.stopped ? 'bad' : b.pnl >= 0 ? 'ok' : 'warn';
+    const row = (lv, t, v, n) => `<div class="rrow">${sdot(lv)}<div><b>${t}</b><span>${v}</span>${n ? `<small>${n}</small>` : ''}</div></div>`;
+    return `<div class="strat rule1"><div class="rhead">✅ La regola che giochi</div>
+      <p class="muted" style="margin:2px 0 10px;">${i.bestRule === 'sicure' ? '🛡️ Sicure' : i.bestRule === 'tutte' ? '⭐ F2+' : '✅ Consigliate'} · vantaggio dal 4% · entro 3 ore · quota fino a ${num(i.bestMaxOdd || 3.5, 2)} · niente coppe · 2 € · massimo 5 al giorno</p>
+      ${row(vl, 'Valore contro la chiusura', f.measured >= 5 ? pct(f.avgClvPct, 1) + (f.clvCi95 ? ` (da ${pct(f.clvCi95[0])} a ${pct(f.clvCi95[1])})` : '') : 'pochi dati', vl === 'ok' ? 'il valore c\'è' : vl === 'bad' ? 'sotto zero: non funziona' : vl === 'warn' ? 'incerto: servono più segnali' : `giudizio da 20 segnali (ora ${f.measured})`)}
+      ${row(cl, 'Vinte contro attese', ck && ck.n ? `${ck.won} su ${ck.n}, attese ${num(ck.expected, 1)}` : 'nessun risultato', cl === 'ok' ? 'in linea' : cl === 'warn' ? 'un po\' sotto: normale sfortuna' : cl === 'bad' ? 'troppo sotto: fermati e mandami il backup' : `giudizio da ${ck ? ck.minN : 30} risultati`)}
+      ${row(bl, 'Il tuo budget', b ? `${money(b.balance)} (${signedMoney(b.pnl)})` : '—', b ? `stop a ${money(b.stop)}` : '')}
+    </div>`;
+  }
   function booksCard(B) {
     if (!B || !B.books || !B.books.length) return '';
     const dot = { ok: '🟢', no: '🔴', forse: '🟡', pochi: '⚪' }, lab = { ok: 'conviene', no: 'da evitare', forse: 'da vedere', pochi: 'pochi dati' };
@@ -711,7 +759,8 @@
   async function loadItalia() {
     try {
       const [i, b, L, BK] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null)]);
-      $('italia').innerHTML = final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + booksCard(BK) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
+      $('italia').innerHTML = ruleCard(i) + booksCard(BK) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+        + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
   async function loadStrategies() {
@@ -755,15 +804,75 @@
     try { const d = await getJson('/api/tracker/credits'); $('credits').innerHTML = d.items.map(i => `<div>${marker(i.level === 'bad' ? 'bad' : i.level === 'warn' ? 'warn' : i.level === 'ok' ? 'ok' : 'info')}<div><b>${esc(i.name)}</b><span class="muted">${esc(i.text)}</span></div></div>`).join(''); }
     catch (e) { $('credits').innerHTML = '<div class="empty">Crediti non disponibili: ' + esc(e.message) + '</div>'; }
   }
+  // ------------------------------------------------------------------ OGGI: tutto quello che serve, in una schermata
+  // Pallini: 🟢 da fare / tutto ok · 🟡 da controllare · 🔴 fermati · (le informazioni stanno in "Dettagli")
+  const sdot = lv => `<i class="sdot ${lv}"></i>`;
+  const pickTxt = r => r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X';
+  const pickLong = r => r.pick === '1' ? `1 · vince ${r.home}` : r.pick === '2' ? `2 · vince ${r.away}` : 'X · pareggio';
+  function playActions(r) {
+    if (r.played) return `<div class="played">✅ Giocata a <b>${num(r.played.odd, 2)}</b> su ${esc(r.played.book)}</div>`;
+    if (r.skipped) return `<div class="played no">🚫 Non giocata: ${esc(r.skipped.label)} <button class="linkbtn" onclick="undoSkip(${Number(r.skipped.id)})">annulla</button></div>`;
+    return `<div class="pact"><button class="playbtn" onclick="openPlay(${Number(r.id)}, this)">✍️ Ho giocato</button><button class="playbtn skipbtn" onclick="openSkip(${Number(r.id)}, this)">🚫 Non giocata</button><div class="playform"></div></div>`;
+  }
+  function oggiRow(r) {
+    const t = Date.parse(r.commence_time), until = new Date(t - 30 * 60000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    return `<article class="orow${isNow(r) ? ' now' : ''}">
+      <div class="ot"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
+      <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div>
+        <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>
+        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`} · solo se la quota è almeno <b>${num(r.min_odd, 2)}</b></div>
+        ${playActions(r)}</div>
+      <div class="oq">${num(r.play ? r.play.odd : r.odd, 2)}</div></article>`;
+  }
+  async function loadOggi() {
+    const el = $('oggi'); if (!el) return;
+    try {
+      const [d, P, A, C] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/played').catch(() => null), getJson('/api/tracker/advice').catch(() => null), getJson('/api/tracker/credits').catch(() => null)]);
+      (d.recent || []).forEach(r => { sigById[r.id] = r; });
+      if (Array.isArray(d.myBooks) && d.myBooks.length) myBookNames = d.myBooks;
+      const b = d.budget || { start: 100, balance: 100, pnl: 0, stop: 60, playedToday: 0, maxPerDay: 5 }, ck = d.bestCheck;
+      const best = (d.best || []).map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
+      const todo = P && P.items ? P.items.filter(x => !['won', 'lost', 'void'].includes(x.result) && Date.parse(x.commence_time) < Date.now() - 150 * 60000) : [];
+      // avvisi: solo quelli che chiedono di fare qualcosa (rossi e gialli), al massimo 3
+      const alerts = [];
+      if (ck && ck.level === 'allarme') alerts.push({ lv: 'bad', t: 'Le vinte sono troppo sotto le attese', s: `${ck.won} vinte su ${ck.n}, attese ${num(ck.expected, 1)}. Fermati e mandami il backup.` });
+      (C && C.items || []).filter(i => i.level === 'bad' || i.level === 'warn').forEach(i => alerts.push({ lv: i.level === 'bad' ? 'bad' : 'warn', t: i.name, s: i.text }));
+      (A && A.advice || []).filter(x => x.level === 'bad').forEach(x => alerts.push({ lv: 'bad', t: x.title, s: x.text }));
+      const lv = b.stopped || (ck && ck.level === 'allarme') ? 'bad' : alerts.length || todo.length ? 'warn' : 'ok';
+      const head = b.stopped ? 'Stop raggiunto: niente giocate' : ck && ck.level === 'allarme' ? 'Fermati: controlliamo i numeri' : todo.length ? `${todo.length} ${todo.length === 1 ? 'risultato' : 'risultati'} da segnare` : alerts.length ? 'Tutto ok, con un avviso' : 'Tutto in ordine';
+      $('statusPill').innerHTML = `${sdot(lv)}<span>${lv === 'ok' ? 'Tutto ok' : lv === 'warn' ? 'Da fare' : 'Fermati'}</span>`;
+      const room = Math.max(0, b.maxPerDay - b.playedToday), span = Math.max(1, b.start * 1.5 - b.stop), pos = Math.max(0, Math.min(100, 100 * (b.balance - b.stop) / span));
+      el.innerHTML = `
+        <section class="ostate ${lv}">${sdot(lv)}<b>${esc(head)}</b></section>
+        <section class="obank card3">
+          <div class="olabel">Il tuo budget</div>
+          <div class="omoney num">${money(b.balance)}</div>
+          <div class="odelta ${cls(b.pnl)}">${signedMoney(b.pnl)} da ${money(b.start)}${b.open ? ` · <span class="muted">${money(b.open)} in gioco</span>` : ''}</div>
+          <div class="ostop"><div class="ostopbar"><i style="width:${pos}%"></i></div><span>stop a ${money(b.stop)}</span></div>
+          <div class="ometa"><span>Oggi: <b>${b.playedToday} su ${b.maxPerDay}</b> giocate</span>${ck && ck.n ? `<span>${sdot(ck.level === 'allarme' ? 'bad' : ck.level === 'attenzione' ? 'warn' : ck.level === 'ok' ? 'ok' : 'info')}Lista: ${ck.won} vinte su ${ck.n} (attese ${num(ck.expected, 1)})</span>` : ''}</div>
+        </section>
+        <section class="block">
+          <h3>⭐ Da giocare <small class="muted">${b.stopped ? '' : room ? `· 2 € l'una · ancora ${room} oggi` : '· per oggi basta così'}</small></h3>
+          ${b.stopped ? `<div class="callout warn"><b>Stop a ${money(b.stop)} raggiunto.</b> Niente giocate finché non controlliamo i numeri insieme: mandami il backup.</div>`
+            : best.length ? best.map(oggiRow).join('')
+            : `<div class="oempty">${room ? 'Nessuna partita da giocare adesso. Compaiono da sole quando mancano meno di 3 ore e la quota è giusta: il CRM controlla ogni 3 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata.' : 'Hai già fatto le giocate di oggi.'}</div>`}
+        </section>
+        ${todo.length ? `<section class="block"><h3>✏️ Da segnare</h3><div class="card3">${todo.slice(0, 6).map(x => `<div class="otodo">${esc(x.home)} – ${esc(x.away)}<small>${esc(x.book)} ${num(x.odd, 2)}</small></div>`).join('')}<button class="primary wide" onclick="show('bankroll')">Segna i risultati</button></div><p class="muted">Quelle delle serie maggiori si chiudono da sole entro domattina.</p></section>` : ''}
+        ${alerts.length ? `<section class="block"><h3>Avvisi</h3><div class="list card3">${alerts.slice(0, 3).map(a => `<div>${sdot(a.lv)}<div><b>${esc(a.t)}</b><span class="muted">${esc(a.s)}</span></div></div>`).join('')}</div></section>` : ''}`;
+      lastLoad = Date.now();
+    } catch (e) {
+      el.innerHTML = `<section class="ostate bad">${sdot('bad')}<b>Non riesco a caricare i dati</b></section><p class="muted">${esc(e.message)}. Se il server si stava svegliando, riprova tra un minuto.</p><button class="primary retry" onclick="loadHome()">Riprova</button>`;
+      $('statusPill').innerHTML = `${sdot('bad')}<span>Problema</span>`;
+    }
+  }
   async function loadHome() {
-    loadAdvice(); loadToday(); loadCredits();
+    loadOggi(); loadAdvice(); loadToday(); loadCredits();
     try {
       const [o, h, m, b] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health'), getJson('/api/tracker/milestones').catch(() => null), getJson('/api/tracker/bankroll').catch(() => null)]);
       bankData = b; renderMilestones(m); renderBankMini(b);
       const lv = h.todo.level;
       $('todo').className = 'todo ' + lv;
       $('todo').innerHTML = `${marker(lv)}<div><b>${esc(h.todo.title)}</b><span>${esc(h.todo.text)}</span></div>`;
-      $('statusPill').innerHTML = `${marker(lv)}<span>${lv === 'ok' ? 'Tutto ok' : lv === 'warn' ? 'Da controllare' : 'Problema'}</span>`;
       lastLoad = Date.now(); $('updLine').textContent = 'Aggiornato alle ' + dt(new Date(), { hour: '2-digit', minute: '2-digit' });
       $('verdict').className = 'hero ' + o.verdict.level;
       $('verdict').innerHTML = `<h2>${esc(o.verdict.title)}</h2><p>${esc(o.verdict.text)}</p>${gauge(o.total)}`;
@@ -790,7 +899,6 @@
       $('todo').className = 'todo bad';
       $('todo').innerHTML = `${marker('bad')}<div><b>Non riesco a caricare i dati</b><span>${esc(e.message)}. Se il server era fermo, riprova tra un minuto.</span><div><button class="primary retry" onclick="loadHome()">Riprova</button></div></div>`;
       $('verdict').innerHTML = '';
-      $('statusPill').innerHTML = `${marker('bad')}<span>Problema</span>`;
     }
   }
 
@@ -822,19 +930,24 @@
   // ⏱️ il momento giusto: mancano meno di 3 ore e la quota sui tuoi siti e' ancora almeno la minima (dai dati: piu' vicino, piu' valore)
   const isNow = r => { const t = Date.parse(r.commence_time) - Date.now(); return !!r.play && !r.played && t > 0 && t <= 3 * 3600000; };
   function ticket(r, chip) {
-    const it = chip.includes('chip it');
+    const it = chip.includes('chip it'), live = Date.parse(r.commence_time) > Date.now();
+    // in primo piano solo: quando, chi, cosa giocare e dove, quota; tutto il resto in "dettagli"
     return `
         <article class="ticket${r.best ? ' bestt' : ''}">
-          <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { day: 'numeric' })}</b><span>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span></div>
+          <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { day: 'numeric', month: 'short' })}</span></div>
           <div class="tmain">
-            <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
-            <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
-            ${it ? (r.play ? `<div class="todo-line">👉 Gioca su <b>${esc(r.play.book)}</b> a <b>${num(r.play.odd, 2)}</b>${isNow(r) ? ' <span class="chip now">⏱️ Ora è il momento</span>' : ''}</div>` : `<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>`) : ''}
-            ${it && r.play && !r.played && Date.parse(r.commence_time) > Date.now() ? `<div class="avail">🔍 Su ${esc(r.play.book)} cerca <b>${esc(r.home)}</b> (lente in alto) · <a class="tlink" href="https://www.google.com/search?q=${encodeURIComponent(r.play.book + ' ' + r.home + ' ' + r.away)}" target="_blank" rel="noopener" onclick="rememberSpot()">cerca la partita</a></div>` : ''}
-            ${it && r.min_odd && r.play && !r.played && Date.parse(r.commence_time) - 30 * 60000 > Date.now() ? `<div class="avail">⏱️ <b>Gioca da adesso fino alle ${new Date(Date.parse(r.commence_time) - 30 * 60000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</b> (30 minuti prima del calcio d'inizio), solo se su ${esc(r.play.book)} la quota è almeno <b>${num(r.min_odd, 2)}</b></div>` : ''}
-            ${it && r.min_odd ? `<div class="avail">${r.play && !r.played && Date.parse(r.commence_time) > Date.now() ? 'Quote viste dal CRM' : `Prima di giocare controlla sul sito: quota almeno <b>${num(r.min_odd, 2)}</b>`}${r.alt && Object.keys(r.alt).length > 1 ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''}</div>` : ''}
-            ${it ? (r.played ? `<div class="played">✅ Giocata: <b>${num(r.played.odd, 2)}</b> su ${esc(r.played.book)}</div>` : r.skipped ? `<div class="played no">🚫 Non giocata: ${esc(r.skipped.label)} <button class="linkbtn" onclick="undoSkip(${Number(r.skipped.id)})">annulla</button></div>` : `<button class="playbtn" onclick="openPlay(${Number(r.id)})">✍️ Ho giocato</button> <button class="playbtn skipbtn" onclick="openSkip(${Number(r.id)})">🚫 Non giocata</button><div class="playform" id="pf-${Number(r.id)}"></div>`) : ''}
-            <div class="foot">${chip}${r.final6 ? '<span class="chip fin">✅ consigliata</span>' : ''}${r.solid && r.solid.score >= 2 ? `<span class="chip fin" title="${[r.solid.near ? 'letta a meno di 1 ora' : '', r.solid.liquid ? 'mercato liquido' : '', r.solid.agree ? r.solid.books + ' siti italiani sopra il prezzo' : ''].filter(Boolean).join(', ')}">🟢 solida</span>` : ''}${r.final4 && !r.final6 && r.thin && r.win_prob >= 0.5 ? '<span class="chip">⚠️ favorito in mercato sottile</span>' : ''}${r.final6 && /\b(?:super)?(cup|coppa|copa|pokal|puchar|coupe|kupa|kupasi|beker|ta[cç]a|cupa|trophy|shield)\b/i.test(r.league || '') ? '<span class="chip">⚠️ coppa: non in lista</span>' : ''}${r.final5 ? '<span class="chip">🛡️ sicura</span>' : ''}${r.final4 ? '<span class="chip fin">⭐ F2+</span>' : ''}${r.final ? '<span class="chip fin">✅ F</span>' : ''}${r.six ? '<span class="chip fin">🎯 6 su 10</span>' : ''}${r.final2 ? '<span class="chip fin">✅ F2</span>' : ''}${r.final3 ? '<span class="chip fin">✅ F3</span>' : ''}${r.again ? '<span class="chip">🔄 quota riletta vicino alla partita</span>' : ''}${learnMap[r.id] ? `<span class="chip${learnMap[r.id].pick ? ' fin' : ''}">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.in_band ? '<span class="chip inband">⭐ fascia 4–6 su 10</span>' : ''}${r.win_prob ? `<span class="muted">vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'won' || r.result === 'lost' ? `<span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span>` : r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} rispetto alla chiusura</span>` : '<span class="muted">chiusura da misurare</span>'}</div>
+            <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
+            <div class="pick"><span>${it && r.play ? `Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
+            ${it && r.best && r.play && live ? `<div class="todo-line">${isNow(r) ? '<span class="chip now">⏱️ Ora è il momento</span> ' : ''}quota minima <b>${num(r.min_odd, 2)}</b></div>` : ''}
+            ${it && !r.play && !r.played ? `<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>` : ''}
+            ${it && (r.best || r.played || r.skipped) ? playActions(r) : ''}
+            ${r.result === 'won' || r.result === 'lost' ? `<div class="foot"><span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span></div>` : ''}
+            <details class="tdet"><summary>dettagli</summary>
+              <div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
+              ${it && r.play && !r.played && live ? `<div class="avail">🔍 Su ${esc(r.play.book)} cerca <b>${esc(r.home)}</b> · <a class="tlink" href="https://www.google.com/search?q=${encodeURIComponent(r.play.book + ' ' + r.home + ' ' + r.away)}" target="_blank" rel="noopener" onclick="rememberSpot()">cerca la partita</a></div>` : ''}
+              ${it && r.min_odd ? `<div class="avail">Quote viste dal CRM${r.alt && Object.keys(r.alt).length ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''} · minimo ${num(r.min_odd, 2)}</div>` : ''}
+              <div class="foot">${chip}${r.final6 ? '<span class="chip fin">✅ consigliata</span>' : ''}${r.solid && r.solid.score >= 2 ? '<span class="chip fin">🟢 solida</span>' : ''}${r.final5 ? '<span class="chip">🛡️ sicura</span>' : ''}${r.final4 ? '<span class="chip">⭐ F2+</span>' : ''}${r.final ? '<span class="chip">F</span>' : ''}${r.final2 ? '<span class="chip">F2</span>' : ''}${r.final3 ? '<span class="chip">F3</span>' : ''}${learnMap[r.id] ? `<span class="chip">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.win_prob ? `<span>vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} vs chiusura</span>` : '<span>chiusura da misurare</span>'}</div>
+            </details>
           </div>
         </article>`;
   }
@@ -851,8 +964,9 @@
     else if (b.playedToday >= b.maxPerDay) body = `<p class="muted hidnote">Hai già fatto ${b.playedToday} giocate oggi: per oggi basta così. Meno giocate scelte bene, meno errori.</p>`;
     else if (!items.length) body = `<p class="muted hidnote">Nessuna partita ${d.bestRule === 'consigliate' ? '✅' : d.bestOnlySafe ? '🛡️' : '⭐'} adesso. Compaiono quando mancano meno di 3 ore alla partita, c'è un vantaggio dal 4% in su, la quota è fino a ${num(d.bestMaxOdd || 3.5, 2)}${d.bestRule === 'consigliate' ? ', non è un favorito in un mercato sottile' : d.bestOnlySafe ? ', vince almeno 5 volte su 10' : ''} e la quota sui tuoi siti è almeno la minima. Il CRM controlla ogni 3 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata: va bene così.</p>`;
     else body = items.map(r => ticket(r, '<span class="chip it">IT</span>')).join('');
-    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una${d.bestMaxOdd ? ' · quota fino a ' + num(d.bestMaxOdd, 2) : ''}${d.bestRule === 'consigliate' ? ' · solo ✅ consigliate, prima le 🟢 solide' : d.bestOnlySafe ? ' · solo 🛡️ sicure' : ''}</small></h4>${line}${ckLine}${body}</section>`;
+    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una</small></h4>${line}${body}<details class="tdet"><summary>regole e risultati della lista</summary><p class="muted">Selezione ${d.bestRule === 'consigliate' ? '✅ consigliate' : d.bestOnlySafe ? '🛡️ sicure' : '⭐ F2+'}, quota fino a ${num(d.bestMaxOdd || 3.5, 2)}, niente coppe, prima le 🟢 solide, massimo ${b.maxPerDay} al giorno.</p>${ckLine}</details></section>`;
   }
+  let showOthers = false;
   function italiaTickets(d, head, chip, tail) {
     if (d && Array.isArray(d.myBooks) && d.myBooks.length) myBookNames = d.myBooks;
     const now = Date.now(), it = chip.includes('chip it');
@@ -866,65 +980,76 @@
     const hidden = it ? Math.min(base.length, 15) - list.length : 0;
     const note = hidden > 0 ? `<p class="muted hidnote">${hidden} ${hidden === 1 ? 'segnale nascosto' : 'segnali nascosti'} dai filtri (${[sigScope === 'mine' ? 'non giocabili sui tuoi siti' : '', sixOnly ? 'non 🎯 6 su 10' : ''].filter(Boolean).join(' o ')}). <button class="linkbtn" onclick="sixOnly=false;try{localStorage.setItem('sixOnly','0')}catch(e){};setScope('it')">Mostrali</button></p>` : '';
     if (!list.length) return top + (note ? head + note : '');
-    return top + head + note + list.map(r => ticket(r, chip)).join('') + tail;
+    // gli altri segnali non si giocano: nascosti finche' non li chiedi (meno confusione)
+    if (it && !showOthers) return top + `<button class="sixbtn" onclick="showOthers=true;loadSignals()">Mostra anche gli altri ${list.length} segnali · solo da guardare</button>`;
+    return top + head + note + list.map(r => ticket(r, chip)).join('') + (it ? `<button class="sixbtn" onclick="showOthers=false;loadSignals()">Nascondi gli altri segnali</button>` : '') + tail;
   }
   // i siti dove hai il conto (MY_BOOKS su Render) per primi, poi gli altri piu' comuni
   let myBookNames = ['888sport', 'Snai'];
   const PLAY_BOOKS_BASE = ['888sport', 'Snai', 'Fastbet', 'Goldbet', 'Netwin', 'Eurobet', 'Sisal', 'Winamax', 'Lottomatica'];
   const playBooks = () => [...new Set([...myBookNames, ...PLAY_BOOKS_BASE])];
-  function openPlay(id) {
-    const r = sigById[id], box = $('pf-' + id); if (!r || !box) return;
-    if (box.innerHTML) { box.innerHTML = ''; return; }
+  // il modulo si apre accanto al pulsante toccato (in Oggi o in Segnali): niente id doppi tra le pagine
+  const formOf = el => el ? el.closest('.pact').querySelector('.playform') : null;
+  function openPlay(id, el) {
+    const r = sigById[id], box = formOf(el) || $('pf-' + id); if (!r || !box) return;
+    if (box.innerHTML && box.dataset.kind === 'play') { box.innerHTML = ''; box.dataset.kind = ''; return; }
+    box.dataset.kind = 'play';
     // proposta: il bookmaker consigliato con la quota piu' alta sopra la minima, altrimenti quello del segnale
     const ok = Object.entries(r.alt || {}).filter(([, v]) => !r.min_odd || v >= r.min_odd).sort((a, b) => b[1] - a[1])[0];
     const PLAY_BOOKS = playBooks(), book = ok ? ok[0] : (PLAY_BOOKS.includes(r.book) ? r.book : PLAY_BOOKS[0]), odd = ok ? ok[1] : r.odd;
-    box.innerHTML = `<div class="pf"><label>Bookmaker<select id="pb-${id}">${PLAY_BOOKS.map(b => `<option${b === book ? ' selected' : ''}>${b}</option>`).join('')}</select></label>
-      <label>Quota presa<input id="po-${id}" type="number" inputmode="decimal" step="0.01" value="${odd}"></label>
-      <label>Puntata €<input id="ps-${id}" type="number" inputmode="decimal" step="0.5" value="2"></label>
-      <div class="pfb"><button class="primary" onclick="savePlay(${id})">Salva</button><button class="linkbtn" onclick="openPlay(${id})">Annulla</button></div><div class="muted" id="pm-${id}"></div></div>`;
+    box.innerHTML = `<div class="pf"><label>Sito<select class="f-book">${PLAY_BOOKS.map(b => `<option${b === book ? ' selected' : ''}>${b}</option>`).join('')}</select></label>
+      <label>Quota presa<input class="f-odd" type="number" inputmode="decimal" step="0.01" value="${odd}"></label>
+      <label>Puntata €<input class="f-stake" type="number" inputmode="decimal" step="0.5" value="2"></label>
+      <div class="pfb"><button class="primary" onclick="savePlay(${id}, this)">Salva</button><button class="linkbtn" onclick="this.closest('.playform').innerHTML=''">Annulla</button></div><div class="muted f-msg"></div></div>`;
   }
-  async function savePlay(id) {
-    const r = sigById[id], odd = parseFloat(String($('po-' + id).value).replace(',', '.')), stake = parseFloat(String($('ps-' + id).value).replace(',', '.'));
+  async function savePlay(id, btn) {
+    const box = btn ? btn.closest('.playform') : $('pf-' + id), q = c => box.querySelector(c);
+    const r = sigById[id], odd = parseFloat(String(q('.f-odd').value).replace(',', '.')), stake = parseFloat(String(q('.f-stake').value).replace(',', '.')), book = q('.f-book').value;
     if (r && r.min_odd && odd < r.min_odd && !confirm(`La quota ${num(odd, 2)} è sotto la minima ${num(r.min_odd, 2)}: il segnale non avrebbe valore. Salvo lo stesso?`)) return;
     if (!(await ensureKey())) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Salvo…'; }
     try {
-      const res = await fetch('/api/tracker/played/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book: $('pb-' + id).value, odd, stake }) });
+      const res = await fetch('/api/tracker/played/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book, odd, stake }) });
       const d = await res.json().catch(() => ({}));
-      if (res.status === 401) { lock(); $('pm-' + id).textContent = 'La chiave non è più valida: riprova.'; return; }
-      if (!res.ok) { $('pm-' + id).textContent = d.error || 'Errore ' + res.status; return; }
-      r.played = { book: $('pb-' + id).value, odd }; loadSignals(); softRefresh();
-    } catch (e) { $('pm-' + id).textContent = 'Errore: ' + e.message; }
+      if (res.status === 401) { lock(); q('.f-msg').textContent = 'La chiave non è più valida: riprova.'; if (btn) { btn.disabled = false; btn.textContent = 'Salva'; } return; }
+      if (!res.ok) { q('.f-msg').textContent = d.error || 'Errore ' + res.status; if (btn) { btn.disabled = false; btn.textContent = 'Salva'; } return; }
+      if (r) r.played = { book, odd };
+      refreshViews(); softRefresh();
+    } catch (e) { q('.f-msg').textContent = 'Errore: ' + e.message; if (btn) { btn.disabled = false; btn.textContent = 'Salva'; } }
   }
   // 🚫 NON GIOCATA: il motivo serve a sapere quante occasioni si riescono davvero a giocare (senza, i numeri sembrano migliori)
   const SKIP_LABELS = { quota: '📉 Quota scesa', trovata: '🔍 Partita non trovata', tempo: '⏰ Non avevo tempo' };
-  function openSkip(id) {
-    const box = $('pf-' + id); if (!box) return;
-    if (box.dataset.skip === '1') { box.innerHTML = ''; box.dataset.skip = ''; return; }
-    box.dataset.skip = '1';
-    box.innerHTML = `<div class="pf"><span class="muted">Perché non l'hai giocata?</span><div class="pfb">${Object.entries(SKIP_LABELS).map(([k, l]) => `<button class="linkbtn" onclick="saveSkip(${id}, '${k}')">${l}</button>`).join('')}</div><div class="muted" id="pm-${id}"></div></div>`;
+  function openSkip(id, el) {
+    const box = formOf(el) || $('pf-' + id); if (!box) return;
+    if (box.innerHTML && box.dataset.kind === 'skip') { box.innerHTML = ''; box.dataset.kind = ''; return; }
+    box.dataset.kind = 'skip';
+    box.innerHTML = `<div class="pf"><span class="muted">Perché non l'hai giocata?</span><div class="pfb skipr">${Object.entries(SKIP_LABELS).map(([k, l]) => `<button class="chipbtn" onclick="saveSkip(${id}, '${k}', this)">${l}</button>`).join('')}</div><div class="muted f-msg"></div></div>`;
   }
-  async function saveSkip(id, reason) {
+  async function saveSkip(id, reason, btn) {
     if (!(await ensureKey())) return;
+    const msg = btn ? btn.closest('.playform').querySelector('.f-msg') : $('pm-' + id);
     try {
       const res = await fetch('/api/tracker/skipped/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
       const d = await res.json().catch(() => ({}));
       if (res.status === 401) { lock(); return; }
-      if (!res.ok) { const m = $('pm-' + id); if (m) m.textContent = d.error || 'Errore ' + res.status; return; }
+      if (!res.ok) { if (msg) msg.textContent = d.error || 'Errore ' + res.status; return; }
       const r = sigById[id]; if (r) r.skipped = { id: d.id, reason, label: SKIP_TEXT[reason] || reason };
-      loadSignals(); softRefresh();
-    } catch (e) { const m = $('pm-' + id); if (m) m.textContent = 'Errore: ' + e.message; }
+      refreshViews(); softRefresh();
+    } catch (e) { if (msg) msg.textContent = 'Errore: ' + e.message; }
   }
+  // ridisegna subito la pagina aperta con i dati gia' in memoria (Oggi e Segnali condividono le stesse schede)
+  function refreshViews() { if (curPage === 'home') loadOggi(); else loadSignals(); }
   // dopo un salvataggio la scheda cambia subito; i numeri completi (lista ⭐, budget) si rinfrescano da soli qualche secondo dopo,
   // quando il server ha gia' ripreparato le pagine
   const SKIP_TEXT = { quota: 'quota scesa', trovata: 'partita non trovata', tempo: 'non avevo tempo' };
   let softTimer = null;
-  function softRefresh() { clearTimeout(softTimer); softTimer = setTimeout(() => { memo.clear(); if ($('signals') && $('signals').offsetParent) loadSignals(); }, 6000); }
+  function softRefresh() { clearTimeout(softTimer); softTimer = setTimeout(() => { memo.clear(); refreshViews(); }, 6000); }
   async function undoSkip(sid) {
     if (!(await ensureKey())) return;
     const res = await fetch('/api/tracker/skipped/' + sid, { method: 'DELETE', headers: { 'x-run-key': key } });
     if (res.status === 401) { lock(); return; }
     Object.values(sigById).forEach(r => { if (r.skipped && r.skipped.id === sid) r.skipped = null; });
-    loadSignals(); softRefresh();
+    refreshViews(); softRefresh();
   }
   async function deletePlay(id) {
     if (!confirm('Cancello questa giocata?')) return;
