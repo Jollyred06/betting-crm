@@ -391,8 +391,9 @@
     let y = null; try { y = sessionStorage.getItem('spotY'); sessionStorage.removeItem('spotY'); } catch (e) { /* facoltativo */ }
     if (y !== null && window.scrollTo) setTimeout(() => window.scrollTo(0, Number(y) || 0), 50);
   }
+  let curPage = 'home';
   function show(name) {
-    setHash(name);
+    setHash(name); curPage = name;
     PANES.forEach(n => { $('pane-' + n).style.display = n === name ? 'block' : 'none'; $('nav-' + n).className = n === name ? 'on' : ''; });
     if (name === 'signals') loadSignals(); if (name === 'strategies') loadStrategies(); if (name === 'bankroll') loadBankroll(); if (name === 'more') moreRefresh();
     if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, 0);
@@ -406,12 +407,42 @@
     window.fetch = (u, o) => { if (o && o.method && o.method !== 'GET' && !/\/api\/tracker\/(played|skipped|auth-check)/.test(String(u))) memo.clear(); return rawFetch(u, o); };
   }
   async function fetchJson(url) { const r = await fetch(url); const d = await r.json(); if (d && d.error && !Array.isArray(d)) throw new Error(d.error); return d; }
+  // Super veloce (1° novembre 2026): l'ultima risposta di ogni pagina resta nel telefono. All'apertura si mostra SUBITO quella
+  // (anche se il server di Render si sta svegliando), e intanto si scarica quella nuova: se cambia, la pagina si ridisegna da sola.
+  const SWR_KEY = 'swr:', SWR_MAX_MS = 6 * 3600000, swrServed = new Set();
+  const swrGet = url => { try { const v = JSON.parse(localStorage.getItem(SWR_KEY + url) || 'null'); return v && Date.now() - v.at < SWR_MAX_MS ? v : null; } catch (e) { return null; } };
+  const swrPut = (url, d, raw) => { try { localStorage.setItem(SWR_KEY + url, JSON.stringify({ at: Date.now(), raw })); } catch (e) { /* telefono pieno o navigazione privata: pazienza */ } };
+  let redrawTimer = null;
+  function redraw() {
+    clearTimeout(redrawTimer);
+    redrawTimer = setTimeout(() => { if (curPage === 'home') loadHome(); else if (curPage === 'signals') loadSignals(); else if (curPage === 'strategies') loadStrategies(); else if (curPage === 'bankroll') loadBankroll(); }, 150);
+  }
+  async function fetchRaw(url) {
+    const r = await fetch(url); let raw, d;
+    if (typeof r.text === 'function') { raw = await r.text(); d = JSON.parse(raw); } else { d = await r.json(); raw = JSON.stringify(d); }
+    if (d && d.error && !Array.isArray(d)) throw new Error(d.error); return { d, raw };
+  }
   function getJson(url) {
     const hit = memo.get(url);
     if (hit && Date.now() - hit.at < MEMO_MS) return hit.p;
-    const p = fetchJson(url); memo.set(url, { at: Date.now(), p });
+    const net = fetchRaw(url).then(({ d, raw }) => { swrPut(url, d, raw); return { d, raw }; });
+    const old = !swrServed.has(url) && /^\/api\/tracker\//.test(url) ? swrGet(url) : null;
+    if (old) {
+      // prima volta in questa visita: si mostra la copia del telefono, poi quella nuova (ridisegno solo se e' cambiata)
+      swrServed.add(url);
+      const p = Promise.resolve(JSON.parse(old.raw)); memo.set(url, { at: Date.now(), p });
+      net.then(({ d, raw }) => { memo.set(url, { at: Date.now(), p: Promise.resolve(d) }); if (raw !== old.raw) redraw(); }).catch(() => {});
+      return p;
+    }
+    swrServed.add(url);
+    const p = net.then(x => x.d); memo.set(url, { at: Date.now(), p });
     p.catch(() => memo.delete(url));   // un errore non resta in memoria
     return p;
+  }
+  // dopo la Home si preparano in silenzio le altre pagine: cambiare scheda diventa istantaneo
+  function prefetch() {
+    ['/api/tracker/italia', '/api/tracker/italia?s=B', '/api/tracker/learning', '/api/tracker/books', '/api/tracker/strategies', '/api/tracker/played', '/api/tracker/training', '/api/tracker/signals?status=pending']
+      .forEach((u, i) => setTimeout(() => { getJson(u).catch(() => {}); }, 400 + i * 150));
   }
 
   // ------------------------------------------------------------------ CHIAVE: si chiede solo quando serve
@@ -1135,6 +1166,7 @@
   (function start() {
     const h = (typeof location !== 'undefined' && location.hash || '').replace('#', '');
     const name = Object.keys(HASH).find(k => HASH[k] && h.startsWith(HASH[k]));
+    if (typeof setTimeout === 'function') setTimeout(prefetch, 1500);
     if (!name) { loadHome(); return; }
     if (name === 'signals' && h.endsWith('-archivio')) { sigTab = 'archive'; document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.s === 'archive')); }
     loadHome(); show(name); setTimeout(restoreSpot, 1200);
