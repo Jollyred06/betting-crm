@@ -225,6 +225,7 @@
   .legend { display:flex; gap:14px; flex-wrap:wrap; color:var(--muted); font-size:13px; margin:0 0 10px; } .legend .dot { margin-right:5px; width:9px; height:9px; animation:none; }
   @media (prefers-reduced-motion: reduce) { .band { animation:none; } .fill { transition:none; } .sk { animation:none; } }
   .ocheck { padding:12px 0; border-top:1px solid var(--line); } .ocheck:first-child { border-top:0; } .ocheck small { display:block; color:var(--muted); margin:2px 0 8px; }
+  .ochips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; } .ochips:empty { display:none; } .chip.warnc { border-color:var(--warn); color:var(--ink); }
 </style>
 </head>
 <body>
@@ -707,7 +708,12 @@
         ${f.retro && f.retro.measured ? `<div><dt>Stesse regole all'indietro</dt><dd class="muted">${f.retro.signals} segnali · ${itStat(f.retro)}${f.retro.results && f.retro.results.settled ? ' · ' + resVsExp(f.retro.results) : ''}</dd></div>` : ''}</dl></div>`;
     return `<details class="fold"><summary><span>🧪 Prove sulla carta</span><small>non si giocano: tra qualche settimana vediamo se battono le ⭐</small></summary>
       ${row('🔒', '7 su 10', 'Le ⭐ F2+ che Pinnacle dà vincenti dal 65% (quota circa 1,30–1,55), niente coppe', i.final8)}
-      ${row('💧', 'Liquidi', 'Le ⭐ F2+ solo nei mercati più liquidi (margine Pinnacle sotto l\'8%), quota fino a 3,50, niente coppe', i.final9)}</details>`;
+      ${row('💧', 'Liquidi', 'Le ⭐ F2+ solo nei mercati più liquidi (margine Pinnacle sotto l\'8%), quota fino a 3,50, niente coppe', i.final9)}      ${i.consensus ? (() => { const K = i.consensus, st = f => `${f.signals} da oggi · ${f.measured >= 5 ? `<span class="${cls(f.avgClvPct)}">${itStat(f)}</span>` : 'ancora pochi'} · ${resVsExp(f.results)}`;
+        const rt = f => f.retro && f.retro.measured ? `${f.retro.signals} segnali · ${itStat(f.retro)}${f.retro.results && f.retro.results.settled ? ' · ' + resVsExp(f.retro.results) : ''}` : '—';
+        return `<div class="strat"><div class="sh"><div class="letter" style="font-size:24px">👥</div><div><b>Consenso dei siti</b><span>Le ⭐ F2+ fino a 3,50 divise per quanti siti italiani pagano sopra il giusto</span></div></div>
+        <dl class="facts"><div><dt>👥 ${K.rules.agreeMin}+ siti d'accordo</dt><dd>${st(K.agree)}<br><span class="muted">all'indietro: ${rt(K.agree)}</span></dd></div>
+          <div><dt>⚠️ Quota isolata (+${num((K.rules.isolatedRatio - 1) * 100, 0)}% sugli altri)</dt><dd>${st(K.isolated)}<br><span class="muted">all'indietro: ${rt(K.isolated)}</span></dd></div>
+          <div><dt>Le altre</dt><dd>${st(K.rest)}<br><span class="muted">all'indietro: ${rt(K.rest)}</span></dd></div></dl></div>`; })() : ''}</details>`;
   }
   function final6Card(i) {
     const f = i && i.final6; if (!f) return '';
@@ -848,6 +854,13 @@
     if (r.skipped) return `<div class="played no">🚫 Non giocata: ${esc(r.skipped.label)} <button class="linkbtn" onclick="undoSkip(${Number(r.skipped.id)})">annulla</button></div>`;
     return `<div class="pact"><button class="playbtn" onclick="openPlay(${Number(r.id)}, this)">✍️ Ho giocato</button><button class="playbtn skipbtn" onclick="openSkip(${Number(r.id)}, this)">🚫 Non giocata</button><div class="playform"></div></div>`;
   }
+  // 👥 consenso dei siti: quanti pagano sopra il giusto; ⚠️ quota isolata se la tua quota supera dell'8% la mediana degli altri
+  function consChip(r) {
+    const k = r && r.consensus; if (!k) return '';
+    const odd = r.play ? r.play.odd : r.odd, ratio = k.median ? odd / k.median : 0;
+    const iso = ratio > 1.08 ? `<span class="chip warnc" title="Quota molto sopra gli altri siti: controlla che ci sia ancora prima di puntare">⚠️ quota isolata +${num((ratio - 1) * 100, 0)}%</span>` : '';
+    return `<span class="chip${k.above >= 4 ? ' fin' : ''}" title="Siti italiani che pagano sopra il prezzo giusto">👥 ${k.above} su ${k.sites} d'accordo</span>${iso}`;
+  }
   function oggiRow(r) {
     const t = Date.parse(r.commence_time), until = new Date(t - 30 * 60000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     return `<article class="orow${isNow(r) ? ' now' : ''}">
@@ -855,6 +868,7 @@
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>
         <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`} · solo se la quota è almeno <b>${num(r.min_odd, 2)}</b></div>
+        <div class="ochips">${consChip(r)}</div>
         ${playActions(r)}</div>
       <div class="oq">${num(r.play ? r.play.odd : r.odd, 2)}</div></article>`;
   }
@@ -980,6 +994,7 @@
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="pick"><span>${it && r.play ? `Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
             ${it && r.best && r.play && live ? `<div class="todo-line">${isNow(r) ? '<span class="chip now">⏱️ Ora è il momento</span> ' : ''}quota minima <b>${num(r.min_odd, 2)}</b></div>` : ''}
+            ${it && r.play && live && !r.played && !r.skipped ? `<div class="ochips">${consChip(r)}</div>` : ''}
             ${it && !r.play && !r.played ? `<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>` : ''}
             ${it && (r.best || r.played || r.skipped) ? playActions(r) : ''}
             ${it && !r.best && !r.played && !r.skipped && r.play && live ? `<div class="notbest">⚠️ Non è tra le ⭐ da giocare: se la giochi lo stesso, segnala qui sotto (conta nel budget).</div>${playActions(r)}` : ''}
@@ -988,7 +1003,7 @@
               <div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
               ${it && r.play && !r.played && live ? `<div class="avail">🔍 Su ${esc(r.play.book)} cerca <b>${esc(r.home)}</b> · <a class="tlink" href="https://www.google.com/search?q=${encodeURIComponent(r.play.book + ' ' + r.home + ' ' + r.away)}" target="_blank" rel="noopener" onclick="rememberSpot()">cerca la partita</a></div>` : ''}
               ${it && r.min_odd ? `<div class="avail">Quote viste dal CRM${r.alt && Object.keys(r.alt).length ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''} · minimo ${num(r.min_odd, 2)}</div>` : ''}
-              <div class="foot">${chip}${r.final6 ? '<span class="chip fin">✅ consigliata</span>' : ''}${r.solid && r.solid.score >= 2 ? '<span class="chip fin">🟢 solida</span>' : ''}${r.final5 ? '<span class="chip">🛡️ sicura</span>' : ''}${r.final4 ? '<span class="chip">⭐ F2+</span>' : ''}${r.final ? '<span class="chip">F</span>' : ''}${r.final2 ? '<span class="chip">F2</span>' : ''}${r.final3 ? '<span class="chip">F3</span>' : ''}${learnMap[r.id] ? `<span class="chip">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.win_prob ? `<span>vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} vs chiusura</span>` : '<span>chiusura da misurare</span>'}</div>
+              <div class="foot">${chip}${consChip(r)}${r.final6 ? '<span class="chip fin">✅ consigliata</span>' : ''}${r.solid && r.solid.score >= 2 ? '<span class="chip fin">🟢 solida</span>' : ''}${r.final5 ? '<span class="chip">🛡️ sicura</span>' : ''}${r.final4 ? '<span class="chip">⭐ F2+</span>' : ''}${r.final ? '<span class="chip">F</span>' : ''}${r.final2 ? '<span class="chip">F2</span>' : ''}${r.final3 ? '<span class="chip">F3</span>' : ''}${learnMap[r.id] ? `<span class="chip">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.win_prob ? `<span>vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} vs chiusura</span>` : '<span>chiusura da misurare</span>'}</div>
             </details>
           </div>
         </article>`;

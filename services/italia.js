@@ -643,6 +643,18 @@ const markFinal9 = (rows, o) => markPaper(rows, r => [
   ...(liquidOf(r, FINAL9.maxMarginPct) ? [] : ['mercato sottile']),
   ...(Number(r.odd) <= FINAL9.maxOdd ? [] : ['quota sopra 3,50'])], FINAL9.since, o);
 
+// ------------------------------------------------------------------------------------------- 👥 consenso dei siti (1° novembre 2026)
+const CONSENSUS = { since: '2026-11-01T16:00:00Z', minEdgePct: 2, agreeMin: 4, isolatedRatio: 1.08, minSites: 3 };
+/** Parte pura (testata): quanti siti italiani pagano sopra il prezzo giusto e quanto la quota sta sopra la mediana degli altri. */
+function consensusOf(odd, fairProb, selection, quotes) {
+  const i = { home: 0, draw: 1, away: 2 }[selection];
+  if (i === undefined || !(fairProb > 0) || !(odd > 1) || !quotes) return null;
+  const odds = Object.values(quotes).filter(v => Array.isArray(v) && Number(v[i]) > 1).map(v => Number(v[i])).sort((a, b) => a - b);
+  if (odds.length < CONSENSUS.minSites) return null;
+  const m = odds.length % 2 ? odds[(odds.length - 1) / 2] : (odds[odds.length / 2 - 1] + odds[odds.length / 2]) / 2;
+  return { sites: odds.length, above: odds.filter(o => (o * fairProb - 1) * 100 >= CONSENSUS.minEdgePct).length, median: m, ratio: odd / m };
+}
+
 // ------------------------------------------------------------------------------------------- timbro della categoria
 /** Parte pura (testata): la categoria di un segnale I calcolata con le regole di adesso. */
 function flagsOf(r, f4, f5, f6, c, nowMs = Date.now()) {
@@ -823,7 +835,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const tQuotes = new Map();
   if (strategy === 'I') {
     try {
-      const evs = [...new Set(all.slice(0, 200).map(r => r.event_id))];
+      const evs = [...new Set(all.map(r => r.event_id))];
       const tr = evs.length ? (await pool.query(`SELECT event_id, phase, quotes, created_at FROM italia_signals WHERE strategy = 'T' AND event_id = ANY($1) ORDER BY created_at`, [evs])).rows : [];
       for (const t of tr) { const q = parseQ(t.quotes); if (q) { tQuotes.set(`${t.event_id}|${t.phase || ''}`, q); tQuotes.set(t.event_id, q); } }
     } catch (e) { /* facoltativo */ }
@@ -833,6 +845,12 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     for (const k of c.myBooks) { const v = q[k] && Number(q[k][SEL_IDX[r.selection]]); if (v > 1) out[BOOK_NAMES[k] || k] = v; }
     return Object.keys(out).length ? out : null; };
   const checks = strategy === 'I' ? await R.pendingChecks(pool).catch(() => []) : [];
+  // 👥 consenso dei siti italiani (1° novembre 2026): sulle 296 I con chiusura, 4+ siti sopra il giusto = CLV +6,6%;
+  // quota oltre l'8% sopra la mediana degli altri siti ("isolata") = vinte sotto le attese. Si mostra e si misura, non filtra.
+  const consOf = r => consensusOf(Number(r.odd), Number(r.fair_prob), r.selection, quotesOf(r));
+  const f2c = strategy === 'I' ? all.filter(r => fin4.get(r.id) && fin4.get(r.id).final && Number(r.odd) <= 3.5).map(r => ({ r, k: consOf(r) })).filter(x => x.k) : [];
+  const since = Date.parse(CONSENSUS.since), consGroup = test => { const l = f2c.filter(x => test(x.k)); const now = l.filter(x => Date.parse(x.r.created_at) >= since).map(x => x.r), all2 = l.map(x => x.r);
+    return { ...oddsStats(now), results: R.resultStats(now), retro: { ...oddsStats(all2), results: R.resultStats(all2) } }; };
   const out = {
     ...base, checks, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
     final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows), results: R.resultStats(finRows),
@@ -849,6 +867,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       retro: { ...oddsStats(p8.retro), results: R.resultStats(p8.retro) } } : null,
     final9: strategy === 'I' ? { ...oddsStats(p9.rows), rules: FINAL9, stake: STAKE, expectedEur: expectedEur(p9.rows), results: R.resultStats(p9.rows),
       retro: { ...oddsStats(p9.retro), results: R.resultStats(p9.retro) } } : null,
+    consensus: strategy === 'I' ? { rules: CONSENSUS, agree: consGroup(k => k.above >= CONSENSUS.agreeMin), isolated: consGroup(k => k.ratio > CONSENSUS.isolatedRatio),
+      rest: consGroup(k => k.above < CONSENSUS.agreeMin && !(k.ratio > CONSENSUS.isolatedRatio)) } : null,
     bySelection: ['home', 'draw', 'away'].map(s => ({ name: SEL_NAME[s], ...stats(rows.filter(r => r.selection === s)) })),
     byOdds: [
       { name: 'Sotto 1,60 (7 o più vinte su 10)', ...oddsStats(rows.filter(r => Number(r.odd) < BAND.min)) },
@@ -871,7 +891,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final8: !!(p8.map.get(r.id) || {}).final, final9: !!(p9.map.get(r.id) || {}).final,
       pin_margin: pinMarginPct(r), thin: pinMarginPct(r) !== null && pinMarginPct(r) >= FINAL6.thinMarginPct, solid: solidity(r),
       six: !!(fin.get(firstOf.get(sigKey(r))) || {}).final && isSix(r),
-      alt: strategy === 'I' ? altOdds(r) : null, played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null,
+      alt: strategy === 'I' ? altOdds(r) : null, consensus: strategy === 'I' ? consOf(r) : null, played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null,
       skipped: skipped.get(Number(r.id)) || skippedByKey.get(sigKey(r)) || null,
       // dove giocarlo: il bookmaker consigliato (888sport o Snai) con la quota piu' alta, solo se almeno la minima
       play: (() => { const a = strategy === 'I' ? altOdds(r) : null, m = r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null;
@@ -895,4 +915,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

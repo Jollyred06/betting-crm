@@ -142,3 +142,13 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(R.verifyStatus('rinviata', '1-1'), null);
   console.log('controllo risultati a mano: ok');
 }
+// 👥 consenso dei siti
+{
+  const I = require('../services/italia');
+  const q = { snai: [2.2, 3.3, 3.4], eurobet: [2.15, 3.3, 3.4], sisal: [2.0, 3.2, 3.6], goldbet: [2.1, 3.3, 3.5], netwin: [2.3, 3.2, 3.3] };
+  const k = I.consensusOf(2.3, 0.47, 'home', q);              // giusto 2,13: sopra del 2% chi paga da 2,17
+  assert.strictEqual(k.sites, 5); assert.strictEqual(k.above, 2); assert.strictEqual(k.median, 2.15);
+  assert.ok(k.ratio > 1.06 && k.ratio < 1.08);
+  assert.strictEqual(I.consensusOf(2.3, 0.47, 'home', { snai: [2.2, 3, 3] }), null);   // troppo pochi siti
+  console.log('consenso dei siti: ok');
+}
