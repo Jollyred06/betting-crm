@@ -102,3 +102,34 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.markFinal9([{ ...liq, league: 'Coppa Italia' }]).get(2).final, false);
   console.log('prove sulla carta 🔒 e 💧: ok');
 }
+// ⚽ gol: formula, Valanga, Over/Under
+{
+  const G = require('../services/goals');
+  const f = G.fair1x2(1.25, 7, 11);                                   // grande favorita, X alta
+  assert.ok(f.draw < 0.15 && f.marginPct > 0);
+  assert.ok(Math.abs(G.expGoals(0.3) - 2.454) < 0.01);
+  assert.strictEqual(G.isValanga('Spain - Tercera Division', { draw: 0.18, marginPct: 9 }), true);
+  assert.strictEqual(G.isValanga('Premier League', { draw: 0.18, marginPct: 5 }), false);    // mercato liquido
+  assert.strictEqual(G.isValanga('FA Cup', { draw: 0.18, marginPct: 9 }), false);             // coppa
+  assert.strictEqual(G.isValanga('Serie C', { draw: 0.27, marginPct: 9 }), false);
+  const nv = G.noVig2(1.9, 1.9); assert.ok(Math.abs(nv[0] - 0.5) < 1e-6 && Math.abs(nv[0] + nv[1] - 1) < 1e-9);
+  assert.strictEqual(G.goalsOf('3-2'), 5); assert.strictEqual(G.goalsOf('x'), null);
+  assert.strictEqual(G.sideWon('over', 2.5, 3), true); assert.strictEqual(G.sideWon('under', 2.5, 3), false);
+  const t0 = Date.parse('2026-11-12T12:00:00Z'), ct = '2026-11-12T14:00:00Z';
+  const recs = [
+    { event_id: 'e1', market: 'over_under', line: 2.5, league: 'Tercera', home_team: 'A', away_team: 'B', commence_time: ct,
+      bookmakers: [{ key: 'pinnacle', outcomes: { OVER: 1.80, UNDER: 2.05 } }, { key: 'snai', outcomes: { OVER: 1.95, UNDER: 1.80 } }] },
+    { event_id: 'e1', market: 'over_under', line: 3.5, league: 'Tercera', home_team: 'A', away_team: 'B', commence_time: ct,
+      bookmakers: [{ key: 'pinnacle', outcomes: { OVER: 2.6, UNDER: 1.5 } }, { key: 'snai', outcomes: { OVER: 2.5, UNDER: 1.45 } }] },
+    { event_id: 'e1', market: '1x2', bookmakers: [] }
+  ];
+  const tot = G.parseTotals(recs);
+  assert.deepStrictEqual(Object.keys(tot.get('e1').lines).sort(), ['2.5', '3.5']);
+  const pin = new Map([['e1', { league: 'Spain - Tercera Division', fair: { draw: 0.18, marginPct: 9 } }]]);
+  const s = G.findGoalSignals(tot, ['snai'], pin, t0);
+  const g = s.filter(x => x.strategy === 'G'); assert.strictEqual(g.length, 1); assert.strictEqual(g[0].side, 'over'); assert.ok(g[0].edge_pct > 4);
+  const v = s.filter(x => x.strategy === 'V'); assert.deepStrictEqual(v.map(x => x.line).sort(), [2.5, 3.5]);
+  assert.strictEqual(G.findGoalSignals(tot, ['snai'], new Map(), t0).filter(x => x.strategy === 'V').length, 0);
+  const st = G.overStats([0, 1, 2, 3, 4, null]); assert.strictEqual(st.n, 5); assert.strictEqual(st.over[2.5], 40);
+  console.log('gol (formula, Valanga, Over/Under): ok');
+}

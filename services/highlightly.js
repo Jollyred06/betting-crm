@@ -107,8 +107,10 @@ async function settleFromHighlightly(pool, { env = process.env, http = axios, no
   const { rows } = await pool.query(`SELECT id, event_id, selection, home, away, league, commence_time FROM italia_signals
     WHERE (result IS NULL OR result = 'notfound') AND commence_time < to_timestamp($1::double precision / 1000) - INTERVAL '150 minutes'
       AND commence_time > to_timestamp($1::double precision / 1000) - INTERVAL '3 days'`, [nowMs]);
-  if (!rows.length) return { highlightly: 'niente da chiudere' };
-  const days = [...new Set(rows.map(r => new Date(r.commence_time).toISOString().slice(0, 10)))].sort();
+  // ⚽ anche le partite viste per i gol (stesse pagine: nessuna richiesta in piu' per i giorni gia' da leggere)
+  const G = require('./goals'), watchRows = await G.pendingWatch(pool, nowMs);
+  if (!rows.length && !watchRows.length) return { highlightly: 'niente da chiudere' };
+  const days = [...new Set([...rows, ...watchRows].map(r => new Date(r.commence_time).toISOString().slice(0, 10)))].sort();
   let lette = 0, chiuse = 0; const fatti = [];
   for (const day of days) {
     const tries = (await pool.query(`SELECT at FROM results_requests WHERE src = 'hl' AND day = $1 ORDER BY id DESC`, [day])).rows;
@@ -133,8 +135,13 @@ async function settleFromHighlightly(pool, { env = process.env, http = axios, no
       for (const r of all) await pool.query(`UPDATE italia_signals SET result = $2, result_score = $3, settled_at = NOW() WHERE id = $1 AND (result IS NULL OR result = 'notfound')`, [r.id, R.outcome(r.selection, h, a), sc]);
       n++;
     }
+    let ng = 0;
+    for (const w of watchRows.filter(r => new Date(r.commence_time).toISOString().slice(0, 10) === day)) {
+      const m = findMatch(w, matches, I.sameTeam), sc = m && finalScore(m);
+      if (sc) { try { await G.setWatchScore(pool, w.event_id, sc); ng++; } catch (e) { /* facoltativo */ } }
+    }
     chiuse += n; fatti.push(day);
-    await R.logRequestPublic(pool, day, true, matches.length, `${n} partite chiuse su ${byEvent.size} pagine=${matches.pages || 1}`, 'hl');
+    await R.logRequestPublic(pool, day, true, matches.length, `${n} partite chiuse su ${byEvent.size}, gol ${ng} pagine=${matches.pages || 1}`, 'hl');
   }
   return fatti.length ? { highlightly: 'fatto', giorni: fatti, partiteLette: lette, partiteChiuse: chiuse } : { highlightly: 'non ancora' };
 }

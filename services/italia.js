@@ -73,6 +73,8 @@ function cfg(env = process.env) {
     bEnabled: env.B_ENABLED !== 'false',
     tBooks: (env.T_BOOKS ? env.T_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_T_BOOKS),
     tEnabled: env.T_ENABLED !== 'false',
+    // ⚽ gol (1° novembre 2026): quote Over/Under sulla carta, una richiesta in piu' a scansione. Spente finche' OU_ENABLED non e' 'true'
+    ouEnabled: env.OU_ENABLED === 'true', ouMarket: String(env.OU_MARKET || 'over_under').trim(),
     // 1° novembre 2026: i siti dove Christian ha il conto (MY_BOOKS su Render, chiavi del feed separate da virgola).
     // "👉 Gioca su" sceglie la quota piu' alta tra questi.
     myBooks: (env.MY_BOOKS ? env.MY_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : ['888sport_it', 'snai'])
@@ -336,6 +338,10 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
     commence_to: new Date(nowMs + c.windowHours * 3600000).toISOString()
   }, 'scan', http);
   if (!pinBoardDropped) { pinBoardDropped = true; try { await pool.query('DROP TABLE IF EXISTS pin_board'); } catch (e) { /* facoltativo */ } }   // quote maggiorate tolte il 1° novembre
+  // ⚽ gol: prezzo 1X2 di Pinnacle di tutte le partite viste (gratis) e, se accese, le quote Over/Under (una richiesta in piu')
+  let golOut = {};
+  try { const merged = mergeWithPinnacle(records), G = require('./goals'); golOut.partiteGol = await G.watch(pool, merged, trio, nowMs);
+    try { Object.assign(golOut, await G.scanTotals(pool, c, { nowMs, http, merged, trio })); } catch (e) { golOut.erroreGol = e.message; } } catch (e) { /* facoltativo */ }
   const found = findSignals(records, c, nowMs);
   const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
   const foundT = c.tEnabled ? findSignals(records, cfgFor(c, 'T'), nowMs) : [];
@@ -360,7 +366,7 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   }
   const partite = new Set(mainRecords(records).map(r => r.event_id)).size;
   await noteRequest(pool, 'scan', { righe: records.length, partite, candidatiI: found.length, nuoviI: fresh.length, candidatiB: foundB.length, nuoviB, candidatiT: foundT.length });
-  return { scan: 'fatta', righe: records.length, partite, candidati: found.length, nuovi: fresh.length, nuoviB, candidatiT: foundT.length };
+  return { scan: 'fatta', righe: records.length, partite, candidati: found.length, nuovi: fresh.length, nuoviB, candidatiT: foundT.length, ...golOut };
 }
 
 async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
@@ -409,6 +415,7 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
   try { out.timbrati = await stampFlags(pool, c, nowMs); } catch (e) { out.erroreTimbro = e.message; }
   try { Object.assign(out, await require('./results').settleSignals(pool, { env, nowMs, http: resultsHttp, sameTeam })); } catch (e) { out.erroreRisultati = e.message; }
   try { Object.assign(out, await require('./highlightly').settleFromHighlightly(pool, { env, nowMs })); } catch (e) { out.erroreHighlightly = e.message; }
+  try { await require('./goals').settleGoals(pool); } catch (e) { out.erroreGol = e.message; }
   try { Object.assign(out, await require('./backup').saveDaily(pool, { nowMs })); } catch (e) { out.erroreCopia = e.message; }
   return out;
 }
@@ -887,4 +894,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

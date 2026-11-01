@@ -677,6 +677,26 @@
       ${B.alerts.map(a => `<div class="callout ${a.level === 'bad' ? 'warn' : 'ok'}">${esc(a.text)}</div>`).join('')}
       ${top.map(row).join('')}${rest.length ? `<details><summary>Altri ${rest.length} siti con poche occasioni</summary>${rest.map(row).join('')}</details>` : ''}</div>`;
   }
+  // ⚽ GOL: formula del pareggio, 💥 Valanga e quote Over/Under sulla carta (dal 1° novembre)
+  function goalsCard(G) {
+    if (!G) return '';
+    const ov = (x, L) => x.over[L] === null || x.over[L] === undefined ? '—' : num(x.over[L], 0) + '%';
+    const line = x => x.n ? `${x.n} con risultato · ${num(x.goals, 2)} gol · Over 1,5 ${ov(x, 1.5)} · 2,5 ${ov(x, 2.5)} · 3,5 ${ov(x, 3.5)}` : 'ancora nessun risultato';
+    const R = G.reference, v = G.valanga;
+    const sig = x => x.signals ? `${x.signals} segnali · ${x.settled ? `${x.won} vinte su ${x.settled} · saldo carta <span class="${cls(x.pnlEur)}">${signedMoney(x.pnlEur)}</span>` : 'nessun risultato'}` : 'nessuno';
+    return `<details class="fold"><summary><span>⚽ Gol · Over/Under</span><small>sulla carta: la formula del pareggio e 💥 Valanga si misurano da oggi</small></summary>
+      <div class="strat"><div class="sh"><div class="letter" style="font-size:24px">💥</div><div><b>Valanga</b><span>Pareggio sotto il 22% (X di Pinnacle alta) in un mercato sottile, niente coppe: il più forte travolge il più debole</span></div></div>
+        <dl class="facts"><div><dt>Da oggi</dt><dd>${v.matches} viste · ${line(v)}</dd></div>
+          <div><dt>Trovato all'indietro</dt><dd class="muted">${R.valanga.n} partite · ${num(R.valanga.goals, 2)} gol · Over 2,5 ${R.valanga.over[2.5]}% · 3,5 ${R.valanga.over[3.5]}%</dd></div>
+          ${v.next.length ? `<div><dt>Prossime</dt><dd>${v.next.map(x => `${esc(x.match)} <span class="muted">(${dt(x.commence_time, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}, ${num(x.expGoals, 1)} gol attesi)</span>`).join('<br>')}</dd></div>` : ''}</dl></div>
+      <div class="strat"><div class="sh"><div class="letter" style="font-size:24px">📐</div><div><b>Formula dei gol</b><span>gol attesi ≈ ${num(G.rules.formula.a, 2)} − ${num(G.rules.formula.b, 2)} × probabilità del pareggio</span></div></div>
+        <dl class="facts"><div><dt>Tutte le partite viste</dt><dd>${G.watched} viste · ${line(G.all)}</dd></div>
+          ${G.formula.map(b => `<div><dt>Previsti ${b.hi > 50 ? 'oltre ' + num(b.lo, 1) : b.lo ? num(b.lo, 1) + '–' + num(b.hi, 1) : 'sotto ' + num(b.hi, 1)} gol</dt><dd>${line(b)}</dd></div>`).join('')}
+          <div><dt>Riferimento all'indietro</dt><dd class="muted">${R.all.n} partite · ${num(R.all.goals, 2)} gol · Over 2,5 ${R.all.over[2.5]}%</dd></div></dl></div>
+      <div class="strat"><div class="sh"><div class="letter" style="font-size:24px">⭐</div><div><b>Quote Over/Under</b><span>${G.odds.enabled ? 'Accese: una richiesta in più a scansione' : 'Spente fino al 12 novembre (servono le richieste odss)'}</span></div></div>
+        <dl class="facts"><div><dt>⭐ Gol (2,5 sopra Pinnacle, +4%)</dt><dd>${sig(G.odds.G)}</dd></div>
+          ${G.odds.V.map(x => `<div><dt>💥 Over ${num(x.line, 1)} alla miglior quota</dt><dd>${sig(x)}</dd></div>`).join('')}</dl></div></details>`;
+  }
   // 🔒 7 su 10 e 💧 Liquidi: due prove sulla carta dal 1° novembre (non si giocano)
   function paperCard(i) {
     if (!i || !i.final8 || !i.final9) return '';
@@ -771,8 +791,8 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L, BK] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null)]);
-      $('italia').innerHTML = ruleCard(i) + booksCard(BK) + paperCard(i) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+      const [i, b, L, BK, GL] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null)]);
+      $('italia').innerHTML = ruleCard(i) + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
         + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }

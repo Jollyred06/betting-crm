@@ -73,6 +73,15 @@ router.get('/italia-export', async (req, res) => {
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// ⚽ gol: formula, 💥 Valanga e quote Over/Under sulla carta (solo numeri delle partite, niente giocate)
+router.get('/goals', async (req, res) => {
+  try { res.json(await require('../services/goals').getGoals(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// prova del formato Over/Under di odss: costa UNA richiesta, solo a mano e con la chiave
+router.post('/ou-check', async (req, res) => {
+  if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json(await require('../services/goals').ouCheck(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 // 💳 crediti di tutte le piattaforme (solo numeri)
 router.get('/credits', async (req, res) => {
   try { res.json(await require('../services/credits').getCredits(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
