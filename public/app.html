@@ -402,7 +402,8 @@
   const memo = new Map(), MEMO_MS = 30000;
   if (typeof window !== 'undefined' && typeof window.fetch === 'function' && !window.__memoFetch) {
     const rawFetch = window.fetch.bind(window); window.__memoFetch = true;
-    window.fetch = (u, o) => { if (o && o.method && o.method !== 'GET') memo.clear(); return rawFetch(u, o); };
+    // le giocate e le non giocate si aggiornano sulla scheda subito (senza riscaricare): la copia resta, poi si rinfresca da sola
+    window.fetch = (u, o) => { if (o && o.method && o.method !== 'GET' && !/\/api\/tracker\/(played|skipped|auth-check)/.test(String(u))) memo.clear(); return rawFetch(u, o); };
   }
   async function fetchJson(url) { const r = await fetch(url); const d = await r.json(); if (d && d.error && !Array.isArray(d)) throw new Error(d.error); return d; }
   function getJson(url) {
@@ -853,7 +854,7 @@
       const d = await res.json().catch(() => ({}));
       if (res.status === 401) { lock(); $('pm-' + id).textContent = 'La chiave non è più valida: riprova.'; return; }
       if (!res.ok) { $('pm-' + id).textContent = d.error || 'Errore ' + res.status; return; }
-      r.played = { book: $('pb-' + id).value, odd }; loadSignals();
+      r.played = { book: $('pb-' + id).value, odd }; loadSignals(); softRefresh();
     } catch (e) { $('pm-' + id).textContent = 'Errore: ' + e.message; }
   }
   // 🚫 NON GIOCATA: il motivo serve a sapere quante occasioni si riescono davvero a giocare (senza, i numeri sembrano migliori)
@@ -871,14 +872,21 @@
       const d = await res.json().catch(() => ({}));
       if (res.status === 401) { lock(); return; }
       if (!res.ok) { const m = $('pm-' + id); if (m) m.textContent = d.error || 'Errore ' + res.status; return; }
-      loadSignals();
+      const r = sigById[id]; if (r) r.skipped = { id: d.id, reason, label: SKIP_TEXT[reason] || reason };
+      loadSignals(); softRefresh();
     } catch (e) { const m = $('pm-' + id); if (m) m.textContent = 'Errore: ' + e.message; }
   }
+  // dopo un salvataggio la scheda cambia subito; i numeri completi (lista ⭐, budget) si rinfrescano da soli qualche secondo dopo,
+  // quando il server ha gia' ripreparato le pagine
+  const SKIP_TEXT = { quota: 'quota scesa', trovata: 'partita non trovata', tempo: 'non avevo tempo' };
+  let softTimer = null;
+  function softRefresh() { clearTimeout(softTimer); softTimer = setTimeout(() => { memo.clear(); if ($('signals') && $('signals').offsetParent) loadSignals(); }, 6000); }
   async function undoSkip(sid) {
     if (!(await ensureKey())) return;
     const res = await fetch('/api/tracker/skipped/' + sid, { method: 'DELETE', headers: { 'x-run-key': key } });
     if (res.status === 401) { lock(); return; }
-    loadSignals();
+    Object.values(sigById).forEach(r => { if (r.skipped && r.skipped.id === sid) r.skipped = null; });
+    loadSignals(); softRefresh();
   }
   async function deletePlay(id) {
     if (!confirm('Cancello questa giocata?')) return;

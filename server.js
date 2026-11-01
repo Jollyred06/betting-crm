@@ -36,7 +36,7 @@ app.get('/api/status', (req, res) => {
 
 // ogni salvataggio butta la copia pronta dei numeri, cosi' l'app mostra subito il dato nuovo
 // un salvataggio cambia i numeri: via la copia pronta subito, e a risposta inviata le pagine principali si ripreparano da sole
-app.use('/api', (req, res, next) => { if (req.method !== 'GET') { cache.clear(); res.on('finish', () => cache.clearAndWarm({ port: PORT })); } next(); });
+app.use('/api', (req, res, next) => { if (req.method !== 'GET' && !/auth-check/.test(req.path)) { cache.clear(); res.on('finish', () => cache.clearAndWarm({ port: PORT })); } next(); });
 app.use('/api/tracker', cache.middleware(5 * 60000));
 app.use('/api', betsRouter);
 app.use('/api', runRouter);
