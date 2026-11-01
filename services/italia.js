@@ -56,6 +56,8 @@ function cfg(env = process.env) {
     fromHour: n('ITALIA_FROM_HOUR', 9), toHour: n('ITALIA_TO_HOUR', 22),
     monthlyCap: n('ITALIA_MONTHLY_CAP', 400),
     closeReserve: n('ITALIA_CLOSE_RESERVE', 60),
+    // giorno del mese in cui odss ricarica le richieste (1° novembre 2026: 12)
+    resetDay: n('ODSS_RESET_DAY', 12),
     // chiusura: si chiede Pinnacle quando una partita segnalata parte entro 15 minuti, e nella stessa richiesta
     // si prendono tutte quelle che partono entro 45 minuti (una richiesta per gruppo di partite, nessuna ripetizione)
     closeTriggerMin: n('ITALIA_CLOSE_TRIGGER_MIN', 15),
@@ -204,6 +206,16 @@ function closingPin(records, eventId) {
   return b ? trio(b.outcomes) : null;
 }
 
+/** Parte pura (testata): quante richieste odss si possono usare oggi per arrivare alla ricarica. */
+function odssPace(remaining, usedToday, resetDay = 12, nowMs = Date.now()) {
+  const d = new Date(nowMs);
+  let reset = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), resetDay);
+  if (reset <= nowMs) reset = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, resetDay);
+  const daysLeft = Math.max(1, Math.ceil((reset - nowMs) / 86400000));
+  const perDay = Math.max(4, Math.floor((remaining + usedToday) / daysLeft));
+  return { daysLeft, perDay, usedToday, over: usedToday >= perDay, resetAt: new Date(reset).toISOString() };
+}
+
 /** Quote di tutti i siti (tranne Pinnacle) per una partita alla chiusura: { sito: [1, X, 2] }, oppure null. */
 function closingQuotes(records, eventId) {
   const r = mergeWithPinnacle(mainRecords(records)).find(x => x.event_id === eventId);
@@ -311,6 +323,12 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   if (await usedThisMonth(pool) >= c.monthlyCap - c.closeReserve) return { scan: 'tetto mensile' };
   const rem = await lastRemaining(pool);
   if (rem !== null && rem <= c.closeReserve) return { scan: 'quota odss quasi finita' };
+  // 1° novembre 2026: richieste distribuite fino alla ricarica. Budget di oggi = rimaste / giorni alla ricarica;
+  // se oggi e' gia' stato speso, niente scansione (le chiusure, che misurano il valore, continuano).
+  if (rem !== null) {
+    const p = odssPace(rem, (await pool.query(`SELECT COUNT(*)::int AS n FROM italia_requests WHERE at >= date_trunc('day', NOW())`)).rows[0].n, c.resetDay, nowMs);
+    if (p.over) return { scan: `budget di oggi finito (${p.usedToday} su ${p.perDay})` };
+  }
   const records = await fetchOdds(pool, c, {
     bookmakers: [...new Set(['pinnacle', ...c.books, ...(c.bEnabled ? c.bBooks : []), ...(c.tEnabled ? c.tBooks : [])])].join(','),
     commence_from: new Date(nowMs + c.minLeadMin * 60000).toISOString(),
@@ -389,6 +407,7 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
   try { out.timbrati = await stampFlags(pool, c, nowMs); } catch (e) { out.erroreTimbro = e.message; }
   try { Object.assign(out, await require('./results').settleSignals(pool, { env, nowMs, http: resultsHttp, sameTeam })); } catch (e) { out.erroreRisultati = e.message; }
   try { Object.assign(out, await require('./highlightly').settleFromHighlightly(pool, { env, nowMs })); } catch (e) { out.erroreHighlightly = e.message; }
+  try { Object.assign(out, await require('./backup').saveDaily(pool, { nowMs })); } catch (e) { out.erroreCopia = e.message; }
   return out;
 }
 
@@ -811,4 +830,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

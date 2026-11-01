@@ -64,3 +64,12 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(H.finalScore({ state: { description: 'Finished after extra time', score: { current: '2 - 1' } } }), null);
   console.log('Highlightly (orario, supplementari): ok');
 }
+// crediti odss distribuiti fino alla ricarica del 12
+{
+  const I = require('../services/italia');
+  const p = I.odssPace(188, 10, 12, Date.parse('2026-11-01T12:00:00Z'));
+  assert.strictEqual(p.daysLeft, 11); assert.strictEqual(p.perDay, 18); assert.strictEqual(p.over, false);
+  assert.strictEqual(I.odssPace(30, 20, 12, Date.parse('2026-11-01T12:00:00Z')).over, true);       // pochi crediti: oggi basta cosi'
+  assert.strictEqual(I.odssPace(400, 0, 12, Date.parse('2026-11-12T10:00:00Z')).daysLeft, 30);      // dopo la ricarica: mese dopo
+  console.log('crediti odss distribuiti: ok');
+}

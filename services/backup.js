@@ -6,7 +6,7 @@
  *  - "riepilogo": i numeri gia' calcolati (selezioni, budget, bookmaker, allenamento, calibrazione), per leggerla in un attimo.
  * Si scarica compressa (.json.gz, circa un decimo del peso): la si apre con qualsiasi programma zip, o la si manda in chat cosi' com'e'.
  */
-const SKIP = new Set(['historical_matches', 'xg_matches', 'xg_seasons', 'match_stats', 'referee_stats']);
+const SKIP = new Set(['historical_matches', 'xg_matches', 'xg_seasons', 'match_stats', 'referee_stats', 'backups']);
 
 async function listTables(pool) {
   const { rows } = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`);
@@ -56,4 +56,36 @@ async function buildBackup(pool, now = new Date(), { withSummary = true } = {}) 
   return out;
 }
 
-module.exports = { buildBackup, listTables, movements, SKIP };
+// ------------------------------------------------------------------------------------------- copia automatica ogni giorno
+/**
+ * Ogni giorno, al primo giro dopo le 3 di notte (ora italiana), il CRM salva da solo una copia compressa nel database.
+ * Si tengono le ultime KEEP: proteggono da errori e cancellazioni sbagliate; la copia scaricata sul telefono resta quella "fuori casa".
+ */
+const KEEP = 14;
+const ROME_PARTS = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false });
+async function ensureBackups(pool) {
+  await pool.query(`CREATE TABLE IF NOT EXISTS backups (id SERIAL PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), day TEXT, bytes INT, righe JSONB, data BYTEA)`);
+}
+async function saveDaily(pool, { nowMs = Date.now(), force = false } = {}) {
+  await ensureBackups(pool);
+  const parts = Object.fromEntries(ROME_PARTS.formatToParts(new Date(nowMs)).map(p => [p.type, p.value]));
+  const day = `${parts.year}-${parts.month}-${parts.day}`, hour = Number(parts.hour) % 24;
+  if (!force && hour < 3) return { copia: 'non ancora' };
+  if (!force && (await pool.query(`SELECT 1 FROM backups WHERE day = $1`, [day])).rows.length) return { copia: 'gia\' fatta oggi' };
+  const b = await buildBackup(pool, new Date(nowMs));
+  const gz = require('zlib').gzipSync(Buffer.from(JSON.stringify(b)), { level: 9 });
+  await pool.query(`INSERT INTO backups (day, bytes, righe, data) VALUES ($1, $2, $3, $4)`, [day, gz.length, JSON.stringify(b.righe), gz]);
+  await pool.query(`DELETE FROM backups WHERE id NOT IN (SELECT id FROM backups ORDER BY id DESC LIMIT ${KEEP})`);
+  return { copia: 'salvata', giorno: day, kb: Math.round(gz.length / 1024) };
+}
+async function listBackups(pool) {
+  await ensureBackups(pool);
+  return (await pool.query(`SELECT id, created_at, day, bytes, righe FROM backups ORDER BY id DESC`)).rows;
+}
+async function getBackupFile(pool, id = null) {
+  await ensureBackups(pool);
+  const r = (await pool.query(id ? `SELECT day, data FROM backups WHERE id = $1` : `SELECT day, data FROM backups ORDER BY id DESC LIMIT 1`, id ? [id] : [])).rows[0];
+  return r || null;
+}
+
+module.exports = { buildBackup, listTables, movements, SKIP, saveDaily, listBackups, getBackupFile, KEEP };

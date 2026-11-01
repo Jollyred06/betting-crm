@@ -73,6 +73,25 @@ router.get('/italia-export', async (req, res) => {
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// 💳 crediti di tutte le piattaforme (solo numeri)
+router.get('/credits', async (req, res) => {
+  try { res.json(await require('../services/credits').getCredits(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+// copie automatiche giornaliere: elenco libero (solo date e pesi), file con la chiave
+router.get('/backups', async (req, res) => {
+  try { res.json({ copie: (await require('../services/backup').listBackups(pool)).map(b => ({ id: b.id, at: b.created_at, giorno: b.day, kb: Math.round(b.bytes / 1024) })) }); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
+router.get('/backups/latest', async (req, res) => {
+  if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida' });
+  try {
+    const f = await require('../services/backup').getBackupFile(pool, /^\d+$/.test(req.query.id || '') ? Number(req.query.id) : null);
+    if (!f) return res.status(404).json({ error: 'Nessuna copia automatica ancora: si salva da sola ogni giorno dopo le 3.' });
+    res.setHeader('Content-Type', 'application/gzip');
+    res.setHeader('Content-Disposition', `attachment; filename="backup_betting_crm_${f.day}_auto.json.gz"`);
+    res.send(f.data);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 // Prova di Highlightly (solo numeri di copertura, nessun dato personale; al massimo una lettura ogni 10 minuti)
 router.get('/highlightly-check', async (req, res) => {
   try { res.json(await require('../services/highlightly').check(pool, { day: /^\d{4}-\d{2}-\d{2}$/.test(req.query.day || '') ? req.query.day : null })); }
