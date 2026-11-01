@@ -192,7 +192,6 @@
   .oempty { color:var(--muted); background:var(--surface); border:1.5px dashed var(--line); border-radius:16px; padding:16px; font-size:14.5px; }
   .otodo { display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-weight:600; } .otodo small { color:var(--muted); font-weight:500; }
   .primary.wide { width:100%; margin-top:12px; }
-  .boostbox input[type=text] { margin-top:4px; } .bmatch { padding:12px 0; border-top:1px solid var(--line); } .bmatch small { display:block; color:var(--muted); font-size:12.5px; } .brow { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:8px; } .brow label { display:flex; flex-direction:column; gap:3px; font-weight:700; } .brow label small { font-weight:500; color:var(--muted); } .brow input { margin:0; padding:9px; } .bverdict { display:flex; gap:10px; margin-top:10px; } .bverdict b { display:block; } .bverdict:empty { display:none; }
   .notbest { margin-top:8px; font-size:12.5px; color:var(--muted); }
   .oplay { display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); } .oplay:last-child { border-bottom:0; } .oplay b { display:block; font-weight:600; } .oplay small { color:var(--muted); font-size:13px; } .ores { display:flex; flex-direction:column; align-items:flex-end; gap:4px; text-align:right; white-space:nowrap; } .chip.live { border-color:#2a9df4; color:#2a9df4; }
   .pact { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; } .pact .playbtn { margin-top:0; } .pact .playform { flex-basis:100%; }
@@ -237,8 +236,6 @@
   <!-- HOME -->
   <main id="pane-home">
     <div id="oggi"><div class="sk l1"></div><div class="sk box"></div><div class="sk box"></div></div>
-    <section class="block"><details class="fold boostbox"><summary><span>⚡ Quota maggiorata? Controllala</span><small>scrivi una squadra e la quota "boost" del sito: ti dico se conviene</small></summary>
-      <input type="text" id="bq" placeholder="Squadra, es. Inter" autocomplete="off" oninput="boostSearch()"><div id="bres"></div></details></section>
     <details class="fold quiet"><summary><span>Dettagli</span><small>tutti i consigli, prossimi segnali, sistema e crediti</small></summary>
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
     <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Tutti i consigli automatici. In Oggi vedi solo quelli rossi e gialli.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
@@ -828,27 +825,6 @@
         <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`} · solo se la quota è almeno <b>${num(r.min_odd, 2)}</b></div>
         ${playActions(r)}</div>
       <div class="oq">${num(r.play ? r.play.odd : r.odd, 2)}</div></article>`;
-  }
-  // ⚡ QUOTE MAGGIORATE: si cerca la partita tra quelle viste da Pinnacle e si confronta la quota boost con il prezzo giusto
-  let boostT = null, boostData = [];
-  function boostSearch() {
-    clearTimeout(boostT);
-    boostT = setTimeout(async () => {
-      const q = $('bq').value.trim(), out = $('bres');
-      if (q.length < 3) { out.innerHTML = ''; return; }
-      try {
-        const d = await fetchRaw('/api/tracker/boost?q=' + encodeURIComponent(q)).then(x => x.d); boostData = d.partite || [];
-        out.innerHTML = boostData.length ? boostData.map((m, i) => `<div class="bmatch"><b>${esc(m.home)} – ${esc(m.away)}</b><small>${esc(m.league || '')} · ${dt(m.commence_time, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</small>
-          <div class="brow">${['home', 'draw', 'away'].map(k => `<label><span>${k === 'home' ? '1' : k === 'draw' ? 'X' : '2'} <small>giusta ${num(1 / m.fair[k], 2)}</small></span><input type="number" inputmode="decimal" step="0.01" placeholder="boost" oninput="boostJudge(${i}, '${k}', this)"></label>`).join('')}</div><div class="bverdict" id="bv-${i}"></div></div>`).join('')
-          : `<p class="muted">${esc(d.nota || 'Nessuna partita trovata.')}</p>`;
-      } catch (e) { out.innerHTML = `<p class="muted">Errore: ${esc(e.message)}</p>`; }
-    }, 350);
-  }
-  function boostJudge(i, k, input) {
-    const m = boostData[i], o = parseFloat(String(input.value).replace(',', '.')), el = $('bv-' + i);
-    if (!m || !(o > 1)) { el.innerHTML = ''; return; }
-    const p = m.fair[k], v = (o * p - 1) * 100, lv = v >= 3 ? 'ok' : v >= 0 ? 'warn' : 'bad';
-    el.innerHTML = `${sdot(lv)}<div><b>${lv === 'ok' ? 'Conviene' : lv === 'warn' ? 'Al limite' : 'Non conviene'}: ${pct(v, 1)}</b><span class="muted">Quota ${num(o, 2)} contro un prezzo giusto di ${num(1 / p, 2)} (vince ${num(p * 10, 1)} volte su 10).${lv === 'ok' ? ' Giocala con 2 € (o la puntata massima del boost, se più bassa) e segnala con ✍️ in Segnali se c\'è la scheda.' : lv === 'warn' ? ' Poco valore: meglio lasciar perdere.' : ' Maggiorata ma ancora sotto il giusto: non giocarla.'}</span></div>`;
   }
   async function loadOggi() {
     const el = $('oggi'); if (!el) return;

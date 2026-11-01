@@ -88,12 +88,3 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.winCheck(mk(40, 12, 0.5)).level, 'allarme');      // 12 vinte su 20 attese: z = -2,5
   console.log('lista: quota massima e vinte contro attese: ok');
 }
-// ⚡ quote maggiorate: giudizio
-{
-  const B = require('../services/boost');
-  assert.strictEqual(B.judge(2.2, 0.5).level, 'ok');      // +10%
-  assert.strictEqual(B.judge(2.02, 0.5).level, 'warn');   // +1%
-  assert.strictEqual(B.judge(1.8, 0.5).level, 'bad');
-  assert.strictEqual(B.judge(0, 0.5), null);
-  console.log('quote maggiorate: ok');
-}

@@ -11,6 +11,7 @@
  * Tetto mensile di richieste (ITALIA_MONTHLY_CAP, predefinito 400) con una riserva per le chiusure.
  * Qualsiasi errore qui viene registrato e non ferma mai il resto.
  */
+let pinBoardDropped = false;
 const axios = require('axios');
 const { noVigPower } = require('./sharpSignals');
 
@@ -335,7 +336,7 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
     commence_to: new Date(nowMs + c.windowHours * 3600000).toISOString()
   }, 'scan', http);
   // ⚡ quote maggiorate: i prezzi di Pinnacle di tutte le partite viste restano a disposizione (nessuna richiesta in piu')
-  try { await require('./boost').saveBoard(pool, mergeWithPinnacle(records), trio); } catch (e) { /* facoltativo */ }
+  if (!pinBoardDropped) { pinBoardDropped = true; try { await pool.query('DROP TABLE IF EXISTS pin_board'); } catch (e) { /* facoltativo */ } }   // quote maggiorate tolte il 1° novembre
   const found = findSignals(records, c, nowMs);
   const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
   const foundT = c.tEnabled ? findSignals(records, cfgFor(c, 'T'), nowMs) : [];
