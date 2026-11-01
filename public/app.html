@@ -205,7 +205,7 @@
   <main id="pane-home">
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
     <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Consigli automatici sui risultati, aggiornati a ogni apertura. Niente giudizi su pochi dati.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
-    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani giocabili su 888sport o Snai. In alto le ⭐ da giocare: le altre sono solo da guardare.</p><div id="today"><div class="sk box"></div></div>
+    <section class="block today"><h3>⚽ Da guardare oggi</h3><p class="muted sub">I prossimi segnali sui bookmaker italiani giocabili sui tuoi siti. In alto le ⭐ da giocare: le altre sono solo da guardare.</p><div id="today"><div class="sk box"></div></div>
       <button class="ghost" onclick="show('signals')">Tutti i segnali →</button></section>
     <section class="block"><h3>Bankroll di carta</h3><p class="muted sub">Strategia A (libri esteri, 2 € a segnale). Il bankroll dei segnali italiani è nella scheda Bankroll, sotto "allenamento".</p><div id="bankMini"></div></section>
     <details class="fold"><summary><span>Strategia A · test di ottobre</span><small>verdetto, numeri e tappe</small></summary>
@@ -396,7 +396,21 @@
     if (name === 'signals') loadSignals(); if (name === 'strategies') loadStrategies(); if (name === 'bankroll') loadBankroll(); if (name === 'more') moreRefresh();
     if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo(0, 0);
   }
-  async function getJson(url) { const r = await fetch(url); const d = await r.json(); if (d && d.error && !Array.isArray(d)) throw new Error(d.error); return d; }
+  // Fluidita' (31 ottobre 2026): la stessa richiesta fatta da piu' pagine (Home, Segnali, Strategie) parte una volta sola
+  // e si riusa per 30 secondi; qualsiasi salvataggio (POST/DELETE) butta la copia, cosi' si vede subito il dato nuovo.
+  const memo = new Map(), MEMO_MS = 30000;
+  if (typeof window !== 'undefined' && typeof window.fetch === 'function' && !window.__memoFetch) {
+    const rawFetch = window.fetch.bind(window); window.__memoFetch = true;
+    window.fetch = (u, o) => { if (o && o.method && o.method !== 'GET') memo.clear(); return rawFetch(u, o); };
+  }
+  async function fetchJson(url) { const r = await fetch(url); const d = await r.json(); if (d && d.error && !Array.isArray(d)) throw new Error(d.error); return d; }
+  function getJson(url) {
+    const hit = memo.get(url);
+    if (hit && Date.now() - hit.at < MEMO_MS) return hit.p;
+    const p = fetchJson(url); memo.set(url, { at: Date.now(), p });
+    p.catch(() => memo.delete(url));   // un errore non resta in memoria
+    return p;
+  }
 
   // ------------------------------------------------------------------ CHIAVE: si chiede solo quando serve
   function ensureKey() {
@@ -567,6 +581,18 @@
   }
   // risultati veri di una selezione con le vinte attese accanto (se le vinte sono molte meno delle attese, le probabilita' sbagliano)
   const resVsExp = r => !r || !r.settled ? 'ancora nessuno' : `${r.won} vinte su ${r.settled} · saldo carta <span class="${cls(r.pnlEur)}">${signedMoney(r.pnlEur)}</span>`;
+  // 📊 BOOKMAKER: quale sito conviene, con gli stessi numeri delle strategie (segnali I e T)
+  function booksCard(B) {
+    if (!B || !B.books || !B.books.length) return '';
+    const dot = { ok: '🟢', no: '🔴', forse: '🟡', pochi: '⚪' }, lab = { ok: 'conviene', no: 'da evitare', forse: 'da vedere', pochi: 'pochi dati' };
+    const row = b => `<div class="move"><span><b>${dot[b.verdict]} ${esc(b.name)}</b>${b.mine ? ' <span class="chip fin">ce l\'hai</span>' : ''}<small>${b.signals} occasioni (${b.recent14} in 14 giorni) · ${lab[b.verdict]}${b.settled ? ` · ${b.won} vinte su ${b.settled}, attese ${num(b.expected, 1)}` : ''}</small></span>
+      <span style="text-align:right"><b class="${b.clv.n >= 5 ? cls(b.clv.mean) : 'muted'}">${b.clv.n ? pct(b.clv.mean, 1) : '—'}</b><small class="muted">${b.clv.n} misurati${b.settled ? ' · ' + signedMoney(b.pnlEur) : ''}</small></span></div>`;
+    const top = B.books.filter(b => b.mine || b.signals >= 5), rest = B.books.filter(b => !b.mine && b.signals < 5);
+    return `<div class="strat"><div class="sh"><div class="letter" style="font-size:30px">📊</div><div><b>Bookmaker</b><span>Quale sito paga di più del prezzo giusto · giudizio da ${B.minN} segnali misurati</span></div></div>
+      <p class="muted" style="margin:0 0 6px;font-size:14px;">I tuoi siti: <b>${esc(B.my.join(', '))}</b>. Negli ultimi 14 giorni ci sono state <b>${B.missed14}</b> occasioni su siti dove non hai il conto. Il numero a destra è il valore contro la chiusura di Pinnacle: il giudice vero, più delle vinte.</p>
+      ${B.alerts.map(a => `<div class="callout ${a.level === 'bad' ? 'warn' : 'ok'}">${esc(a.text)}</div>`).join('')}
+      ${top.map(row).join('')}${rest.length ? `<details><summary>Altri ${rest.length} siti con poche occasioni</summary>${rest.map(row).join('')}</details>` : ''}</div>`;
+  }
   function final6Card(i) {
     const f = i && i.final6; if (!f) return '';
     const rt = f.retro;
@@ -650,8 +676,8 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null)]);
-      $('italia').innerHTML = final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
+      const [i, b, L, BK] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null)]);
+      $('italia').innerHTML = final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + booksCard(BK) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '');
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
   async function loadStrategies() {
@@ -688,7 +714,7 @@
       $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
         <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a></b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${best.has(r.id) ? ' · <span class="chip now">⭐ da giocare</span>' : r.final4 ? ' · <span class="chip fin">⭐ F2+</span>' : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.six ? ' · <span class="chip fin">🎯</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
         <div class="q">${num(r.played ? r.played.odd : r.play.odd, 2)}</div></div>`).join('')
-        : '<div class="empty">Nessun segnale giocabile su 888sport o Snai in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
+        : '<div class="empty">Nessun segnale giocabile sui tuoi siti in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
   }
   async function loadHome() {
@@ -755,7 +781,7 @@
   const liveUrl = (h, a) => 'https://www.google.com/search?q=' + encodeURIComponent(`${h} - ${a}`);
   // il testo e l'indirizzo li aggiorna paintDots ogni minuto (prima, durante e dopo la partita)
   const liveLink = (h, a) => `<a class="live" data-q="${esc(h + ' - ' + a)}" href="${liveUrl(h, a)}" rel="noopener" onclick="rememberSpot()">🔎 Partita su Google</a>`;
-  // ⏱️ il momento giusto: mancano meno di 3 ore e la quota su 888sport o Snai e' ancora almeno la minima (dai dati: piu' vicino, piu' valore)
+  // ⏱️ il momento giusto: mancano meno di 3 ore e la quota sui tuoi siti e' ancora almeno la minima (dai dati: piu' vicino, piu' valore)
   const isNow = r => { const t = Date.parse(r.commence_time) - Date.now(); return !!r.play && !r.played && t > 0 && t <= 3 * 3600000; };
   function ticket(r, chip) {
     const it = chip.includes('chip it');
@@ -765,7 +791,7 @@
           <div class="tmain">
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div><div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
             <div class="pick"><span>Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b></span><span class="odd num">${num(r.odd, 2)}</span></div>
-            ${it ? (r.play ? `<div class="todo-line">👉 Gioca su <b>${esc(r.play.book)}</b> a <b>${num(r.play.odd, 2)}</b>${isNow(r) ? ' <span class="chip now">⏱️ Ora è il momento</span>' : ''}</div>` : `<div class="todo-line no">⛔ Non giocabile su 888sport e Snai</div>`) : ''}
+            ${it ? (r.play ? `<div class="todo-line">👉 Gioca su <b>${esc(r.play.book)}</b> a <b>${num(r.play.odd, 2)}</b>${isNow(r) ? ' <span class="chip now">⏱️ Ora è il momento</span>' : ''}</div>` : `<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>`) : ''}
             ${it && r.play && !r.played && Date.parse(r.commence_time) > Date.now() ? `<div class="avail">🔍 Su ${esc(r.play.book)} cerca <b>${esc(r.home)}</b> (lente in alto) · <a class="tlink" href="https://www.google.com/search?q=${encodeURIComponent(r.play.book + ' ' + r.home + ' ' + r.away)}" target="_blank" rel="noopener" onclick="rememberSpot()">cerca la partita</a></div>` : ''}
             ${it && r.min_odd && r.play && !r.played && Date.parse(r.commence_time) - 30 * 60000 > Date.now() ? `<div class="avail">⏱️ <b>Gioca da adesso fino alle ${new Date(Date.parse(r.commence_time) - 30 * 60000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</b> (30 minuti prima del calcio d'inizio), solo se su ${esc(r.play.book)} la quota è almeno <b>${num(r.min_odd, 2)}</b></div>` : ''}
             ${it && r.min_odd ? `<div class="avail">${r.play && !r.played && Date.parse(r.commence_time) > Date.now() ? 'Quote viste dal CRM' : `Prima di giocare controlla sul sito: quota almeno <b>${num(r.min_odd, 2)}</b>`}${r.alt && Object.keys(r.alt).length > 1 ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''}</div>` : ''}
@@ -774,7 +800,7 @@
           </div>
         </article>`;
   }
-  // ⭐ LE MIGLIORI DI OGGI: solo F2+ giocabili su 888sport o Snai, al massimo 5 al giorno, con il conto del budget e lo stop
+  // ⭐ LE MIGLIORI DI OGGI: solo F2+ giocabili sui tuoi siti, al massimo 5 al giorno, con il conto del budget e lo stop
   function bestBox(d) {
     const b = d && d.budget; if (!b) return '';
     const ids = d.best || [], items = ids.map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
@@ -783,11 +809,12 @@
     let body;
     if (b.stopped) body = `<div class="callout warn"><b>Fermati: il budget è sceso a ${money(b.balance)}, sotto lo stop di ${money(b.stop)}.</b> Niente giocate finché non controlliamo insieme i numeri (mandami il backup).</div>`;
     else if (b.playedToday >= b.maxPerDay) body = `<p class="muted hidnote">Hai già fatto ${b.playedToday} giocate oggi: per oggi basta così. Meno giocate scelte bene, meno errori.</p>`;
-    else if (!items.length) body = `<p class="muted hidnote">Nessuna partita ${d.bestRule === 'consigliate' ? '✅' : d.bestOnlySafe ? '🛡️' : '⭐'} adesso. Compaiono quando mancano meno di 3 ore alla partita, c'è un vantaggio dal 4% in su${d.bestRule === 'consigliate' ? ', non è un favorito in un mercato sottile' : d.bestOnlySafe ? ', vince almeno 5 volte su 10' : ''} e la quota su 888sport o Snai è almeno la minima. Il CRM controlla ogni 3 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata: va bene così.</p>`;
+    else if (!items.length) body = `<p class="muted hidnote">Nessuna partita ${d.bestRule === 'consigliate' ? '✅' : d.bestOnlySafe ? '🛡️' : '⭐'} adesso. Compaiono quando mancano meno di 3 ore alla partita, c'è un vantaggio dal 4% in su${d.bestRule === 'consigliate' ? ', non è un favorito in un mercato sottile' : d.bestOnlySafe ? ', vince almeno 5 volte su 10' : ''} e la quota sui tuoi siti è almeno la minima. Il CRM controlla ogni 3 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata: va bene così.</p>`;
     else body = items.map(r => ticket(r, '<span class="chip it">IT</span>')).join('');
     return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una${d.bestRule === 'consigliate' ? ' · solo ✅ consigliate, prima le 🟢 solide' : d.bestOnlySafe ? ' · solo 🛡️ sicure' : ''}</small></h4>${line}${body}</section>`;
   }
   function italiaTickets(d, head, chip, tail) {
+    if (d && Array.isArray(d.myBooks) && d.myBooks.length) myBookNames = d.myBooks;
     const now = Date.now(), it = chip.includes('chip it');
     (d && d.recent || []).forEach(r => { sigById[r.id] = r; r.best = false; });
     const top = it ? bestBox(d) : '';
@@ -797,17 +824,20 @@
       .filter(r => !sixOnly || !it || r.six).slice(0, 15);
     // quanti segnali i filtri stanno nascondendo: cosi' non sembra che "manchino"
     const hidden = it ? Math.min(base.length, 15) - list.length : 0;
-    const note = hidden > 0 ? `<p class="muted hidnote">${hidden} ${hidden === 1 ? 'segnale nascosto' : 'segnali nascosti'} dai filtri (${[sigScope === 'mine' ? 'non giocabili su 888sport o Snai' : '', sixOnly ? 'non 🎯 6 su 10' : ''].filter(Boolean).join(' o ')}). <button class="linkbtn" onclick="sixOnly=false;try{localStorage.setItem('sixOnly','0')}catch(e){};setScope('it')">Mostrali</button></p>` : '';
+    const note = hidden > 0 ? `<p class="muted hidnote">${hidden} ${hidden === 1 ? 'segnale nascosto' : 'segnali nascosti'} dai filtri (${[sigScope === 'mine' ? 'non giocabili sui tuoi siti' : '', sixOnly ? 'non 🎯 6 su 10' : ''].filter(Boolean).join(' o ')}). <button class="linkbtn" onclick="sixOnly=false;try{localStorage.setItem('sixOnly','0')}catch(e){};setScope('it')">Mostrali</button></p>` : '';
     if (!list.length) return top + (note ? head + note : '');
     return top + head + note + list.map(r => ticket(r, chip)).join('') + tail;
   }
-  const PLAY_BOOKS = ['888sport', 'Snai', 'Goldbet', 'Netwin', 'Eurobet', 'Sisal'];
+  // i siti dove hai il conto (MY_BOOKS su Render) per primi, poi gli altri piu' comuni
+  let myBookNames = ['888sport', 'Snai'];
+  const PLAY_BOOKS_BASE = ['888sport', 'Snai', 'Fastbet', 'Goldbet', 'Netwin', 'Eurobet', 'Sisal', 'Winamax', 'Lottomatica'];
+  const playBooks = () => [...new Set([...myBookNames, ...PLAY_BOOKS_BASE])];
   function openPlay(id) {
     const r = sigById[id], box = $('pf-' + id); if (!r || !box) return;
     if (box.innerHTML) { box.innerHTML = ''; return; }
     // proposta: il bookmaker consigliato con la quota piu' alta sopra la minima, altrimenti quello del segnale
     const ok = Object.entries(r.alt || {}).filter(([, v]) => !r.min_odd || v >= r.min_odd).sort((a, b) => b[1] - a[1])[0];
-    const book = ok ? ok[0] : (PLAY_BOOKS.includes(r.book) ? r.book : '888sport'), odd = ok ? ok[1] : r.odd;
+    const PLAY_BOOKS = playBooks(), book = ok ? ok[0] : (PLAY_BOOKS.includes(r.book) ? r.book : PLAY_BOOKS[0]), odd = ok ? ok[1] : r.odd;
     box.innerHTML = `<div class="pf"><label>Bookmaker<select id="pb-${id}">${PLAY_BOOKS.map(b => `<option${b === book ? ' selected' : ''}>${b}</option>`).join('')}</select></label>
       <label>Quota presa<input id="po-${id}" type="number" inputmode="decimal" step="0.01" value="${odd}"></label>
       <label>Puntata €<input id="ps-${id}" type="number" inputmode="decimal" step="0.5" value="2"></label>
@@ -906,7 +936,7 @@
       const itPart = italiaTickets(it, `<h4 class="sechead">🇮🇹 Gli altri segnali <small class="muted">· da guardare, si giocano solo le ⭐</small></h4>`, '<span class="chip it">IT</span>', '');
       if (sigScope === 'it' || sigScope === 'mine') {
         el.innerHTML = itPart ? '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + itPart
-          : sigScope === 'mine' ? '<div class="empty">Nessun segnale giocabile su 888sport o Snai in questa lista. Gli altri segnali italiani sono in “Tutti italiani”.</div>'
+          : sigScope === 'mine' ? '<div class="empty">Nessun segnale giocabile sui tuoi siti in questa lista. Gli altri segnali italiani sono in “Tutti italiani”.</div>'
           : '<div class="empty">Nessun segnale sui bookmaker italiani in questa lista. Il CRM controlla le partite ogni 3 ore, dalle 9 alle 22. Per vedere anche le strategie di sola misura tocca “Tutte”.</div>';
         paintDots(); return;
       }
@@ -1065,7 +1095,7 @@
   }
 
   // quando torni all'app dopo un po', i numeri si aggiornano da soli
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && lastLoad && Date.now() - lastLoad > 60000) loadHome(); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && lastLoad && Date.now() - lastLoad > 60000) { memo.clear(); loadHome(); }; });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => { /* senza, l'app funziona lo stesso */ });
   // apertura: se l'indirizzo dice una scheda (per esempio tornando indietro da Google), si riapre quella, nello stesso punto
   (function start() {

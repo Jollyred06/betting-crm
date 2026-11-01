@@ -27,7 +27,7 @@ const DEFAULT_T_BOOKS = ['888sport_it', 'snai', 'sisal', 'pokerstars', 'eurobet'
 const BOOK_FAMILY = { snai: 'flutter', sisal: 'flutter', pokerstars: 'flutter', eplay24: 'betplay', sportium: 'betplay', betwin360: 'betplay', fastbet: 'altenar', zonagioco: 'altenar',
   betsson: 'betsson_group', starcasino: 'betsson_group', admiralbet: 'novomatic', starvegas: 'novomatic' };
 const DEFAULT_B_BOOKS = ['onexbet', 'unibet_se', 'unibet_nl', 'williamhill', 'marathonbet', '888sport', 'bet365'];
-const BOOK_NAMES = { netwin: 'Netwin', '888sport_it': '888sport', sisal: 'Sisal', snai: 'Snai', goldbet: 'Goldbet', eurobet: 'Eurobet', lottomatica: 'Lottomatica', pokerstars: 'PokerStars', leovegas: 'LeoVegas', betsson: 'Betsson', bet365: 'bet365', planetwin365: 'Planetwin365',
+const BOOK_NAMES = { fastbet: 'Fastbet', zonagioco: 'Zonagioco', eplay24: 'Eplay24', sportium: 'Sportium', betwin360: 'Betwin360', gioca7: 'Gioca7', vincitu: 'Vincitu', stanleybet: 'Stanleybet', daznbet: 'DAZN Bet', staryes: 'StarYes', codere: 'Codere', bgame: 'Bgame', sunbet: 'Sunbet', domusbet: 'Domusbet', totosi: 'Totosì', quigioco: 'Quigioco', perlaplay: 'Perlaplay', sportbet: 'Sportbet', casinosanremo: 'Casinò Sanremo', netbet: 'NetBet', admiralbet: 'AdmiralBet', starcasino: 'StarCasinò', starvegas: 'StarVegas', winamax: 'Winamax', netwin: 'Netwin', '888sport_it': '888sport', sisal: 'Sisal', snai: 'Snai', goldbet: 'Goldbet', eurobet: 'Eurobet', lottomatica: 'Lottomatica', pokerstars: 'PokerStars', leovegas: 'LeoVegas', betsson: 'Betsson', bet365: 'bet365', planetwin365: 'Planetwin365',
   onexbet: '1xBet', unibet_se: 'Unibet (SE)', unibet_nl: 'Unibet (NL)', williamhill: 'William Hill', marathonbet: 'Marathonbet', '888sport': '888sport (estero)' };
 const STRATEGIES = {
   I: { letter: 'I', title: 'Quote italiane contro Pinnacle', playable: true },
@@ -69,7 +69,10 @@ function cfg(env = process.env) {
     bMinEdge: n('B_MIN_EDGE', 2), bMaxEdge: n('B_MAX_EDGE', 5), bMaxOdd: n('B_MAX_ODD', 5),
     bEnabled: env.B_ENABLED !== 'false',
     tBooks: (env.T_BOOKS ? env.T_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_T_BOOKS),
-    tEnabled: env.T_ENABLED !== 'false'
+    tEnabled: env.T_ENABLED !== 'false',
+    // 1° novembre 2026: i siti dove Christian ha il conto (MY_BOOKS su Render, chiavi del feed separate da virgola).
+    // "👉 Gioca su" sceglie la quota piu' alta tra questi.
+    myBooks: (env.MY_BOOKS ? env.MY_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : ['888sport_it', 'snai'])
   };
 }
 
@@ -322,13 +325,15 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
 
 async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   const { rows } = await pool.query(
-    `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min FROM italia_signals
+    `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min, COALESCE(strategy, 'I') AS strategy FROM italia_signals
      WHERE commence_time > to_timestamp($1::double precision / 1000) AND commence_time <= to_timestamp($1::double precision / 1000) + make_interval(mins => $2::int)
-       AND close_captured_at IS NULL AND close_tried_at IS NULL AND COALESCE(edge_pct, 0) >= $3 AND COALESCE(strategy, 'I') <> 'T'`,
+       AND close_captured_at IS NULL AND close_tried_at IS NULL AND COALESCE(edge_pct, 0) >= $3`,
     [nowMs, c.closeWindowMin, c.closeMinEdge]);
-  if (!rows.length) return { chiusure: 0 };
+  // 1° novembre 2026: anche i segnali T (tutti i siti italiani) prendono la chiusura, per giudicare i bookmaker sul valore.
+  // Non fanno mai partire una richiesta da soli: si aggiungono a quella dei segnali I e B (una richiesta = stesso costo).
+  if (!rows.some(r => r.strategy !== 'T')) return { chiusure: 0 };
   // si aspetta che almeno una partita sia vicina: cosi' una sola richiesta copre il gruppo e la chiusura e' piu' fedele
-  if (!rows.some(r => Date.parse(r.commence_time) - nowMs <= c.closeTriggerMin * 60000)) return { chiusure: 0, nota: 'non ancora' };
+  if (!rows.some(r => r.strategy !== 'T' && Date.parse(r.commence_time) - nowMs <= c.closeTriggerMin * 60000)) return { chiusure: 0, nota: 'non ancora' };
   if (await usedThisMonth(pool) >= c.monthlyCap) return { chiusure: 0, nota: 'tetto mensile' };
   const rem = await lastRemaining(pool);
   if (rem !== null && rem <= 3) return { chiusure: 0, nota: 'quota odss finita' };
@@ -713,10 +718,20 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   // una giocata vale per la partita e l'esito, anche se la scheda mostrata e' la rilettura
   const playedByKey = new Map(all.filter(r => played.get(Number(r.id))).map(r => [sigKey(r), played.get(Number(r.id))]));
   const SEL_IDX = { home: 0, draw: 1, away: 2 };
-  // quote dei due bookmaker consigliati (888sport e Snai) per l'esito del segnale, se il feed le aveva
-  const altOdds = r => { let q = r.quotes; try { if (typeof q === 'string') q = JSON.parse(q); } catch (e) { q = null; }
-    if (!q) return null; const out = {};
-    for (const [k, name] of [['888sport_it', '888sport'], ['snai', 'Snai']]) { const v = q[k] && Number(q[k][SEL_IDX[r.selection]]); if (v > 1) out[name] = v; }
+  // 1° novembre 2026: quote di TUTTI i siti dove Christian ha il conto (MY_BOOKS). Le quote dei siti fuori dalla I (es. Fastbet)
+  // arrivano dalla riga T della stessa partita e della stessa lettura (stessa richiesta al feed, nessun costo in piu').
+  const parseQ = q => { try { return typeof q === 'string' ? JSON.parse(q) : q; } catch (e) { return null; } };
+  const tQuotes = new Map();
+  if (strategy === 'I') {
+    try {
+      const evs = [...new Set(all.slice(0, 200).map(r => r.event_id))];
+      const tr = evs.length ? (await pool.query(`SELECT event_id, phase, quotes, created_at FROM italia_signals WHERE strategy = 'T' AND event_id = ANY($1) ORDER BY created_at`, [evs])).rows : [];
+      for (const t of tr) { const q = parseQ(t.quotes); if (q) { tQuotes.set(`${t.event_id}|${t.phase || ''}`, q); tQuotes.set(t.event_id, q); } }
+    } catch (e) { /* facoltativo */ }
+  }
+  const quotesOf = r => ({ ...(tQuotes.get(`${r.event_id}|${r.phase || ''}`) || tQuotes.get(r.event_id) || {}), ...(parseQ(r.quotes) || {}) });
+  const altOdds = r => { const q = quotesOf(r), out = {};
+    for (const k of c.myBooks) { const v = q[k] && Number(q[k][SEL_IDX[r.selection]]); if (v > 1) out[BOOK_NAMES[k] || k] = v; }
     return Object.keys(out).length ? out : null; };
   const out = {
     ...base, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
@@ -764,7 +779,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     const budget = budgetOf(playedSum, budgetCfg(env));
     out.budget = budget;
     const bc = budgetCfg(env);
-    out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule;
+    out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule; out.myBooks = c.myBooks.map(k => BOOK_NAMES[k] || k);
     out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule });
   }
   return out;

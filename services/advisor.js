@@ -119,6 +119,9 @@ async function getAdvice(pool) {
         text: `Su ${L.measured} segnali misurati, la caratteristica che pesa di più è "${best.f.toLowerCase()}: ${best.level}" (${f1(best.effect)} rispetto alla media). ${L.test.proven ? 'Le sue scelte battono chiaramente quelle scartate.' : 'Non ha ancora dimostrato di scegliere meglio di tutti i segnali insieme.'}` });
     }
   } catch (e) { /* facoltativo */ }
+  // 1° novembre 2026: avvisi sui bookmaker (sito da aprire, sito in calo, quote che spariscono)
+  try { for (const x of (await require('./books').getBooks(pool)).alerts) advice.push({ level: x.level === 'bad' ? 'bad' : 'info', key: 'libro', title: x.kind === 'apri' ? `📊 Sito da valutare: ${x.book}` : x.kind === 'calo' ? `📊 ${x.book} in calo` : `📊 ${x.book}: quote che spariscono`, text: x.text }); }
+  catch (e) { /* facoltativo */ }
   return { advice, minN: MIN_N, updatedAt: new Date().toISOString() };
 }
 

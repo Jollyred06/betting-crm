@@ -1,0 +1,34 @@
+// 📊 Bookmaker: parte pura (giudizio per sito, avvisi)
+const assert = require('assert');
+const { buildBooks, verdictOf, band } = require('../services/books');
+const NOW = Date.parse('2026-11-01T10:00:00Z');
+const at = d => new Date(NOW - d * 86400000).toISOString();
+const rows = [];
+let id = 1;
+// 888sport (mio): 25 segnali misurati, valore positivo stabile
+for (let i = 0; i < 25; i++) rows.push({ id: id++, event_id: 'a' + i, selection: 'home', phase: 'near', strategy: 'I', book: '888sport_it', created_at: at(10 - i * 0.3), odd: 2, fair_prob: 0.52, edge_pct: 4, clv_pct: 3 + (i % 3), result: i % 2 ? 'won' : 'lost' });
+// la stessa occasione anche nella T: non si conta due volte
+rows.push({ ...rows[0], id: id++, strategy: 'T' });
+// fastbet (non mio): 22 segnali, valore piu' alto, recenti
+for (let i = 0; i < 22; i++) rows.push({ id: id++, event_id: 'f' + i, selection: 'away', phase: 'near', strategy: 'T', book: 'fastbet', created_at: at(i * 0.5), odd: 2.5, fair_prob: 0.42, edge_pct: 5, clv_pct: 6 + (i % 2), result: null });
+// eurobet: pochi
+rows.push({ id: id++, event_id: 'e1', selection: 'draw', phase: 'far', strategy: 'I', book: 'eurobet', created_at: at(2), odd: 3.4, fair_prob: 0.3, edge_pct: 2, clv_pct: -1, result: 'lost' });
+const B = buildBooks(rows, { my: ['888sport_it', 'snai'], names: { '888sport_it': '888sport', fastbet: 'Fastbet' }, nowMs: NOW });
+const s888 = B.books.find(b => b.key === '888sport_it'), fb = B.books.find(b => b.key === 'fastbet'), eu = B.books.find(b => b.key === 'eurobet');
+assert.strictEqual(s888.signals, 25); assert.strictEqual(s888.mine, true); assert.strictEqual(s888.verdict, 'ok');
+assert.strictEqual(fb.verdict, 'ok'); assert.strictEqual(eu.verdict, 'pochi');
+assert.strictEqual(B.books[0].key, '888sport_it');          // prima i miei siti
+assert.ok(Math.abs(s888.pnlEur - (12 * 2 - 13 * 2)) < 1e-9);  // 12 vinte a quota 2, 13 perse
+assert.ok(B.alerts.some(a => a.kind === 'apri' && a.book === 'Fastbet'));
+assert.strictEqual(B.missed14, 23);
+// sito in calo: ultimi 30 segnali sotto zero
+const bad = []; for (let i = 0; i < 30; i++) bad.push({ id: 1000 + i, event_id: 'b' + i, selection: 'home', strategy: 'I', book: 'snai', created_at: at(5 - i * 0.1), odd: 2, fair_prob: 0.5, edge_pct: 3, clv_pct: -2 });
+assert.ok(buildBooks(bad, { my: ['snai'], nowMs: NOW }).alerts.some(a => a.kind === 'calo'));
+// quote che spariscono: il mio sito c'era quasi sempre, negli ultimi 3 giorni quasi mai
+const pres = [];
+const q = has => JSON.stringify({ snai: has ? [2, 3, 4] : null, a: [2, 3, 4], b: [2, 3, 4], c: [2, 3, 4], d: [2, 3, 4], e: [2, 3, 4] });
+for (let i = 0; i < 25; i++) pres.push({ id: 2000 + i, event_id: 'p' + i, selection: 'home', strategy: 'T', book: 'a', created_at: at(4 + i * 0.3), quotes: q(true) });
+for (let i = 0; i < 12; i++) pres.push({ id: 3000 + i, event_id: 'r' + i, selection: 'home', strategy: 'T', book: 'a', created_at: at(i * 0.2), quotes: q(i === 0) });
+assert.ok(buildBooks(pres, { my: ['snai'], nowMs: NOW }).alerts.some(a => a.kind === 'sparisce'));
+assert.strictEqual(verdictOf(band([1, 2])), 'pochi');
+console.log('books.test.js: tutti i controlli passati');
