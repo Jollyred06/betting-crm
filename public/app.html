@@ -1003,7 +1003,7 @@
             ${it && r.best && r.play && live && isNow(r) ? `<div class="todo-line"><span class="chip now">⏱️ Ora è il momento</span></div>` : ''}
             ${it && r.min_odd && live && !r.played && !r.skipped ? minLine(r) : ''}
             ${it && r.play && live && !r.played && !r.skipped ? `<div class="ochips">${consChip(r)}</div>` : ''}
-            ${it && !r.play && !r.played ? `<div class="todo-line no">⛔ Non giocabile sui tuoi siti${live && !r.skipped ? ': se l\'hai giocata altrove (es. ' + esc(r.book) + '), segnala qui sotto' : ''}</div>${live || r.skipped ? playActions(r) : ''}` : ''}
+            ${it && !r.play && !r.played ? `<div class="todo-line no">⛔ Non giocabile sui tuoi siti${live && !r.skipped ? ': se l\'hai giocata altrove (es. ' + esc(r.book) + '), segnala qui sotto' : ''}</div>${live && !r.skipped ? playActions(r) : ''}` : ''}
             ${it && (r.best || r.played || r.skipped) ? playActions(r) : ''}
             ${it && !r.best && !r.played && !r.skipped && r.play && live ? `<div class="notbest">⚠️ Non è tra le ⭐ da giocare: se la giochi lo stesso, segnala qui sotto (conta nel budget).</div>${playActions(r)}` : ''}
             ${r.result === 'won' || r.result === 'lost' ? `<div class="foot"><span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span></div>` : ''}
