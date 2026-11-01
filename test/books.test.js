@@ -152,3 +152,14 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.consensusOf(2.3, 0.47, 'home', { snai: [2.2, 3, 3] }), null);   // troppo pochi siti
   console.log('consenso dei siti: ok');
 }
+// 💳 piano delle richieste odss fino alla ricarica
+{
+  const I = require('../services/italia');
+  const a = I.planScans({ remaining: 181, daysLeft: 11, closesPerDay: 6.6 });
+  assert.strictEqual(a.everyMin, 120); assert.ok(a.perDay * 11 <= 181);
+  const b = I.planScans({ remaining: 120, daysLeft: 11, closesPerDay: 6.6 });
+  assert.strictEqual(b.everyMin, 240);                                   // pochi crediti: si rallenta
+  const c = I.planScans({ remaining: 40, daysLeft: 2, closesPerDay: 6.6 });
+  assert.ok(c.reserve < 60 && c.reserve >= 16);                         // a fine ciclo la riserva si accorcia
+  console.log('piano richieste odss: ok');
+}

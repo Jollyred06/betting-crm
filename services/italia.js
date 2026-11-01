@@ -219,6 +219,22 @@ function odssPace(remaining, usedToday, resetDay = 12, nowMs = Date.now()) {
   return { daysLeft, perDay, usedToday, over: usedToday >= perDay, resetAt: new Date(reset).toISOString() };
 }
 
+/**
+ * PIANO DELLE RICHIESTE ODSS fino alla ricarica (1° novembre 2026). Parte pura (testata).
+ * Le chiusure (che misurano il valore) hanno la precedenza: si tiene da parte quanto serve per loro fino alla ricarica
+ * (media degli ultimi 7 giorni, con un margine), non piu' una riserva fissa di 60 che alla ricarica andava sprecata.
+ * Con quello che resta si sceglie la scansione piu' frequente che ci sta: ogni 2 ore, 3 ore o 4 ore (dalle 9 alle 22).
+ */
+function planScans({ remaining, daysLeft, closesPerDay, usedToday = 0, fromHour = 9, toHour = 22, options = [120, 180, 240], maxReserve = 60, margin = 10 }) {
+  const days = Math.max(1, daysLeft), closes = Math.max(4, Math.ceil(closesPerDay * 1.2));   // +20% per le giornate piene
+  const reserve = Math.min(maxReserve, closes * days + margin);
+  const scansPerDay = m => Math.floor((toHour - fromHour) * 60 / m) + 1;
+  const need = m => (scansPerDay(m) + closes) * days + margin;
+  const pick = options.find(m => need(m) <= remaining) || options[options.length - 1];
+  return { reserve, everyMin: pick, scansPerDay: scansPerDay(pick), closesPerDay: closes, perDay: scansPerDay(pick) + closes,
+    leftAtReset: Math.max(0, remaining - (scansPerDay(pick) + closes) * days) };
+}
+
 /** Quote di tutti i siti (tranne Pinnacle) per una partita alla chiusura: { sito: [1, X, 2] }, oppure null. */
 function closingQuotes(records, eventId) {
   const r = mergeWithPinnacle(mainRecords(records)).find(x => x.event_id === eventId);
@@ -316,16 +332,26 @@ async function fetchOdds(pool, c, params, kind, http = axios) {
   }
 }
 
+/** Il piano di oggi, dai numeri del registro (chiusure medie degli ultimi 7 giorni). */
+async function planOf(pool, c, rem, nowMs = Date.now()) {
+  const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE kind = 'close' AND at >= NOW() - INTERVAL '7 days')::int AS closes,
+    COUNT(*) FILTER (WHERE at >= date_trunc('day', NOW()))::int AS today FROM italia_requests`);
+  const pace = odssPace(rem, rows[0].today, c.resetDay, nowMs);
+  return { ...planScans({ remaining: rem, daysLeft: pace.daysLeft, closesPerDay: rows[0].closes / 7, fromHour: c.fromHour, toHour: c.toHour, maxReserve: c.closeReserve }), daysLeft: pace.daysLeft, resetAt: pace.resetAt };
+}
+
 async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   const h = romeHour(nowMs);
   if (h < c.fromHour || h >= c.toHour) return { scan: 'fuori orario' };
   const { rows } = await pool.query(`SELECT MAX(at) FILTER (WHERE ok) AS last_ok, MAX(at) FILTER (WHERE NOT ok) AS last_ko FROM italia_requests WHERE kind = 'scan'`);
   const lastOk = rows[0].last_ok ? Date.parse(rows[0].last_ok) : 0, lastKo = rows[0].last_ko ? Date.parse(rows[0].last_ko) : 0;
-  if (nowMs - lastOk < c.scanEveryMin * 60000) return { scan: 'non ancora' };
+  const rem = await lastRemaining(pool);
+  const plan = rem !== null ? await planOf(pool, c, rem, nowMs) : null;
+  const every = plan ? Math.min(plan.everyMin, Math.max(c.scanEveryMin, 240)) : c.scanEveryMin;
+  if (nowMs - lastOk < every * 60000 - 5 * 60000) return { scan: 'non ancora' };   // 5 minuti di tolleranza: il giro passa ogni 10
   if (lastKo > lastOk && nowMs - lastKo < 30 * 60000) return { scan: 'in pausa dopo un errore' };    // chiave sbagliata o servizio giu': non insistere ogni 10 minuti
   if (await usedThisMonth(pool) >= c.monthlyCap - c.closeReserve) return { scan: 'tetto mensile' };
-  const rem = await lastRemaining(pool);
-  if (rem !== null && rem <= c.closeReserve) return { scan: 'quota odss quasi finita' };
+  if (rem !== null && rem <= (plan ? plan.reserve : c.closeReserve)) return { scan: 'quota odss quasi finita: restano solo le chiusure' };
   // 1° novembre 2026: richieste distribuite fino alla ricarica. Budget di oggi = rimaste / giorni alla ricarica;
   // se oggi e' gia' stato speso, niente scansione (le chiusure, che misurano il valore, continuano).
   if (rem !== null) {
@@ -915,4 +941,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

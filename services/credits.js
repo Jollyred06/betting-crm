@@ -20,11 +20,12 @@ async function getCredits(pool, env = process.env, nowMs = Date.now()) {
     const today = (await q(`SELECT COUNT(*)::int AS n FROM italia_requests WHERE at >= date_trunc('day', NOW())`))[0].n;
     const week = (await q(`SELECT COUNT(*)::int AS n FROM italia_requests WHERE at >= NOW() - INTERVAL '7 days'`))[0].n;
     const r = rem ? Number(rem.quota_remaining) : null, p = r !== null ? I.odssPace(r, today, c.resetDay, nowMs) : null;
-    const avg = week / 7, enough = p ? avg * p.daysLeft <= r : null;
+    const plan = r !== null ? await I.planOf(pool, c, r, nowMs) : null;
+    const avg = week / 7, enough = plan ? plan.everyMin <= 240 && plan.perDay * p.daysLeft <= r : null;
     out.push({ key: 'odss', name: 'odss-api.com (quote italiane)', remaining: r, unit: 'richieste', usedToday: today, perDay: p && p.perDay, avgPerDay: Math.round(avg * 10) / 10,
-      resetAt: p && p.resetAt, daysLeft: p && p.daysLeft,
-      level: r === null ? 'info' : r <= c.closeReserve ? 'bad' : enough === false ? 'warn' : 'ok',
-      text: r === null ? 'Nessuna lettura ancora.' : `${r} rimaste, ${p.daysLeft} giorni alla ricarica: budget ${p.perDay} al giorno (oggi ${today}, media 7 giorni ${avg.toFixed(1)}).${enough === false ? ' Al ritmo attuale non bastano: il CRM rallenta le scansioni da solo.' : ''}` });
+      resetAt: p && p.resetAt, daysLeft: p && p.daysLeft, plan,
+      level: r === null ? 'info' : r <= plan.reserve ? 'bad' : enough === false ? 'warn' : 'ok',
+      text: r === null ? 'Nessuna lettura ancora.' : `${r} rimaste, ${p.daysLeft} giorni alla ricarica. Piano: scansione ogni ${plan.everyMin / 60} ore (${plan.scansPerDay} al giorno) + circa ${plan.closesPerDay} chiusure = ${plan.perDay} al giorno; ${plan.reserve} tenute da parte per le chiusure; alla ricarica ne restano circa ${plan.leftAtReset}. Oggi ${today}, media 7 giorni ${avg.toFixed(1)}.` });
   });
 
   await safe(async () => {
