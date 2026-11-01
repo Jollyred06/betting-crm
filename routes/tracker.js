@@ -73,6 +73,11 @@ router.get('/italia-export', async (req, res) => {
     });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// Prova di Highlightly (solo numeri di copertura, nessun dato personale; al massimo una lettura ogni 10 minuti)
+router.get('/highlightly-check', async (req, res) => {
+  try { res.json(await require('../services/highlightly').check(pool, { day: /^\d{4}-\d{2}-\d{2}$/.test(req.query.day || '') ? req.query.day : null })); }
+  catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/books', async (req, res) => {
   try { res.json(await require('../services/books').getBooks(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });

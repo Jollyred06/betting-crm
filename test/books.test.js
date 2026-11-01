@@ -43,3 +43,13 @@ console.log('books.test.js: tutti i controlli passati');
   assert.deepStrictEqual(Object.keys(require('../services/played').SKIP_REASONS), ['quota', 'trovata', 'tempo']);
   console.log('quote italiane alla chiusura e motivi delle non giocate: ok');
 }
+// prova di Highlightly: abbinamento e punteggio finale
+{
+  const H = require('../services/highlightly'), I = require('../services/italia');
+  assert.strictEqual(H.finalScore({ state: { description: 'Finished', score: { current: '2 - 1' } } }), '2-1');
+  assert.strictEqual(H.finalScore({ state: { description: 'Second half', score: { current: '0 - 0' } } }), null);
+  const c = H.coverage([{ homeTeam: { name: 'Real Madrid' }, awayTeam: { name: 'Getafe' }, state: { description: 'Finished', score: { current: '3 - 0' } } }],
+    [{ event_id: 'a', league: 'La Liga', home: 'Real Madrid', away: 'Getafe CF' }, { event_id: 'a', league: 'La Liga', home: 'Real Madrid', away: 'Getafe CF' }, { event_id: 'b', league: 'Tercera', home: 'Lugo', away: 'Ferrol' }], I.sameTeam);
+  assert.deepStrictEqual([c.nostrePartite, c.trovate, c.conRisultato], [2, 1, 1]); assert.ok(/Tercera/.test(c.campionatiMancanti[0]));
+  console.log('prova Highlightly (abbinamento): ok');
+}
