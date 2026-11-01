@@ -73,3 +73,18 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.odssPace(400, 0, 12, Date.parse('2026-11-12T10:00:00Z')).daysLeft, 30);      // dopo la ricarica: mese dopo
   console.log('crediti odss distribuiti: ok');
 }
+// lista da giocare: niente quote sopra 3,50; vinte contro attese
+{
+  const I = require('../services/italia');
+  const now = Date.parse('2026-11-01T12:00:00Z'), ko = '2026-11-01T15:00:00Z';
+  const items = [{ id: 1, event_id: 'a', final4: true, final6: true, odd: 3.4, play: { odd: 3.45 }, win_prob: 0.32, commence_time: ko, league: 'Liga' },
+    { id: 2, event_id: 'b', final4: true, final6: true, odd: 3.6, play: { odd: 3.6 }, win_prob: 0.3, commence_time: ko, league: 'Liga' },
+    { id: 3, event_id: 'c', final4: true, final6: true, odd: 3.3, play: { odd: 3.55 }, win_prob: 0.31, commence_time: ko, league: 'Liga' }];
+  assert.deepStrictEqual(I.pickBest(items, { nowMs: now, rule: 'consigliate' }), [1]);
+  assert.strictEqual(I.budgetCfg({}).maxOdd, 3.5); assert.strictEqual(I.budgetCfg({ BEST_MAX_ODD: '3' }).maxOdd, 3);
+  const mk = (n, won, p) => Array.from({ length: n }, (_, i) => ({ result: i < won ? 'won' : 'lost', fair_prob: p, odd: 1 / p }));
+  assert.strictEqual(I.winCheck(mk(10, 5, 0.5)).level, 'pochi');
+  assert.strictEqual(I.winCheck(mk(40, 20, 0.5)).level, 'ok');
+  assert.strictEqual(I.winCheck(mk(40, 12, 0.5)).level, 'allarme');      // 12 vinte su 20 attese: z = -2,5
+  console.log('lista: quota massima e vinte contro attese: ok');
+}

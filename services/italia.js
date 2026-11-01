@@ -634,8 +634,23 @@ const budgetCfg = (env = process.env) => ({
   maxPerDay: Number(env.BEST_MAX_PER_DAY) > 0 ? Number(env.BEST_MAX_PER_DAY) : 5,
   // quali F2+ mettere nelle migliori di oggi: 'consigliate' (predefinito dal 25 ottobre), 'sicure' o 'tutte'
   rule: ['consigliate', 'sicure', 'tutte'].includes(env.BEST_RULE) ? env.BEST_RULE : 'consigliate',
-  onlySafe: env.BEST_RULE === 'sicure'
+  onlySafe: env.BEST_RULE === 'sicure',
+  // 1° novembre 2026: nella lista da giocare niente quote sopra 3,50 (F2+ fino a 3,50: +5..+8% contro la chiusura; sopra: -3,1% su 17)
+  maxOdd: Number(env.BEST_MAX_ODD) > 1 ? Number(env.BEST_MAX_ODD) : 3.5
 });
+
+/**
+ * Parte pura (testata): le vinte della lista da giocare contro le vinte attese (probabilita' di Pinnacle).
+ * z = (vinte - attese) / deviazione: sotto -2 con almeno 30 risultati le vinte sono troppo poche per essere solo sfortuna.
+ */
+function winCheck(rows, minN = 30) {
+  const done = rows.filter(r => r.result === 'won' || r.result === 'lost');
+  const won = done.filter(r => r.result === 'won').length, expected = done.reduce((a, r) => a + Number(r.fair_prob || 0), 0);
+  const sd = Math.sqrt(done.reduce((a, r) => { const p = Number(r.fair_prob || 0); return a + p * (1 - p); }, 0));
+  const z = sd > 0 ? (won - expected) / sd : 0;
+  const pnl = done.reduce((a, r) => a + (r.result === 'won' ? STAKE * (Number(r.odd) - 1) : -STAKE), 0);
+  return { n: done.length, won, expected, z, pnlEur: pnl, minN, level: done.length < minN ? 'pochi' : z < -2 ? 'allarme' : z < -1 ? 'attenzione' : 'ok' };
+}
 
 /**
  * Parte pura (testata): quali segnali mettere in "⭐ Le migliori di oggi".
@@ -643,7 +658,7 @@ const budgetCfg = (env = process.env) => ({
  * Solo F2+ non ancora iniziate, giocabili su 888sport o Snai a quota almeno minima, non gia' giocate;
  * ordinate per valore della quota consigliata, al massimo maxPerDay meno quelle gia' giocate oggi. Niente se il budget e' allo stop.
  */
-function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null } = {}) {
+function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null, maxOdd = 3.5 } = {}) {
   if (stopped) return [];
   const room = Math.max(0, maxPerDay - playedToday);
   const value = r => r.play && r.win_prob ? r.play.odd * r.win_prob - 1 : -1;
@@ -651,7 +666,7 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   const solidOf = r => (r.solid && r.solid.score >= 2 ? 1 : 0);
   // 30 ottobre 2026: niente partite di coppa nella lista da giocare (formazioni incerte: le ✅ di coppa CLV -3,4% su 15,
   // quelle di campionato +4,9% su 61). Le misure non cambiano: le coppe restano nei segnali e nell'archivio.
-  const ok = r => !isCup(r.league) && (rule === 'consigliate' ? r.final6 : (rule === 'sicure' || onlySafe) ? r.final5 : true);
+  const ok = r => !isCup(r.league) && !(Number(r.odd) > maxOdd) && !(r.play && r.play.odd > maxOdd) && (rule === 'consigliate' ? r.final6 : (rule === 'sicure' || onlySafe) ? r.final5 : true);
   // una sola giocata per partita (26 ottobre 2026): se ci sono due esiti della stessa partita (es. X e 2) si tiene il piu' conveniente,
   // perche' sono giocate legate tra loro (se una vince l'altra perde). Non cambia nessuna misura, solo la lista da giocare.
   const seen = new Set();
@@ -825,9 +840,13 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     out.budget = budget;
     const bc = budgetCfg(env);
     out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule; out.myBooks = c.myBooks.map(k => BOOK_NAMES[k] || k);
-    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule });
+    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd });
+    out.bestMaxOdd = bc.maxOdd;
+    // vinte contro attese della lista da giocare (stesse regole: selezione, niente coppe, quota fino al massimo)
+    const ruleRows = bc.rule === 'consigliate' ? fin6Rows : bc.rule === 'sicure' ? fin5Rows : fin4Rows;
+    out.bestCheck = winCheck(ruleRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd));
   }
   return out;
 }
 
-module.exports = { odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

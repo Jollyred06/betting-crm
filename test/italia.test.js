@@ -222,15 +222,15 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   assert.deepStrictEqual(it.pickBest(items, { nowMs: now, rule: 'sicure' }), [2]);
   // una sola giocata per partita: due esiti della stessa partita -> resta il piu' conveniente
   const two = [{ id: 7, event_id: 'z', final4: true, final6: true, play: { odd: 3.6 }, win_prob: 0.3, commence_time: ko }, { id: 8, event_id: 'z', final4: true, final6: true, play: { odd: 4.4 }, win_prob: 0.25, commence_time: ko }];
-  assert.deepStrictEqual(it.pickBest(two, { nowMs: now, rule: 'consigliate' }), [8]);
+  assert.deepStrictEqual(it.pickBest(two, { nowMs: now, rule: 'consigliate', maxOdd: 99 }), [8]);
   // prima le solide, anche se meno convenienti
   const ord = [{ id: 11, event_id: 'p', final4: true, final6: true, play: { odd: 4.4 }, win_prob: 0.25, commence_time: ko, solid: { score: 1 } },
     { id: 12, event_id: 'q', final4: true, final6: true, play: { odd: 3.2 }, win_prob: 0.33, commence_time: ko, solid: { score: 2 } }];
-  assert.deepStrictEqual(it.pickBest(ord, { nowMs: now, rule: 'consigliate' }), [12, 11]);
+  assert.deepStrictEqual(it.pickBest(ord, { nowMs: now, rule: 'consigliate', maxOdd: 99 }), [12, 11]);
   // niente coppe nella lista da giocare
   assert.ok(it.isCup('SERBIA Cup') && it.isCup('Turcja - Puchar') && it.isCup('Copa del Rey') && it.isCup('Taça de Portugal') && it.isCup('Türkiye kupasi') && !it.isCup('Premier League') && !it.isCup('Serie C - Girone C'));
   const cupItems = [{ id: 21, event_id: 'c1', league: 'SERBIA Cup', final4: true, final6: true, play: { odd: 3 }, win_prob: 0.4, commence_time: ko }, { id: 22, event_id: 'c2', league: 'Serie B', final4: true, final6: true, play: { odd: 3 }, win_prob: 0.4, commence_time: ko }];
-  assert.deepStrictEqual(it.pickBest(cupItems, { nowMs: now, rule: 'consigliate' }), [22]);
+  assert.deepStrictEqual(it.pickBest(cupItems, { nowMs: now, rule: 'consigliate', maxOdd: 99 }), [22]);
   assert.strictEqual(it.budgetCfg({}).rule, 'consigliate');
   assert.strictEqual(it.budgetCfg({ BEST_RULE: 'tutte' }).rule, 'tutte');
 }
