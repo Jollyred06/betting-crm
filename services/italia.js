@@ -77,7 +77,7 @@ function cfg(env = process.env) {
     ouEnabled: env.OU_ENABLED === 'true', ouMarket: String(env.OU_MARKET || 'over_under').trim(),
     // 1° novembre 2026: i siti dove Christian ha il conto (MY_BOOKS su Render, chiavi del feed separate da virgola).
     // "👉 Gioca su" sceglie la quota piu' alta tra questi.
-    myBooks: (env.MY_BOOKS ? env.MY_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : ['888sport_it', 'snai'])
+    myBooks: (env.MY_BOOKS ? env.MY_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : ['eurobet', 'goldbet'])
   };
 }
 
@@ -769,7 +769,7 @@ function winCheck(rows, minN = 30) {
 /**
  * Parte pura (testata): quali segnali mettere in "⭐ Le migliori di oggi".
  * items = schede di getItalia (con final4, play, played, win_prob, commence_time); playedToday = giocate annotate oggi.
- * Solo F2+ non ancora iniziate, giocabili su 888sport o Snai a quota almeno minima, non gia' giocate;
+ * Solo F2+ non ancora iniziate, giocabili sui tuoi siti (MY_BOOKS) a quota almeno minima, non gia' giocate;
  * ordinate per valore della quota consigliata, al massimo maxPerDay meno quelle gia' giocate oggi. Niente se il budget e' allo stop.
  */
 function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null, maxOdd = 3.5, noAwayThin = false } = {}) {
@@ -1001,7 +1001,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       six: !!(fin.get(firstOf.get(sigKey(r))) || {}).final && isSix(r),
       alt: strategy === 'I' ? altOdds(r) : null, consensus: strategy === 'I' ? consOf(r) : null, awayThin: isAwayThin(r), played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null,
       skipped: skipped.get(Number(r.id)) || skippedByKey.get(sigKey(r)) || null,
-      // dove giocarlo: il bookmaker consigliato (888sport o Snai) con la quota piu' alta, solo se almeno la minima
+      // dove giocarlo: il bookmaker consigliato (MY_BOOKS) con la quota piu' alta, solo se almeno la minima
       play: (() => { const a = strategy === 'I' ? altOdds(r) : null, m = r.fair_prob ? minOdd(Number(r.fair_prob), c.minEdge) : null;
         const best = Object.entries(a || {}).filter(([, v]) => m && v >= m).sort((x, y) => y[1] - x[1])[0];
         return best ? { book: best[0], odd: best[1] } : null; })(),
