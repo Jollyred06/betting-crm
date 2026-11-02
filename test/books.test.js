@@ -212,3 +212,13 @@ console.log('books.test.js: tutti i controlli passati');
   assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', noAwayThin: true }), [11, 10]);   // la liquida per prima, la 12 fuori
   console.log('liquide tra le stelle: ok');
 }
+// verdetto: prima i motivi fissi (quota alta, trasferta nei minori), poi l'attesa; di notte niente attesa
+{
+  const I = require('../services/italia'), now = Date.parse('2026-11-02T20:11:00Z'), bc = { maxOdd: 3.5, rule: 'consigliate', noAwayThin: true };
+  const r = { id: 7, commence_time: '2026-11-03T01:06:00Z', final4: false, edge_pct: 5, odd: 3.9, league: 'Liga MX', pin_margin: 7, awayThin: true, selection: 'away', play: { book: '888sport', odd: 3.9 } };
+  assert.ok(/Quota sopra/.test(I.verdictOf(r, { bc, nowMs: now }).text));
+  assert.ok(/Trasferta/.test(I.verdictOf({ ...r, odd: 3.0, play: { book: '888sport', odd: 3.0 } }, { bc, nowMs: now }).text));
+  assert.ok(/di notte/.test(I.verdictOf({ ...r, odd: 3.0, play: { book: '888sport', odd: 3.0 }, awayThin: false, selection: 'home', win_prob: 0.4 }, { bc, nowMs: now }).text));
+  assert.strictEqual(I.verdictOf({ ...r, odd: 3.0, play: { book: 'Snai', odd: 3.0 }, awayThin: false, selection: 'home', win_prob: 0.4, commence_time: '2026-11-03T18:00:00Z' }, { bc, nowMs: now }).play, 'wait');
+  console.log('verdetto ordine e notte: ok');
+}

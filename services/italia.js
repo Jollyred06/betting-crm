@@ -796,7 +796,7 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
  * Parte pura (testata): il verdetto di una scheda. play = 'yes' (giocala), 'wait' (non ancora), 'no' (non giocare); text = il motivo.
  * Segue le stesse regole della lista da giocare (pickBest), nello stesso ordine.
  */
-function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now() } = {}) {
+function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now(), toHour = 22 } = {}) {
   if (r.played || r.skipped) return null;
   const t = Date.parse(r.commence_time);
   if (!(t > nowMs)) return null;
@@ -804,16 +804,21 @@ function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now
   const mine = Object.entries(r.alt || {}).map(([b, v]) => `${b} ${n2(v)}`).join(', ');
   if (best.has(r.id) && r.play) return { play: 'yes', text: `Giocala su ${r.play.book} a ${n2(r.play.odd)} o più (minimo ${n2(r.min_odd)})` };
   if (budget.stopped) return { play: 'no', text: 'Stop del budget raggiunto: niente giocate' };
-  if (!r.final4 && !r.liquid) {
-    const leadH = (t - nowMs) / 3600000;
-    const liqOk = r.pin_margin !== null && r.pin_margin !== undefined && Number(r.pin_margin) < LIQUID.maxMarginPct && Number(r.edge_pct) >= LIQUID.minEdge;
-    if ((Number(r.edge_pct) >= 4 || liqOk) && leadH > 3) return { play: 'wait', text: `Non ancora: si decide nelle 3 ore prima della partita (dalle ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })})` };
-    if (!r.liquid) return { play: 'no', text: `Vantaggio troppo basso (${n2(r.edge_pct)}%, serve almeno 4%, o 2% nei campionati principali)` };
-  }
+  // 2 novembre 2026: prima i motivi che non cambiano col tempo (coppa, quota alta, campionato minore), poi l'attesa
+  const liqOk = r.liquid || (r.pin_margin !== null && r.pin_margin !== undefined && Number(r.pin_margin) < LIQUID.maxMarginPct && Number(r.edge_pct) >= LIQUID.minEdge);
   if (isCup(r.league)) return { play: 'no', text: 'Partita di coppa: formazioni incerte' };
-  if (bc.maxOdd && Number(r.odd) > bc.maxOdd && !(r.play && r.play.odd <= bc.maxOdd)) return { play: 'no', text: `Quota sopra ${n2(bc.maxOdd)}: lì il vantaggio non regge` };
+  const odd = r.play ? r.play.odd : Number(r.odd);
+  if (bc.maxOdd && odd > bc.maxOdd) return { play: 'no', text: `Quota sopra ${n2(bc.maxOdd)}: lì il vantaggio non regge` };
+  if (!liqOk && bc.rule === 'consigliate' && Number(r.win_prob) >= 0.5 && Number(r.pin_margin) >= 6) return { play: 'no', text: 'Favorito in un campionato minore: vince meno del previsto' };
+  if (!liqOk && bc.noAwayThin && r.awayThin) return { play: 'no', text: 'Trasferta in un campionato minore: vince meno del previsto' };
+  if (!r.final4 && !r.liquid) {
+    if (!(Number(r.edge_pct) >= 4 || liqOk)) return { play: 'no', text: `Vantaggio troppo basso (${n2(r.edge_pct)}%, serve almeno 4%, o 2% nei campionati principali)` };
+    const from = t - 3 * 3600000, rome = ms => Number(new Intl.DateTimeFormat('it-IT', { hour: 'numeric', hour12: false, timeZone: 'Europe/Rome' }).format(new Date(ms)));
+    // l'ultimo controllo e' alle 22: se le 3 ore prima cadono di notte, non diventera' mai una ⭐
+    if (rome(t) < 9 || (rome(from) >= toHour && rome(t) >= toHour) || (from > nowMs && rome(from) >= toHour)) return { play: 'no', text: 'Partita di notte: il CRM non controlla dopo le 22, non diventerà una ⭐' };
+    return { play: 'wait', text: `Non ancora: si decide nelle 3 ore prima della partita (dalle ${new Date(from).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })})` };
+  }
   if (!r.liquid && bc.rule === 'consigliate' && !r.final6) return { play: 'no', text: 'Favorito in un campionato minore: vince meno del previsto' };
-  if (!r.liquid && bc.noAwayThin && r.awayThin) return { play: 'no', text: 'Trasferta in un campionato minore: vince meno del previsto' };
   if (!r.play) return { play: 'no', text: `Non c'è sui tuoi siti a una quota buona${mine ? ` (${mine}, serve almeno ${n2(r.min_odd)})` : ''}` };
   if (budget.playedToday >= budget.maxPerDay) return { play: 'no', text: 'Hai già fatto le giocate di oggi' };
   return { play: 'no', text: 'C\'è già una giocata migliore su questa partita o oggi la lista è piena' };
@@ -1009,7 +1014,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     out.bestMaxOdd = bc.maxOdd; out.bestNoAwayThin = bc.noAwayThin;
     // 1° novembre 2026: su ogni scheda un verdetto chiaro, GIOCALA o NON GIOCARE con il motivo (solo partite non ancora iniziate)
     const bestSet = new Set(out.best), nowV = Date.now();
-    for (const r of out.recent) r.verdict = verdictOf(r, { best: bestSet, budget, bc, nowMs: nowV });
+    for (const r of out.recent) r.verdict = verdictOf(r, { best: bestSet, budget, bc, nowMs: nowV, toHour: c.toHour });
     // vinte contro attese della lista da giocare (stesse regole: selezione, niente coppe, quota fino al massimo)
     const ruleRows0 = bc.rule === 'consigliate' ? fin6Rows : bc.rule === 'sicure' ? fin5Rows : fin4Rows;
     const ruleRows = [...ruleRows0, ...liqRows.filter(r => !ruleRows0.includes(r))];   // con le 💧 liquide dal 2 novembre
