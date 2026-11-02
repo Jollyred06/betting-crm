@@ -199,7 +199,7 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   assert.deepStrictEqual(it.pickBest(items, { nowMs: now, stopped: true }), []);
   // budget: 100 + saldo delle chiuse, stop a 75, giocate di oggi (ora italiana)
   const c4 = it.budgetCfg({});
-  assert.deepStrictEqual([c4.start, c4.stop, c4.maxPerDay], [100, 75, 5]);
+  assert.deepStrictEqual([c4.start, c4.stop, c4.maxPerDay], [100, 75, 10]);
   const b = it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 2, pnlEur: 2.4 }, { at: '2026-10-24T09:00:00Z', stake: 2, pnlEur: -2 }, { at: '2026-10-23T09:00:00Z', stake: 2, pnlEur: null }] }, c4, now);
   assert.ok(Math.abs(b.balance - 100.4) < 1e-9 && b.open === 2 && b.playedToday === 2 && !b.stopped);
   assert.ok(it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 26, pnlEur: -26 }] }, c4, now).stopped);

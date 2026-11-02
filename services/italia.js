@@ -743,7 +743,7 @@ async function stampFlags(pool, c, nowMs = Date.now()) {
 const budgetCfg = (env = process.env) => ({
   start: Number(env.BUDGET_START) > 0 ? Number(env.BUDGET_START) : 100,
   stop: Number(env.BUDGET_STOP) >= 0 && env.BUDGET_STOP !== undefined && env.BUDGET_STOP !== '' ? Number(env.BUDGET_STOP) : 75,
-  maxPerDay: Number(env.BEST_MAX_PER_DAY) > 0 ? Number(env.BEST_MAX_PER_DAY) : 5,
+  maxPerDay: Number(env.BEST_MAX_PER_DAY) > 0 ? Number(env.BEST_MAX_PER_DAY) : 10,   // 2 novembre 2026: da 5 a 10 (il tetto quasi non scatta, resta come protezione)
   // quali F2+ mettere nelle migliori di oggi: 'consigliate' (predefinito dal 25 ottobre), 'sicure' o 'tutte'
   rule: ['consigliate', 'sicure', 'tutte'].includes(env.BEST_RULE) ? env.BEST_RULE : 'consigliate',
   onlySafe: env.BEST_RULE === 'sicure',
