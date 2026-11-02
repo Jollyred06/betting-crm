@@ -664,7 +664,7 @@
     const bl = !b ? 'info' : b.stopped ? 'bad' : b.pnl >= 0 ? 'ok' : 'warn';
     const row = (lv, t, v, n) => `<div class="rrow">${sdot(lv)}<div><b>${t}</b><span>${v}</span>${n ? `<small>${n}</small>` : ''}</div></div>`;
     return `<div class="strat rule1"><div class="rhead">✅ La regola che giochi</div>
-      <p class="muted" style="margin:2px 0 10px;">${i.bestRule === 'sicure' ? '🛡️ Sicure' : i.bestRule === 'tutte' ? '⭐ F2+' : '✅ Consigliate'} · vantaggio dal 4% · entro 3 ore · quota fino a ${num(i.bestMaxOdd || 3.5, 2)} · niente coppe · 2 € · massimo 5 al giorno</p>
+      <p class="muted" style="margin:2px 0 10px;">${i.bestRule === 'sicure' ? '🛡️ Sicure' : i.bestRule === 'tutte' ? '⭐ F2+' : '✅ Consigliate'} · vantaggio dal 4% · entro 3 ore · quota fino a ${num(i.bestMaxOdd || 3.5, 2)} · niente coppe${i.bestNoAwayThin ? ' · niente 2 nei campionati minori' : ''} · 2 € · massimo 5 al giorno</p>
       ${row(vl, 'Valore contro la chiusura', f.measured >= 5 ? pct(f.avgClvPct, 1) + (f.clvCi95 ? ` (da ${pct(f.clvCi95[0])} a ${pct(f.clvCi95[1])})` : '') : 'pochi dati', vl === 'ok' ? 'il valore c\'è' : vl === 'bad' ? 'sotto zero: non funziona' : vl === 'warn' ? 'incerto: servono più segnali' : `giudizio da 20 segnali (ora ${f.measured})`)}
       ${row(cl, 'Vinte contro attese', ck && ck.n ? `${ck.won} su ${ck.n}, attese ${num(ck.expected, 1)}` : 'nessun risultato', cl === 'ok' ? 'in linea' : cl === 'warn' ? 'un po\' sotto: normale sfortuna' : cl === 'bad' ? 'troppo sotto: fermati e mandami il backup' : `giudizio da ${ck ? ck.minN : 30} risultati`)}
       ${row(bl, 'Il tuo budget', b ? `${money(b.balance)} (${signedMoney(b.pnl)})` : '—', b ? `stop a ${money(b.stop)}` : '')}
@@ -675,11 +675,14 @@
     const dot = { ok: '🟢', no: '🔴', forse: '🟡', pochi: '⚪' }, lab = { ok: 'conviene', no: 'da evitare', forse: 'da vedere', pochi: 'pochi dati' };
     const row = b => `<div class="move"><span><b>${dot[b.verdict]} ${esc(b.name)}</b>${b.mine ? ' <span class="chip fin">ce l\'hai</span>' : ''}<small>${b.signals} occasioni (${b.recent14} in 14 giorni) · ${lab[b.verdict]}${b.settled ? ` · ${b.won} vinte su ${b.settled}, attese ${num(b.expected, 1)}` : ''}</small></span>
       <span style="text-align:right"><b class="${b.clv.n >= 5 ? cls(b.clv.mean) : 'muted'}">${b.clv.n ? pct(b.clv.mean, 1) : '—'}</b><small class="muted">${b.clv.n} misurati${b.settled ? ' · ' + signedMoney(b.pnlEur) : ''}</small></span></div>`;
-    const top = B.books.filter(b => b.mine || b.signals >= 5), rest = B.books.filter(b => !b.mine && b.signals < 5);
+    // in vista: i tuoi siti e i 2 migliori candidati (verdetto e valore); tutti gli altri dietro "Mostra tutti"
+    const rank = { ok: 0, forse: 1, pochi: 2, no: 3 }, cand = B.books.filter(b => !b.mine && b.verdict !== 'no' && b.signals >= 5)
+      .sort((a, b) => (rank[a.verdict] - rank[b.verdict]) || ((b.clv.n ? b.clv.mean : -99) - (a.clv.n ? a.clv.mean : -99))).slice(0, 2);
+    const top = [...B.books.filter(b => b.mine), ...cand], rest = B.books.filter(b => !top.includes(b));
     return `<div class="strat"><div class="sh"><div class="letter" style="font-size:30px">📊</div><div><b>Bookmaker</b><span>Quale sito paga di più del prezzo giusto · giudizio da ${B.minN} segnali misurati</span></div></div>
-      <p class="muted" style="margin:0 0 6px;font-size:14px;">I tuoi siti: <b>${esc(B.my.join(', '))}</b>. Negli ultimi 14 giorni ci sono state <b>${B.missed14}</b> occasioni su siti dove non hai il conto. Il numero a destra è il valore contro la chiusura di Pinnacle: il giudice vero, più delle vinte.</p>
+      <p class="muted" style="margin:0 0 6px;font-size:14px;">I tuoi siti e i 2 migliori dove non hai il conto (${B.missed14} occasioni perse in 14 giorni). A destra il valore contro la chiusura.</p>
       ${B.alerts.map(a => `<div class="callout ${a.level === 'bad' ? 'warn' : 'ok'}">${esc(a.text)}</div>`).join('')}
-      ${top.map(row).join('')}${rest.length ? `<details><summary>Altri ${rest.length} siti con poche occasioni</summary>${rest.map(row).join('')}</details>` : ''}</div>`;
+      ${top.map(row).join('')}${rest.length ? `<details><summary>Mostra tutti gli altri ${rest.length} siti</summary>${rest.map(row).join('')}</details>` : ''}</div>`;
   }
   // ⚽ GOL: formula del pareggio, 💥 Valanga e quote Over/Under sulla carta (dal 1° novembre)
   function goalsCard(G) {
@@ -849,7 +852,7 @@
       $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
         <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a></b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${best.has(r.id) ? ' · <span class="chip now">⭐ da giocare</span>' : r.final4 ? ' · <span class="chip fin">⭐ F2+</span>' : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.six ? ' · <span class="chip fin">🎯</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
         <div class="q">${num(r.played ? r.played.odd : r.play.odd, 2)}</div></div>`).join('')
-        : '<div class="empty">Nessun segnale giocabile sui tuoi siti in arrivo per ora. Il CRM controlla ogni 3 ore, dalle 9 alle 22.</div>';
+        : '<div class="empty">Nessun segnale giocabile sui tuoi siti in arrivo per ora. Il CRM controlla circa ogni 2 ore, dalle 9 alle 22.</div>';
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
   }
   async function loadCredits() {
@@ -913,7 +916,7 @@
       $('statusPill').innerHTML = `${sdot(lv)}<span>${lv === 'ok' ? 'Tutto ok' : lv === 'warn' ? 'Da fare' : 'Fermati'}</span>`;
       const room = Math.max(0, b.maxPerDay - b.playedToday), span = Math.max(1, b.start * 1.5 - b.stop), pos = Math.max(0, Math.min(100, 100 * (b.balance - b.stop) / span));
       el.innerHTML = `
-        <section class="ostate ${lv}">${sdot(lv)}<b>${esc(head)}</b></section>
+        ${lv === 'ok' ? '' : `<section class="ostate ${lv}">${sdot(lv)}<b>${esc(head)}</b></section>`}
         <section class="obank card3">
           <div class="olabel">Il tuo budget</div>
           <div class="omoney num">${money(b.balance)}</div>
@@ -925,7 +928,7 @@
           <h3>⭐ Da giocare <small class="muted">${b.stopped ? '' : room ? `· 2 € l'una · ancora ${room} oggi` : '· per oggi basta così'}</small></h3>
           ${b.stopped ? `<div class="callout warn"><b>Stop a ${money(b.stop)} raggiunto.</b> Niente giocate finché non controlliamo i numeri insieme: mandami il backup.</div>`
             : best.length ? best.map(oggiRow).join('')
-            : `<div class="oempty">${room ? 'Nessuna partita da giocare adesso. Compaiono da sole quando mancano meno di 3 ore e la quota è giusta: il CRM controlla ogni 3 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata.' : 'Hai già fatto le giocate di oggi.'}</div>`}
+            : `<div class="oempty">${room ? 'Nessuna partita da giocare adesso. Compaiono da sole quando mancano meno di 3 ore e la quota è giusta: il CRM controlla circa ogni 2 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata.' : 'Hai già fatto le giocate di oggi.'}</div>`}
         </section>
         ${mine.length ? `<section class="block"><h3>🎯 Le tue giocate <small class="muted">· oggi e prossime</small></h3><div class="card3">${mine.map(x => { const t = Date.parse(x.commence_time), st = x.result === 'won' ? `<span class="chip won">vinta ${esc(x.score || '')}</span>` : x.result === 'lost' ? `<span class="chip lost">persa ${esc(x.score || '')}</span>` : x.result === 'void' ? '<span class="chip">annullata</span>' : Date.now() < t ? `<span class="muted">alle ${dt(x.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>` : Date.now() < t + 115 * 60000 ? '<span class="chip live">● in corso</span>' : '<span class="muted">finita, risultato in arrivo</span>';
             return `<div class="oplay"><div><b>${esc(x.home)} – ${esc(x.away)}</b><small>${esc({ home: '1', draw: 'X', away: '2' }[x.selection] || '')} su ${esc(x.book)} a ${num(x.odd, 2)} · ${money(x.stake)} · <a class="tlink" href="${liveUrl(x.home, x.away)}" rel="noopener" onclick="rememberSpot()">🔎 su Google</a></small></div><div class="ores">${st}${x.pnlEur !== null ? `<b class="${cls(x.pnlEur)}">${signedMoney(x.pnlEur)}</b>` : ''}</div></div>`; }).join('')}</div></section>` : ''}
@@ -1039,9 +1042,9 @@
     let body;
     if (b.stopped) body = `<div class="callout warn"><b>Fermati: il budget è sceso a ${money(b.balance)}, sotto lo stop di ${money(b.stop)}.</b> Niente giocate finché non controlliamo insieme i numeri (mandami il backup).</div>`;
     else if (b.playedToday >= b.maxPerDay) body = `<p class="muted hidnote">Hai già fatto ${b.playedToday} giocate oggi: per oggi basta così. Meno giocate scelte bene, meno errori.</p>`;
-    else if (!items.length) body = `<p class="muted hidnote">Nessuna partita ${d.bestRule === 'consigliate' ? '✅' : d.bestOnlySafe ? '🛡️' : '⭐'} adesso. Compaiono quando mancano meno di 3 ore alla partita, c'è un vantaggio dal 4% in su, la quota è fino a ${num(d.bestMaxOdd || 3.5, 2)}${d.bestRule === 'consigliate' ? ', non è un favorito in un mercato sottile' : d.bestOnlySafe ? ', vince almeno 5 volte su 10' : ''} e la quota sui tuoi siti è almeno la minima. Il CRM controlla ogni 3 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata: va bene così.</p>`;
+    else if (!items.length) body = `<p class="muted hidnote">Nessuna ⭐ adesso: compaiono da sole, il CRM controlla circa ogni 2 ore dalle 9 alle 22.</p>`;
     else body = items.map(r => ticket(r, '<span class="chip it">IT</span>')).join('');
-    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una</small></h4>${line}${body}<details class="tdet"><summary>regole e risultati della lista</summary><p class="muted">Selezione ${d.bestRule === 'consigliate' ? '✅ consigliate' : d.bestOnlySafe ? '🛡️ sicure' : '⭐ F2+'}, quota fino a ${num(d.bestMaxOdd || 3.5, 2)}, niente coppe, prima le 🟢 solide, massimo ${b.maxPerDay} al giorno.</p>${ckLine}</details></section>`;
+    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una</small></h4>${b.stopped ? line : ''}${body}<details class="tdet"><summary>regole e risultati della lista</summary><p class="muted">Selezione ${d.bestRule === 'consigliate' ? '✅ consigliate' : d.bestOnlySafe ? '🛡️ sicure' : '⭐ F2+'}, quota fino a ${num(d.bestMaxOdd || 3.5, 2)}, niente coppe${d.bestNoAwayThin ? ', niente 2 nei campionati minori' : ''}, prima le 🟢 solide, massimo ${b.maxPerDay} al giorno.</p>${ckLine}</details></section>`;
   }
   let showOthers = false;
   function italiaTickets(d, head, chip, tail) {
@@ -1241,7 +1244,7 @@
       if (sigScope === 'it' || sigScope === 'mine') {
         el.innerHTML = itPart ? '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + itPart
           : sigScope === 'mine' ? '<div class="empty">Nessun segnale giocabile sui tuoi siti in questa lista. Gli altri segnali italiani sono in “Tutti italiani”.</div>'
-          : '<div class="empty">Nessun segnale sui bookmaker italiani in questa lista. Il CRM controlla le partite ogni 3 ore, dalle 9 alle 22. Per vedere anche le strategie di sola misura tocca “Tutte”.</div>';
+          : '<div class="empty">Nessun segnale sui bookmaker italiani in questa lista. Il CRM controlla le partite circa ogni 2 ore, dalle 9 alle 22. Per vedere anche le strategie di sola misura tocca “Tutte”.</div>';
         paintDots(); return;
       }
       const itHtml = itPart
