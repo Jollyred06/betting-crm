@@ -44,8 +44,11 @@ let ready = false;
 async function ensureOU(pool) {
   if (ready) return;
   await require('./goals').ensureGoals(pool);
-  await pool.query(`CREATE TABLE IF NOT EXISTS goal_ou (event_id TEXT, line NUMERIC(4,1), sport_key TEXT, home TEXT, away TEXT, commence_time TIMESTAMPTZ,
+  await pool.query(`CREATE TABLE IF NOT EXISTS goal_ou (event_id TEXT, line NUMERIC(5,2), sport_key TEXT, home TEXT, away TEXT, commence_time TIMESTAMPTZ,
     pin_over NUMERIC(8,3), pin_under NUMERIC(8,3), fair_over NUMERIC(6,4), captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), watch_id TEXT, PRIMARY KEY (event_id, line))`);
+  // 2 novembre 2026: le linee asiatiche (2,25, 2,75...) venivano arrotondate a un decimale: colonna a due decimali, righe arrotondate tolte
+  await pool.query(`ALTER TABLE goal_ou ALTER COLUMN line TYPE NUMERIC(5,2)`);
+  await pool.query(`DELETE FROM goal_ou WHERE line * 4 <> floor(line * 4)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS ou_requests (id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), sport_key TEXT, paid BOOLEAN, ok BOOLEAN, events INT, remaining INT, note TEXT)`);
   ready = true;
 }

@@ -667,7 +667,7 @@
     const bl = !b ? 'info' : b.stopped ? 'bad' : b.pnl >= 0 ? 'ok' : 'warn';
     const row = (lv, t, v, n) => `<div class="rrow">${sdot(lv)}<div><b>${t}</b><span>${v}</span>${n ? `<small>${n}</small>` : ''}</div></div>`;
     return `<div class="strat rule1"><div class="rhead">✅ La regola che giochi</div>
-      <p class="muted" style="margin:2px 0 10px;">${i.bestRule === 'sicure' ? '🛡️ Sicure' : i.bestRule === 'tutte' ? '⭐ F2+' : '✅ Consigliate'} · vantaggio dal 4% · entro 3 ore · quota fino a ${num(i.bestMaxOdd || 3.5, 2)} · niente coppe${i.bestNoAwayThin ? ' · niente 2 nei campionati minori' : ''} · 2 € · massimo 5 al giorno</p>
+      <p class="muted" style="margin:2px 0 10px;">${i.bestRule === 'sicure' ? '🛡️ Sicure' : i.bestRule === 'tutte' ? '⭐ F2+' : '✅ Consigliate'} · vantaggio dal 4% · entro 3 ore · quota fino a ${num(i.bestMaxOdd || 3.5, 2)} · niente coppe${i.bestNoAwayThin ? ' · niente 2 nei campionati minori' : ''} · <b>+ 💧 liquide</b> (campionati principali, vantaggio dal 2%, per prime) · 2 € · massimo 5 al giorno</p>
       ${row(vl, 'Valore contro la chiusura', f.measured >= 5 ? pct(f.avgClvPct, 1) + (f.clvCi95 ? ` (da ${pct(f.clvCi95[0])} a ${pct(f.clvCi95[1])})` : '') : 'pochi dati', vl === 'ok' ? 'il valore c\'è' : vl === 'bad' ? 'sotto zero: non funziona' : vl === 'warn' ? 'incerto: servono più segnali' : `giudizio da 20 segnali (ora ${f.measured})`)}
       ${row(cl, 'Vinte contro attese', ck && ck.n ? `${ck.won} su ${ck.n}, attese ${num(ck.expected, 1)}` : 'nessun risultato', cl === 'ok' ? 'in linea' : cl === 'warn' ? 'un po\' sotto: normale sfortuna' : cl === 'bad' ? 'troppo sotto: fermati e mandami il backup' : `giudizio da ${ck ? ck.minN : 30} risultati`)}
       ${row(bl, 'Il tuo budget', b ? `${money(b.balance)} (${signedMoney(b.pnl)})` : '—', b ? `stop a ${money(b.stop)}` : '')}
@@ -721,7 +721,10 @@
         ${f.retro && f.retro.measured ? `<div><dt>Stesse regole all'indietro</dt><dd class="muted">${f.retro.signals} segnali · ${itStat(f.retro)}${f.retro.results && f.retro.results.settled ? ' · ' + resVsExp(f.retro.results) : ''}</dd></div>` : ''}</dl></div>`;
     return `<details class="fold"><summary><span>🧪 Prove sulla carta</span><small>non si giocano: tra qualche settimana vediamo se battono le ⭐</small></summary>
       ${row('🔒', '7 su 10', 'Le ⭐ F2+ che Pinnacle dà vincenti dal 65% (quota circa 1,30–1,55), niente coppe', i.final8)}
-      ${row('💧', 'Liquidi', 'Le ⭐ F2+ solo nei mercati più liquidi (margine Pinnacle sotto l\'8%), quota fino a 3,50, niente coppe', i.final9)}      ${i.homeField ? (() => { const H = i.homeField, st = f => `${f.signals} da oggi · ${f.measured >= 5 ? `<span class="${cls(f.avgClvPct)}">${itStat(f)}</span>` : 'ancora pochi'} · ${resVsExp(f.results)}`;
+      ${row('💧', 'Liquidi (prova del 1° novembre)', 'Le ⭐ F2+ solo nei mercati più liquidi (margine Pinnacle sotto l\'8%), quota fino a 3,50, niente coppe', i.final9)}      ${i.liquidStar ? (() => { const Lq = i.liquidStar, st = f => `${f.signals} · ${f.measured >= 5 ? `<span class="${cls(f.avgClvPct)}">${itStat(f)}</span>` : 'ancora pochi'} · ${resVsExp(f.results)}`;
+        return `<div class="strat final"><div class="sh"><div class="letter" style="font-size:24px">💧</div><div><b>Liquide · tra le ⭐ dal 2 novembre</b><span>Campionati principali (margine Pinnacle sotto il ${num(Lq.rules.maxMarginPct, 0)}%), vantaggio dal ${num(Lq.rules.minEdge, 0)}%, entro 3 ore, niente coppe</span></div></div>
+        <dl class="facts"><div><dt>Da oggi (soldi veri)</dt><dd>${st(Lq)}</dd></div><div><dt>All'indietro</dt><dd class="muted">${st(Lq.retro)}</dd></div></dl></div>`; })() : ''}
+      ${i.homeField ? (() => { const H = i.homeField, st = f => `${f.signals} da oggi · ${f.measured >= 5 ? `<span class="${cls(f.avgClvPct)}">${itStat(f)}</span>` : 'ancora pochi'} · ${resVsExp(f.results)}`;
         const rt = f => f.retro && f.retro.signals ? `${f.retro.signals} segnali${f.retro.measured ? ' · ' + itStat(f.retro) : ''}${f.retro.results && f.retro.results.settled ? ' · ' + resVsExp(f.retro.results) : ''}` : '—';
         return `<div class="strat"><div class="sh"><div class="letter" style="font-size:24px">🏠</div><div><b>Fattore campo</b><span>Dal 1° novembre (21:20) fuori dalle ⭐ il 2 nei campionati minori (margine Pinnacle dal ${num(H.rules.thinMarginPct, 0)}%): lì la trasferta vinceva meno del previsto${H.active ? '' : ' · regola spenta su Render'}</span></div></div>
         <dl class="facts"><div><dt>✅ Tenute</dt><dd>${st(H.kept)}<br><span class="muted">all'indietro: ${rt(H.kept)}</span></dd></div>
@@ -873,12 +876,13 @@
     return `<div class="pact"><button class="playbtn" onclick="openPlay(${Number(r.id)}, this)">✍️ Ho giocato</button><button class="playbtn skipbtn" onclick="openSkip(${Number(r.id)}, this)">🚫 Non giocata</button><div class="playform"></div></div>`;
   }
   // 👥 consenso dei siti: quanti pagano sopra il giusto; ⚠️ quota isolata se la tua quota supera dell'8% la mediana degli altri
+  const liqChip = r => r && r.liquid ? `<span class="chip fin" title="Mercato liquido: il prezzo di Pinnacle è affidabile, basta un vantaggio dal 2%">💧 liquida</span>` : '';
   const awayChip = r => r && r.awayThin ? `<span class="chip warnc" title="Nei campionati minori la squadra in trasferta vince meno di quanto dice Pinnacle: dal 1° novembre non è tra le ⭐">⚠️ trasferta in campionato minore</span>` : '';
   function consChip(r) {
-    const k = r && r.consensus; if (!k) return awayChip(r);
+    const k = r && r.consensus; if (!k) return awayChip(r) + liqChip(r);
     const odd = r.play ? r.play.odd : r.odd, ratio = k.median ? odd / k.median : 0;
     const iso = ratio > 1.08 ? `<span class="chip warnc" title="Quota molto sopra gli altri siti: controlla che ci sia ancora prima di puntare">⚠️ quota isolata +${num((ratio - 1) * 100, 0)}%</span>` : '';
-    return `<span class="chip${k.above >= 4 ? ' fin' : ''}" title="Siti italiani che pagano sopra il prezzo giusto">👥 ${k.above} su ${k.sites} d'accordo</span>${iso}${awayChip(r)}`;
+    return `<span class="chip${k.above >= 4 ? ' fin' : ''}" title="Siti italiani che pagano sopra il prezzo giusto">👥 ${k.above} su ${k.sites} d'accordo</span>${iso}${awayChip(r)}${liqChip(r)}`;
   }
   // 🎯 quota minima sempre in vista: sotto questa quota il segnale non ha piu' valore
   function minLine(r) {

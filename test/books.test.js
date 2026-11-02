@@ -199,3 +199,16 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.verdictOf({ ...r, played: { odd: 2 } }, { bc, nowMs: now }), null);
   console.log('verdetto schede: ok');
 }
+// 💧 liquide tra le ⭐
+{
+  const I = require('../services/italia');
+  const mk = (id, o) => ({ id, event_id: 'e' + id, selection: 'home', strategy: 'I', league: 'Serie B', created_at: '2026-11-03T10:00:00Z', commence_time: '2026-11-03T12:00:00Z', edge_pct: 2.5, pin_h: 2.0, pin_d: 3.5, pin_a: 4.0, ...o });
+  const rows = [mk(1, {}), mk(2, { pin_h: 1.9, pin_d: 3.3, pin_a: 3.6 }), mk(3, { edge_pct: 1.5 }), mk(4, { league: 'Coppa Italia' }), mk(5, { created_at: '2026-11-01T10:00:00Z', commence_time: '2026-11-01T12:00:00Z' })];
+  const m = I.markLiquid(rows);   // 1: margine circa 3%; 2: circa 11% (sottile)
+  assert.deepStrictEqual(rows.filter(r => m.get(r.id).final).map(r => r.id), [1]);
+  assert.strictEqual(I.markLiquid(rows, { ignoreSince: true }).get(5).final, true);
+  const base = { play: { book: 'Snai', odd: 2.1 }, win_prob: 0.5, odd: 2.1, league: 'Serie B', commence_time: '2099-01-01T12:00:00Z' };
+  const items = [{ ...base, id: 10, event_id: 'x', final4: true, final6: true, solid: { score: 3 } }, { ...base, id: 11, event_id: 'y', liquid: true }, { ...base, id: 12, event_id: 'z' }];
+  assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', noAwayThin: true }), [11, 10]);   // la liquida per prima, la 12 fuori
+  console.log('liquide tra le stelle: ok');
+}
