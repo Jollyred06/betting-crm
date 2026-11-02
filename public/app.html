@@ -878,6 +878,12 @@
   // 👥 consenso dei siti: quanti pagano sopra il giusto; ⚠️ quota isolata se la tua quota supera dell'8% la mediana degli altri
   const liqChip = r => r && r.liquid ? `<span class="chip fin" title="Mercato liquido: il prezzo di Pinnacle è affidabile, basta un vantaggio dal 2%">💧 liquida</span>` : '';
   const awayChip = r => r && r.awayThin ? `<span class="chip warnc" title="Nei campionati minori la squadra in trasferta vince meno di quanto dice Pinnacle: dal 1° novembre non è tra le ⭐">⚠️ trasferta in campionato minore</span>` : '';
+  // nelle ⭐ di Oggi solo l'avviso che chiede di fare qualcosa: quota molto sopra gli altri siti, controllare che ci sia ancora
+  function isoChip(r) {
+    const k = r && r.consensus; if (!k || !k.median) return '';
+    const ratio = (r.play ? r.play.odd : r.odd) / k.median;
+    return ratio > 1.08 ? `<span class="chip warnc">⚠️ quota isolata: controlla che ci sia ancora</span>` : '';
+  }
   function consChip(r) {
     const k = r && r.consensus; if (!k) return awayChip(r) + liqChip(r);
     const odd = r.play ? r.play.odd : r.odd, ratio = k.median ? odd / k.median : 0;
@@ -897,7 +903,7 @@
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>
         <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}
-        <div class="ochips">${consChip(r)}</div>
+        <div class="ochips">${isoChip(r)}</div>
         ${playActions(r)}</div>
       <div class="oq">${num(r.play ? r.play.odd : r.odd, 2)}</div></article>`;
   }
@@ -1021,19 +1027,16 @@
           <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { day: 'numeric', month: 'short' })}</span></div>
           <div class="tmain">
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
-            <div class="pick"><span>${it && r.play ? `Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `Punta <b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
+            <div class="pick"><span>${it && r.play ? `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
             ${it && r.verdict ? `<div class="verdict ${r.verdict.play}"><b>${r.verdict.play === 'yes' ? '🟢 GIOCALA' : r.verdict.play === 'wait' ? '🟡 ASPETTA' : '🔴 NON GIOCARE'}</b><span>${esc(r.verdict.text)}</span></div>` : ''}
-            ${it && r.best && r.play && live && isNow(r) ? `<div class="todo-line"><span class="chip now">⏱️ Ora è il momento</span></div>` : ''}
-            ${it && r.min_odd && live && !r.played && !r.skipped ? minLine(r) : ''}
-            ${it && r.play && live && !r.played && !r.skipped ? `<div class="ochips">${consChip(r)}</div>` : ''}
-            ${it && !r.play && !r.played ? `${live && !r.skipped ? `<div class="todo-line no">Se l'hai giocata lo stesso (es. su ${esc(r.book)}), segnala qui sotto</div>${playActions(r)}` : '<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>'}` : ''}
-            ${it && (r.best || r.played || r.skipped) ? playActions(r) : ''}
-            ${it && !r.best && !r.played && !r.skipped && r.play && live ? `<div class="todo-line no">Se la giochi lo stesso, segnala qui sotto (conta nel budget)</div>${playActions(r)}` : ''}
+            ${it && (r.played || r.skipped || (r.verdict && r.verdict.play === 'yes')) ? playActions(r) : ''}
+            ${it && !r.verdict && !r.play && !r.played && !r.skipped ? '<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>' : ''}
             ${r.result === 'won' || r.result === 'lost' ? `<div class="foot"><span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span></div>` : ''}
             <details class="tdet"><summary>dettagli</summary>
               <div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
               ${it && r.play && !r.played && live ? `<div class="avail">🔍 Su ${esc(r.play.book)} cerca <b>${esc(r.home)}</b> · <a class="tlink" href="https://www.google.com/search?q=${encodeURIComponent(r.play.book + ' ' + r.home + ' ' + r.away)}" target="_blank" rel="noopener" onclick="rememberSpot()">cerca la partita</a></div>` : ''}
               ${it && r.min_odd ? `<div class="avail">Quote viste dal CRM${r.alt && Object.keys(r.alt).length ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''} · minimo ${num(r.min_odd, 2)}</div>` : ''}
+              ${it && live && r.verdict && r.verdict.play !== 'yes' && !r.played && !r.skipped ? `<div class="todo-line no">Se la giochi lo stesso, segnala qui (conta nel budget)</div>${playActions(r)}` : ''}
               <div class="foot">${chip}${consChip(r)}${r.final6 ? '<span class="chip fin">✅ consigliata</span>' : ''}${r.solid && r.solid.score >= 2 ? '<span class="chip fin">🟢 solida</span>' : ''}${r.final5 ? '<span class="chip">🛡️ sicura</span>' : ''}${r.final4 ? '<span class="chip">⭐ F2+</span>' : ''}${r.final ? '<span class="chip">F</span>' : ''}${r.final2 ? '<span class="chip">F2</span>' : ''}${r.final3 ? '<span class="chip">F3</span>' : ''}${learnMap[r.id] ? `<span class="chip">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.win_prob ? `<span>vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} vs chiusura</span>` : '<span>chiusura da misurare</span>'}</div>
             </details>
           </div>
