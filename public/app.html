@@ -1077,8 +1077,8 @@
     return top + head + note + list.map(r => ticket(r, chip)).join('') + (it ? `<button class="sixbtn" onclick="showOthers=false;loadSignals()">Nascondi gli altri segnali</button>` : '') + tail;
   }
   // i siti dove hai il conto (MY_BOOKS su Render) per primi, poi gli altri piu' comuni
-  let myBookNames = ['Eurobet', 'Goldbet'];
-  const PLAY_BOOKS_BASE = ['Eurobet', 'Goldbet', '888sport', 'Snai', 'Fastbet', 'Netwin', 'Sisal', 'Winamax', 'Lottomatica'];
+  let myBookNames = ['888sport', 'Snai', 'Netwin', 'Eurobet', 'Goldbet'];
+  const PLAY_BOOKS_BASE = ['888sport', 'Snai', 'Netwin', 'Eurobet', 'Goldbet', 'Fastbet', 'Sisal', 'Winamax', 'Lottomatica'];
   const playBooks = () => [...new Set([...myBookNames, ...PLAY_BOOKS_BASE])];
   // il modulo si apre accanto al pulsante toccato (in Oggi o in Segnali): niente id doppi tra le pagine
   const formOf = el => el ? el.closest('.pact').querySelector('.playform') : null;

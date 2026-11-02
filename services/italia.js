@@ -77,7 +77,7 @@ function cfg(env = process.env) {
     ouEnabled: env.OU_ENABLED === 'true', ouMarket: String(env.OU_MARKET || 'over_under').trim(),
     // 1° novembre 2026: i siti dove Christian ha il conto (MY_BOOKS su Render, chiavi del feed separate da virgola).
     // "👉 Gioca su" sceglie la quota piu' alta tra questi.
-    myBooks: (env.MY_BOOKS ? env.MY_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : ['eurobet', 'goldbet'])
+    myBooks: (env.MY_BOOKS ? env.MY_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : ['888sport_it', 'snai', 'netwin', 'eurobet', 'goldbet'])
   };
 }
 
