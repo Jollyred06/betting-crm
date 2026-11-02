@@ -187,3 +187,15 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.budgetCfg({}).noAwayThin, true); assert.strictEqual(I.budgetCfg({ BEST_AWAY_THIN: 'true' }).noAwayThin, false);
   console.log('fattore campo: ok');
 }
+// 🟢 / 🟡 / 🔴 verdetto su ogni scheda
+{
+  const I = require('../services/italia'), now = Date.parse('2026-11-02T08:00:00Z');
+  const r = { id: 1, commence_time: '2026-11-02T10:00:00Z', final4: true, final6: true, edge_pct: 5, odd: 2.5, league: 'Serie C', min_odd: 2.41, alt: { '888sport': 2.2 }, play: null };
+  const bc = { maxOdd: 3.5, rule: 'consigliate', noAwayThin: true };
+  assert.strictEqual(I.verdictOf({ ...r, play: { book: 'Snai', odd: 2.5 } }, { best: new Set([1]), bc, nowMs: now }).play, 'yes');
+  const v = I.verdictOf(r, { bc, nowMs: now }); assert.strictEqual(v.play, 'no'); assert.ok(/888sport 2,20/.test(v.text));
+  assert.strictEqual(I.verdictOf({ ...r, final4: false, commence_time: '2026-11-02T14:00:00Z' }, { bc, nowMs: now }).play, 'wait');
+  assert.ok(/Trasferta/.test(I.verdictOf({ ...r, awayThin: true, play: { book: 'Snai', odd: 2.5 } }, { bc, nowMs: now }).text));
+  assert.strictEqual(I.verdictOf({ ...r, played: { odd: 2 } }, { bc, nowMs: now }), null);
+  console.log('verdetto schede: ok');
+}

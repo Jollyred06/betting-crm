@@ -768,6 +768,32 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
     .sort((a, b) => (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);
 }
 
+/**
+ * Parte pura (testata): il verdetto di una scheda. play = 'yes' (giocala), 'wait' (non ancora), 'no' (non giocare); text = il motivo.
+ * Segue le stesse regole della lista da giocare (pickBest), nello stesso ordine.
+ */
+function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now() } = {}) {
+  if (r.played || r.skipped) return null;
+  const t = Date.parse(r.commence_time);
+  if (!(t > nowMs)) return null;
+  const n2 = v => Number(v).toFixed(2).replace('.', ',');
+  const mine = Object.entries(r.alt || {}).map(([b, v]) => `${b} ${n2(v)}`).join(', ');
+  if (best.has(r.id) && r.play) return { play: 'yes', text: `Giocala su ${r.play.book} a ${n2(r.play.odd)} o più (minimo ${n2(r.min_odd)})` };
+  if (budget.stopped) return { play: 'no', text: 'Stop del budget raggiunto: niente giocate' };
+  if (!r.final4) {
+    const leadH = (t - nowMs) / 3600000;
+    if (Number(r.edge_pct) >= 4 && leadH > 3) return { play: 'wait', text: `Non ancora: si decide nelle 3 ore prima della partita (dalle ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })})` };
+    return { play: 'no', text: `Vantaggio troppo basso (${n2(r.edge_pct)}%, serve almeno 4%)` };
+  }
+  if (isCup(r.league)) return { play: 'no', text: 'Partita di coppa: formazioni incerte' };
+  if (bc.maxOdd && Number(r.odd) > bc.maxOdd && !(r.play && r.play.odd <= bc.maxOdd)) return { play: 'no', text: `Quota sopra ${n2(bc.maxOdd)}: lì il vantaggio non regge` };
+  if (bc.rule === 'consigliate' && !r.final6) return { play: 'no', text: 'Favorito in un campionato minore: vince meno del previsto' };
+  if (bc.noAwayThin && r.awayThin) return { play: 'no', text: 'Trasferta in un campionato minore: vince meno del previsto' };
+  if (!r.play) return { play: 'no', text: `Non c'è sui tuoi siti a una quota buona${mine ? ` (${mine}, serve almeno ${n2(r.min_odd)})` : ''}` };
+  if (budget.playedToday >= budget.maxPerDay) return { play: 'no', text: 'Hai già fatto le giocate di oggi' };
+  return { play: 'no', text: 'C\'è già una giocata migliore su questa partita o oggi la lista è piena' };
+}
+
 /** Budget dalle giocate vere: partenza + saldo delle chiuse; "in gioco" = puntate ancora senza risultato. */
 function budgetOf(played, c, nowMs = Date.now()) {
   const items = (played && played.items) || [];
@@ -953,6 +979,9 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule; out.myBooks = c.myBooks.map(k => BOOK_NAMES[k] || k);
     out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd, noAwayThin: bc.noAwayThin });
     out.bestMaxOdd = bc.maxOdd; out.bestNoAwayThin = bc.noAwayThin;
+    // 1° novembre 2026: su ogni scheda un verdetto chiaro, GIOCALA o NON GIOCARE con il motivo (solo partite non ancora iniziate)
+    const bestSet = new Set(out.best), nowV = Date.now();
+    for (const r of out.recent) r.verdict = verdictOf(r, { best: bestSet, budget, bc, nowMs: nowV });
     // vinte contro attese della lista da giocare (stesse regole: selezione, niente coppe, quota fino al massimo)
     const ruleRows = bc.rule === 'consigliate' ? fin6Rows : bc.rule === 'sicure' ? fin5Rows : fin4Rows;
     out.bestCheck = winCheck(ruleRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd && !(bc.noAwayThin && isAwayThin(r))));
@@ -964,4 +993,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
