@@ -816,7 +816,11 @@ function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now
     const from = t - 3 * 3600000, rome = ms => Number(new Intl.DateTimeFormat('it-IT', { hour: 'numeric', hour12: false, timeZone: 'Europe/Rome' }).format(new Date(ms)));
     // l'ultimo controllo e' alle 22: se le 3 ore prima cadono di notte, non diventera' mai una ⭐
     if (rome(t) < 9 || (rome(from) >= toHour && rome(t) >= toHour) || (from > nowMs && rome(from) >= toHour)) return { play: 'no', text: 'Partita di notte: il CRM non controlla dopo le 22, non diventerà una ⭐' };
-    return { play: 'wait', text: `Non ancora: si decide nelle 3 ore prima della partita (dalle ${new Date(from).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' })})` };
+    const hm = ms => new Date(ms).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+    // gia' nelle 3 ore: il CRM la rilegge al primo giro (ogni 2 ore circa). Se passato un giro non e' diventata ⭐, la quota non vale piu'
+    if (nowMs >= from + 2.25 * 3600000) return { play: 'no', text: 'Riletta nelle ultime 3 ore: la quota non ha più valore' };
+    if (nowMs >= from) return { play: 'wait', text: `Il CRM la rilegge al prossimo controllo (entro le ${hm(Math.min(t, from + 2.25 * 3600000))}): se la quota tiene diventa 🟢` };
+    return { play: 'wait', text: `Non ancora: il CRM la rilegge nelle 3 ore prima della partita (dalle ${hm(from)}) e ti dice se giocarla` };
   }
   if (!r.liquid && bc.rule === 'consigliate' && !r.final6) return { play: 'no', text: 'Favorito in un campionato minore: vince meno del previsto' };
   if (!r.play) return { play: 'no', text: `Non c'è sui tuoi siti a una quota buona${mine ? ` (${mine}, serve almeno ${n2(r.min_odd)})` : ''}` };
