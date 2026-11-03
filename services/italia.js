@@ -11,6 +11,8 @@
  * Tetto mensile di richieste (ITALIA_MONTHLY_CAP, predefinito 400) con una riserva per le chiusure.
  * Qualsiasi errore qui viene registrato e non ferma mai il resto.
  */
+// 3 novembre 2026 (velocita'): le date dal database sono gia' oggetti Date; Date.parse li riconvertiva in testo a ogni confronto
+const T = v => (v instanceof Date ? v.getTime() : typeof v === 'number' ? v : Date.parse(v));
 let pinBoardDropped = false, ouBusy = false;
 const axios = require('axios');
 const { noVigPower } = require('./sharpSignals');
@@ -100,7 +102,7 @@ function trio(o) {
   return h > 1 && d > 1 && a > 1 ? { home: h, draw: d, away: a } : null;
 }
 
-const fresh = (b, nowMs, maxStaleMin) => !b.last_update || (nowMs - Date.parse(b.last_update)) <= maxStaleMin * 60000;
+const fresh = (b, nowMs, maxStaleMin) => !b.last_update || (nowMs - T(b.last_update)) <= maxStaleMin * 60000;
 
 // Abbinamento tra righe della stessa partita scritte in modo diverso dai bookmaker ("Benfica - Celtic" e "Benfica - Celtic Glasgow").
 const GENERIC = new Set(['fc', 'cf', 'ac', 'sc', 'afc', 'cd', 'ud', 'sd', 'club', 'de', 'the', 'calcio', 'fk', 'sk', 'if', 'bk', 'cp', 'sv', 'vfb', 'vfl', 'tsg', 'as', 'ss', 'us', 'rc', 'rcd', 'ca', 'ad', 'sl', 'fsv', 'spvgg', 'sporting', 'real', 'united', 'city', 'town', 'athletic', 'atletico']);
@@ -121,7 +123,7 @@ function sameTeam(a, b) {
   if (!A.length || !B.length) return wa.join(' ') === wb.join(' ');
   return A.some(x => B.some(y => x === y || (x.length >= 5 && y.length >= 5 && (x.startsWith(y) || y.startsWith(x)))));
 }
-const sameMatch = (p, r) => p.commence_time && Date.parse(p.commence_time) === Date.parse(r.commence_time) && sameTeam(p.home_team, r.home_team) && sameTeam(p.away_team, r.away_team);
+const sameMatch = (p, r) => p.commence_time && T(p.commence_time) === T(r.commence_time) && sameTeam(p.home_team, r.home_team) && sameTeam(p.away_team, r.away_team);
 
 // Nome del campionato con il paese davanti ("Israel - Premier League", "Kazakhstan, Premier League"): alcuni bookmaker del feed lo scrivono,
 // Pinnacle quasi mai. Se un'altra riga della stessa partita ce l'ha, si usa quello (26 ottobre 2026: su 888sport le partite si trovano per paese).
@@ -158,7 +160,7 @@ function findSignals(records, c, nowMs = Date.now()) {
   const out = [];
   const seen = new Set();
   for (const r of mergeWithPinnacle(records)) {
-    const start = Date.parse(r.commence_time);
+    const start = T(r.commence_time);
     if (!(start > nowMs + c.minLeadMin * 60000) || start > nowMs + c.windowHours * 3600000) continue;
     if (FLAGS.some(f => words(r.home_team).includes(f) || words(r.away_team).includes(f))) continue;   // giovanili, donne, riserve: quote poco affidabili
     if (FRIENDLY.test(r.league || '')) continue;
@@ -344,7 +346,7 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   const h = romeHour(nowMs);
   if (h < c.fromHour || h >= c.toHour) return { scan: 'fuori orario' };
   const { rows } = await pool.query(`SELECT MAX(at) FILTER (WHERE ok) AS last_ok, MAX(at) FILTER (WHERE NOT ok) AS last_ko FROM italia_requests WHERE kind = 'scan'`);
-  const lastOk = rows[0].last_ok ? Date.parse(rows[0].last_ok) : 0, lastKo = rows[0].last_ko ? Date.parse(rows[0].last_ko) : 0;
+  const lastOk = rows[0].last_ok ? T(rows[0].last_ok) : 0, lastKo = rows[0].last_ko ? T(rows[0].last_ko) : 0;
   const rem = await lastRemaining(pool);
   const plan = rem !== null ? await planOf(pool, c, rem, nowMs) : null;
   const every = plan ? Math.min(plan.everyMin, Math.max(c.scanEveryMin, 240)) : c.scanEveryMin;
@@ -379,7 +381,7 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
         `INSERT INTO italia_signals (event_id, league, home, away, commence_time, selection, book, odd, fair_prob, edge_pct, pin_h, pin_d, pin_a, netwin_odd, netwin_edge_pct, quotes, strategy, phase)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) ON CONFLICT (event_id, selection, strategy, phase) DO NOTHING RETURNING id`,
         [s.event_id, s.league, s.home, s.away, s.commence_time, s.selection, s.book, s.odd, s.fair_prob, s.edge_pct, s.pin[0], s.pin[1], s.pin[2], s.netwin_odd, s.netwin_edge_pct, JSON.stringify(s.quotes), strategy,
-         (Date.parse(s.commence_time) - nowMs) / 3600000 <= NEAR_HOURS ? 'near' : 'far']);
+         (T(s.commence_time) - nowMs) / 3600000 <= NEAR_HOURS ? 'near' : 'far']);
       if (r.rowCount) {
         // una rilettura di un segnale gia' avvisato non manda un secondo messaggio
         const again = (await pool.query(`SELECT COUNT(*)::int AS n FROM italia_signals WHERE event_id = $1 AND selection = $2 AND strategy = $3`, [s.event_id, s.selection, strategy])).rows[0].n > 1;
@@ -405,7 +407,7 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   // Non fanno mai partire una richiesta da soli: si aggiungono a quella dei segnali I e B (una richiesta = stesso costo).
   if (!rows.some(r => r.strategy !== 'T')) return { chiusure: 0 };
   // si aspetta che almeno una partita sia vicina: cosi' una sola richiesta copre il gruppo e la chiusura e' piu' fedele
-  if (!rows.some(r => r.strategy !== 'T' && Date.parse(r.commence_time) - nowMs <= c.closeTriggerMin * 60000)) return { chiusure: 0, nota: 'non ancora' };
+  if (!rows.some(r => r.strategy !== 'T' && T(r.commence_time) - nowMs <= c.closeTriggerMin * 60000)) return { chiusure: 0, nota: 'non ancora' };
   if (await usedThisMonth(pool) >= c.monthlyCap) return { chiusure: 0, nota: 'tetto mensile' };
   const rem = await lastRemaining(pool);
   if (rem !== null && rem <= 3) return { chiusure: 0, nota: 'quota odss finita' };
@@ -420,7 +422,7 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
     const pin = closingPin(records, s.event_id);
     if (!pin) continue;
     const fair = noVigPower(pin)[s.selection];
-    const lag = Math.max(0, Math.round((Date.parse(s.commence_time) - nowMs) / 60000));
+    const lag = Math.max(0, Math.round((T(s.commence_time) - nowMs) / 60000));
     await pool.query(
       `UPDATE italia_signals SET close_pin_h=$2, close_pin_d=$3, close_pin_a=$4, closing_fair_prob=$5, clv_pct=$6, netwin_clv_pct=$7, close_lag_min=$8, close_captured_at=NOW(), close_quotes=$9 WHERE id=$1`,
       [s.id, pin.home, pin.draw, pin.away, fair, (Number(s.odd) * fair - 1) * 100, s.netwin_odd ? (Number(s.netwin_odd) * fair - 1) * 100 : null, lag, (() => { const q = closingQuotes(records, s.event_id); return q ? JSON.stringify(q) : null; })()]);
@@ -459,7 +461,7 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
  */
 // ------------------------------------------------------------------------------------------- prima uscita e rilettura
 const NEAR_HOURS = 3;
-const phaseOf = r => r.phase || ((Date.parse(r.commence_time) - Date.parse(r.created_at)) / 3600000 <= NEAR_HOURS ? 'near' : 'far');
+const phaseOf = r => r.phase || ((T(r.commence_time) - T(r.created_at)) / 3600000 <= NEAR_HOURS ? 'near' : 'far');
 const sigKey = r => `${r.event_id}|${r.selection}|${r.strategy || 'I'}`;
 /** Righe "prima uscita": tutte tranne le riletture vicino al calcio d'inizio di un segnale gia' uscito prima (le misure di I, B, F e F3 restano quelle di sempre). */
 function primaryRows(rows) {
@@ -486,17 +488,22 @@ function expectedEur(rows, stake = STAKE) {
 
 /** Segna con final=true le righe I che rispettano le condizioni F; il controllo sul bookmaker usa solo le chiusure gia' note al momento del segnale. */
 function markFinal(rows) {
-  const since = Date.parse(FINAL.since);
-  const sorted = [...rows].sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+  const since = T(FINAL.since);
+  const sorted = [...rows].sort((a, b) => T(a.created_at) - T(b.created_at));
   const out = new Map();
+  // chiusure gia' note per bookmaker, in ordine di tempo, con le somme progressive: una ricerca invece di rileggere tutte le righe
+  const byBook = new Map();
+  for (const x of rows) if (x.clv_pct !== null && x.clv_pct !== undefined && x.close_captured_at) { const l = byBook.get(x.book) || []; l.push([T(x.close_captured_at), Number(x.clv_pct)]); byBook.set(x.book, l); }
+  for (const [b, l] of byBook) { l.sort((a, c) => a[0] - c[0]); let acc = 0; byBook.set(b, { ts: l.map(v => v[0]), cum: l.map(v => (acc += v[1])) }); }
+  const pastClv = (book, t) => { const g = byBook.get(book); if (!g) return { n: 0, sum: 0 }; let lo = 0, hi = g.ts.length; while (lo < hi) { const m = (lo + hi) >> 1; if (g.ts[m] < t) lo = m + 1; else hi = m; } return { n: lo, sum: lo ? g.cum[lo - 1] : 0 }; };
   for (const r of sorted) {
-    const t = Date.parse(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
+    const t = T(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
     const reasons = [];
     if (t < since) reasons.push('prima delle regole');
     if (!(edge >= FINAL.minEdge && edge <= FINAL.maxEdge)) reasons.push('vantaggio fuori 2–6%');
     if (!(odd >= FINAL.minOdd && odd <= FINAL.maxOdd)) reasons.push('quota fuori 1,60–3,50');
-    const past = rows.filter(x => x.book === r.book && x.clv_pct !== null && x.clv_pct !== undefined && x.close_captured_at && Date.parse(x.close_captured_at) < t).map(x => Number(x.clv_pct));
-    if (past.length >= FINAL.bookMinN && past.reduce((a, b) => a + b, 0) / past.length < 0) reasons.push('bookmaker con valore negativo');
+    const past = pastClv(r.book, t);
+    if (past.n >= FINAL.bookMinN && past.sum / past.n < 0) reasons.push('bookmaker con valore negativo');
     out.set(r.id, { final: reasons.length === 0, reasons });
   }
   return out;
@@ -513,10 +520,10 @@ function markFinal(rows) {
 const FINAL2 = { since: '2026-10-18T07:30:00Z', minEdge: 4, maxEdge: 8, minOdd: 1.6, maxOdd: 3.5, maxLeadHours: 3 };
 
 function markFinal2(rows) {
-  const since = Date.parse(FINAL2.since), out = new Map();
+  const since = T(FINAL2.since), out = new Map();
   for (const r of rows) {
-    const t = Date.parse(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
-    const lead = (Date.parse(r.commence_time) - t) / 3600000;
+    const t = T(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
+    const lead = (T(r.commence_time) - t) / 3600000;
     const reasons = [];
     if (t < since) reasons.push('prima delle regole');
     if (!(lead <= FINAL2.maxLeadHours)) reasons.push('oltre 3 ore dal calcio d\'inizio');
@@ -537,9 +544,9 @@ function markFinal2(rows) {
 const FINAL3 = { since: '2026-10-18T18:45:00Z', minEdge: 2, maxEdge: 8, minOdd: 1.3, maxOdd: 1.6 };
 
 function markFinal3(rows) {
-  const since = Date.parse(FINAL3.since), out = new Map();
+  const since = T(FINAL3.since), out = new Map();
   for (const r of rows) {
-    const t = Date.parse(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
+    const t = T(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
     const reasons = [];
     if (t < since) reasons.push('prima delle regole');
     if (!(edge >= FINAL3.minEdge && edge <= FINAL3.maxEdge)) reasons.push('vantaggio fuori 2–8%');
@@ -560,10 +567,10 @@ function markFinal3(rows) {
 const FINAL4 = { since: '2026-10-24T18:00:00Z', minEdge: 4, minOdd: 1.3, maxLeadHours: 3 };
 
 function markFinal4(rows, { ignoreSince = false } = {}) {
-  const since = Date.parse(FINAL4.since), out = new Map();
+  const since = T(FINAL4.since), out = new Map();
   for (const r of rows) {
-    const t = Date.parse(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
-    const lead = (Date.parse(r.commence_time) - t) / 3600000;
+    const t = T(r.created_at), edge = Number(r.edge_pct), odd = Number(r.odd);
+    const lead = (T(r.commence_time) - t) / 3600000;
     const reasons = [];
     if (!ignoreSince && t < since) reasons.push('prima delle regole');
     if (!(lead <= FINAL4.maxLeadHours)) reasons.push('oltre 3 ore dal calcio d\'inizio');
@@ -576,7 +583,7 @@ function markFinal4(rows, { ignoreSince = false } = {}) {
   for (const r of rows) {
     if (!out.get(r.id).final) continue;
     const k = sigKey(r), cur = best.get(k);
-    if (!cur || Date.parse(r.created_at) > Date.parse(cur.created_at)) best.set(k, r);
+    if (!cur || T(r.created_at) > T(cur.created_at)) best.set(k, r);
   }
   for (const r of rows) if (out.get(r.id).final && best.get(sigKey(r)) !== r) out.set(r.id, { final: false, reasons: ['letta di nuovo piu\' vicino alla partita'] });
   return out;
@@ -593,10 +600,10 @@ function markFinal4(rows, { ignoreSince = false } = {}) {
 const FINAL5 = { since: '2026-10-24T20:45:00Z', minProb: 0.5 };
 
 function markFinal5(rows, { ignoreSince = false } = {}) {
-  const f4 = markFinal4(rows, { ignoreSince: true }), since = Date.parse(FINAL5.since), out = new Map();
+  const f4 = markFinal4(rows, { ignoreSince: true }), since = T(FINAL5.since), out = new Map();
   for (const r of rows) {
     const reasons = [...((f4.get(r.id) || {}).reasons || [])];
-    if (!ignoreSince && Date.parse(r.created_at) < since) reasons.push('prima delle regole');
+    if (!ignoreSince && T(r.created_at) < since) reasons.push('prima delle regole');
     if (!(Number(r.fair_prob) >= FINAL5.minProb)) reasons.push('probabilita\' di vincita sotto il 50%');
     out.set(r.id, { final: reasons.length === 0, reasons });
   }
@@ -624,7 +631,7 @@ const thinFav = r => Number(r.fair_prob) >= FINAL6.favProb && (pinMarginPct(r) ?
  */
 const SEL_IDX = { home: 0, draw: 1, away: 2 };
 function solidity(r) {
-  const leadH = (Date.parse(r.commence_time) - Date.parse(r.created_at)) / 3600000, m = pinMarginPct(r);
+  const leadH = (T(r.commence_time) - T(r.created_at)) / 3600000, m = pinMarginPct(r);
   let q = r.quotes; try { if (typeof q === 'string') q = JSON.parse(q); } catch (e) { q = null; }
   const fair = Number(r.fair_prob), i = SEL_IDX[r.selection];
   const books = q && fair > 0 ? Object.values(q).filter(v => Array.isArray(v) && Number(v[i]) * fair - 1 >= 0.02).length : 0;
@@ -633,10 +640,10 @@ function solidity(r) {
 }
 
 function markFinal6(rows, { ignoreSince = false } = {}) {
-  const f4 = markFinal4(rows, { ignoreSince: true }), since = Date.parse(FINAL6.since), out = new Map();
+  const f4 = markFinal4(rows, { ignoreSince: true }), since = T(FINAL6.since), out = new Map();
   for (const r of rows) {
     const reasons = [...((f4.get(r.id) || {}).reasons || [])];
-    if (!ignoreSince && Date.parse(r.created_at) < since) reasons.push('prima delle regole');
+    if (!ignoreSince && T(r.created_at) < since) reasons.push('prima delle regole');
     if (thinFav(r)) reasons.push('favorito in un mercato sottile');
     out.set(r.id, { final: reasons.length === 0, reasons });
   }
@@ -655,10 +662,10 @@ const FINAL8 = { since: '2026-11-01T13:30:00Z', minProb: 0.65 };
 const FINAL9 = { since: '2026-11-01T13:30:00Z', maxMarginPct: 8, maxOdd: 3.5 };
 const liquidOf = (r, max) => { const m = pinMarginPct(r); return m !== null && m < max; };
 function markPaper(rows, extra, since, { ignoreSince = false } = {}) {
-  const f4 = markFinal4(rows, { ignoreSince: true }), t0 = Date.parse(since), out = new Map();
+  const f4 = markFinal4(rows, { ignoreSince: true }), t0 = T(since), out = new Map();
   for (const r of rows) {
     const reasons = [...((f4.get(r.id) || {}).reasons || [])];
-    if (!ignoreSince && Date.parse(r.created_at) < t0) reasons.push('prima delle regole');
+    if (!ignoreSince && T(r.created_at) < t0) reasons.push('prima delle regole');
     if (isCup(r.league)) reasons.push('coppa');
     reasons.push(...extra(r));
     out.set(r.id, { final: reasons.length === 0, reasons });
@@ -680,14 +687,14 @@ const markFinal9 = (rows, o) => markPaper(rows, r => [
  */
 const LIQUID = { since: '2026-11-02T20:10:00Z', maxMarginPct: 6, minEdge: 2, maxLeadHours: 3 };
 function markLiquid(rows, { ignoreSince = false } = {}) {
-  const since = Date.parse(LIQUID.since), out = new Map();
+  const since = T(LIQUID.since), out = new Map();
   for (const r of rows) {
-    const t = Date.parse(r.created_at), lead = (Date.parse(r.commence_time) - t) / 3600000, m = pinMarginPct(r);
+    const t = T(r.created_at), lead = (T(r.commence_time) - t) / 3600000, m = pinMarginPct(r);
     const ok = (ignoreSince || t >= since) && lead <= LIQUID.maxLeadHours && Number(r.edge_pct) >= LIQUID.minEdge && m !== null && m < LIQUID.maxMarginPct && !isCup(r.league);
     out.set(r.id, { final: ok });
   }
   const best = new Map();   // una sola per partita ed esito: la lettura piu' vicina al calcio d'inizio
-  for (const r of rows) if (out.get(r.id).final) { const k = sigKey(r), cur = best.get(k); if (!cur || Date.parse(r.created_at) > Date.parse(cur.created_at)) best.set(k, r); }
+  for (const r of rows) if (out.get(r.id).final) { const k = sigKey(r), cur = best.get(k); if (!cur || T(r.created_at) > T(cur.created_at)) best.set(k, r); }
   for (const r of rows) if (out.get(r.id).final && best.get(sigKey(r)) !== r) out.set(r.id, { final: false });
   return out;
 }
@@ -731,7 +738,7 @@ function flagsOf(r, f4, f5, f6, c, nowMs = Date.now()) {
 /** Timbra i segnali I appena usciti (flags ancora vuoto). Le regole guardano lo storico, quindi si caricano gli ultimi 600. */
 async function stampFlags(pool, c, nowMs = Date.now()) {
   const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY commence_time DESC, id DESC LIMIT 600`)).rows;
-  const todo = all.filter(r => r.flags == null && Date.parse(r.commence_time) > nowMs - 6 * 3600000);
+  const todo = all.filter(r => r.flags == null && T(r.commence_time) > nowMs - 6 * 3600000);
   if (!todo.length) return 0;
   const f4 = markFinal4(all), f5 = markFinal5(all), f6 = markFinal6(all);
   for (const r of todo) await pool.query(`UPDATE italia_signals SET flags = $1 WHERE id = $2 AND flags IS NULL`, [JSON.stringify(flagsOf(r, f4, f5, f6, c, nowMs)), r.id]);
@@ -788,7 +795,7 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   // 2 novembre 2026: anche le 💧 liquide (mercato liquido, vantaggio dal 2%), e vengono per prime
   const okLiq = r => r.liquid && !isCup(r.league) && !(Number(r.odd) > maxOdd) && !(r.play && r.play.odd > maxOdd);
   const liq = r => (okLiq(r) ? 1 : 0);
-  return items.filter(r => ((r.final4 && ok(r)) || okLiq(r)) && r.play && !r.played && !r.skipped && Date.parse(r.commence_time) > nowMs)
+  return items.filter(r => ((r.final4 && ok(r)) || okLiq(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs)
     .sort((a, b) => (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);
 }
 
@@ -798,7 +805,7 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
  */
 function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now(), toHour = 22 } = {}) {
   if (r.played || r.skipped) return null;
-  const t = Date.parse(r.commence_time);
+  const t = T(r.commence_time);
   if (!(t > nowMs)) return null;
   const n2 = v => Number(v).toFixed(2).replace('.', ',');
   const mine = Object.entries(r.alt || {}).map(([b, v]) => `${b} ${n2(v)}`).join(', ');
@@ -872,11 +879,11 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
   const played = await require('./played').playedSignalIds(pool);
   const playedByKey = new Map(all.filter(r => played.get(Number(r.id))).map(r => [sigKey(r), played.get(Number(r.id))]));
   const romeDay = ms => ROME_DAY.format(new Date(ms));   // AAAA-MM-GG
-  const past = latestRows(all).filter(r => Date.parse(r.commence_time) <= nowMs && (!before || romeDay(Date.parse(r.commence_time)) < before));
-  const dayList = [...new Set(past.map(r => romeDay(Date.parse(r.commence_time))))].slice(0, Math.max(1, Math.min(31, days)));
+  const past = latestRows(all).filter(r => T(r.commence_time) <= nowMs && (!before || romeDay(T(r.commence_time)) < before));
+  const dayList = [...new Set(past.map(r => romeDay(T(r.commence_time))))].slice(0, Math.max(1, Math.min(31, days)));
   const R = require('./results');
   const out = dayList.map(day => {
-    const items = past.filter(r => romeDay(Date.parse(r.commence_time)) === day).map(r => {
+    const items = past.filter(r => romeDay(T(r.commence_time)) === day).map(r => {
       const first = firstOf.get(sigKey(r));
       return { id: r.id, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book,
         odd: Number(r.odd), clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null, result: r.result || null, result_score: r.result_score || null,
@@ -888,7 +895,7 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
       results: R.resultStats(items), items };
   });
   const oldest = dayList[dayList.length - 1];
-  return { days: out, more: !!oldest && past.some(r => romeDay(Date.parse(r.commence_time)) < oldest), next: oldest || null, totalPast: past.length };
+  return { days: out, more: !!oldest && past.some(r => romeDay(T(r.commence_time)) < oldest), next: oldest || null, totalPast: past.length };
 }
 
 async function getItalia(pool, env = process.env, strategy = 'I') {
@@ -898,11 +905,15 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   try { await ensureTables(pool); } catch (e) { return { ...base, error: e.message, total: stats([]), netwin: stats([]), byBook: [], bySelection: [], byOdds: [], recent: [], requestsThisMonth: 0 }; }
   const R = require('./results');
   try { await R.ensureResults(pool); } catch (e) { /* risultati facoltativi */ }
-  const resultsStatus = await R.resultsStatus(pool, env).catch(() => null);
-  const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = $1 ORDER BY commence_time DESC, id DESC LIMIT 600`, [strategy])).rows;
+  // 3 novembre 2026 (velocita'): le letture indipendenti partono insieme invece che una dopo l'altra
+  const [resultsStatus, allRes, used, lastRes] = await Promise.all([
+    R.resultsStatus(pool, env).catch(() => null),
+    pool.query(`SELECT * FROM italia_signals WHERE strategy = $1 ORDER BY commence_time DESC, id DESC LIMIT 600`, [strategy]),
+    usedThisMonth(pool),
+    pool.query(`SELECT at, ok, kind, records, quota_remaining, note FROM italia_requests ORDER BY id DESC LIMIT 1`)]);
+  const all = allRes.rows;
   const rows = primaryRows(all);   // le misure restano sulla prima uscita; la F2 guarda anche le riletture
-  const used = await usedThisMonth(pool);
-  const last = (await pool.query(`SELECT at, ok, kind, records, quota_remaining, note FROM italia_requests ORDER BY id DESC LIMIT 1`)).rows[0] || null;
+  const last = lastRes.rows[0] || null;
   const byBook = [...new Set(rows.map(r => r.book))].map(b => ({ book: BOOK_NAMES[b] || b, ...stats(rows.filter(r => r.book === b)) })).sort((a, b) => b.signals - a.signals);
   const fin = strategy === 'I' ? markFinal(rows) : new Map();
   const finRows = rows.filter(r => fin.get(r.id) && fin.get(r.id).final);
@@ -956,7 +967,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   // quota oltre l'8% sopra la mediana degli altri siti ("isolata") = vinte sotto le attese. Si mostra e si misura, non filtra.
   const consOf = r => consensusOf(Number(r.odd), Number(r.fair_prob), r.selection, quotesOf(r));
   const f2c = strategy === 'I' ? all.filter(r => fin4.get(r.id) && fin4.get(r.id).final && Number(r.odd) <= 3.5).map(r => ({ r, k: consOf(r) })).filter(x => x.k) : [];
-  const since = Date.parse(CONSENSUS.since), consGroup = test => { const l = f2c.filter(x => test(x.k)); const now = l.filter(x => Date.parse(x.r.created_at) >= since).map(x => x.r), all2 = l.map(x => x.r);
+  const since = T(CONSENSUS.since), consGroup = test => { const l = f2c.filter(x => test(x.k)); const now = l.filter(x => T(x.r.created_at) >= since).map(x => x.r), all2 = l.map(x => x.r);
     return { ...oddsStats(now), results: R.resultStats(now), retro: { ...oddsStats(all2), results: R.resultStats(all2) } }; };
   const out = {
     ...base, checks, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
@@ -1026,8 +1037,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       retro: { ...oddsStats(liqRetro.filter(r => Number(r.odd) <= bc.maxOdd)), results: R.resultStats(liqRetro.filter(r => Number(r.odd) <= bc.maxOdd)) } };
     out.bestCheck = winCheck(ruleRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd && !(bc.noAwayThin && isAwayThin(r))));
     // 🏠 fattore campo sulla carta: le ✅ fino alla quota massima, con e senza le trasferte nei mercati sottili
-    const hf = ruleRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd), t0 = Date.parse(AWAY_THIN.since);
-    const grp = l => { const now = l.filter(r => Date.parse(r.created_at) >= t0); return { ...oddsStats(now), results: R.resultStats(now), retro: { ...oddsStats(l), results: R.resultStats(l) } }; };
+    const hf = ruleRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd), t0 = T(AWAY_THIN.since);
+    const grp = l => { const now = l.filter(r => T(r.created_at) >= t0); return { ...oddsStats(now), results: R.resultStats(now), retro: { ...oddsStats(l), results: R.resultStats(l) } }; };
     out.homeField = { rules: AWAY_THIN, active: bc.noAwayThin, kept: grp(hf.filter(r => !isAwayThin(r))), awayThin: grp(hf.filter(isAwayThin)) };
   }
   return out;

@@ -6,7 +6,7 @@
  * Il backup non passa mai dalla copia.
  */
 const zlib = require('zlib');
-const store = new Map();
+const store = new Map(), pending = new Map();
 let hits = 0, misses = 0;
 
 const clear = () => store.clear();
@@ -28,7 +28,14 @@ function middleware(ttlMs = 5 * 60000) {
     if (req.method !== 'GET' || /backup/.test(req.path)) return next();
     const key = req.originalUrl, hit = store.get(key);
     if (hit && Date.now() - hit.at < ttlMs) { hits++; return send(req, res, hit); }
+    // 3 novembre 2026: se la stessa pagina e' gia' in preparazione (es. la ripreparazione dopo un tocco), si aspetta quella
+    // invece di ricalcolarla una seconda volta: sul server gratuito due calcoli insieme raddoppiano l'attesa
+    const busy = pending.get(key);
+    if (busy) return busy.then(() => { const h = store.get(key); if (h && Date.now() - h.at < ttlMs) { hits++; send(req, res, h); } else next(); });
     misses++;
+    let done; pending.set(key, new Promise(r => { done = r; }));
+    const finish = () => { if (pending.get(key)) { pending.delete(key); done(); } };
+    res.on('finish', finish); res.on('close', finish);
     const json = res.json.bind(res);
     res.json = data => {
       if (res.statusCode !== 200) return json(data);

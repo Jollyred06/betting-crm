@@ -43,7 +43,7 @@ app.use('/api', (req, res, next) => {
   if (/^\/tracker\/(played|skipped|italia\/\d+\/(result|keep))/.test(req.path)) {
     const re = /^\/api\/tracker\/(italia|played|archive|books)/;
     cache.clearMatching(re);
-    res.on('finish', () => { cache.clearMatching(re); cache.warm({ port: PORT, delayMs: 8000, paths: ['/api/tracker/italia', '/api/tracker/played'] }); });
+    res.on('finish', () => { cache.clearMatching(re); cache.warm({ port: PORT, delayMs: 2500, paths: ['/api/tracker/italia', '/api/tracker/played'] }); });
     return next();
   }
   cache.clear(); res.on('finish', () => cache.clearAndWarm({ port: PORT }));
