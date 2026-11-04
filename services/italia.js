@@ -1005,6 +1005,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final3: !!(fin3.get(firstOf.get(sigKey(r))) || {}).final,
       final4: !!(fin4.get(r.id) || {}).final,
       liquid: !!(liqMap.get(r.id) || {}).final,
+      draw_prob: (() => { const o = { home: Number(r.pin_h), draw: Number(r.pin_d), away: Number(r.pin_a) }; return o.home > 1 && o.draw > 1 && o.away > 1 ? noVigPower(o).draw : null; })(),
       final5: !!(fin5.get(r.id) || {}).final,
       final6: !!(fin6.get(r.id) || {}).final,
       final8: !!(p8.map.get(r.id) || {}).final, final9: !!(p9.map.get(r.id) || {}).final,

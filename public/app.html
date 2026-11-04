@@ -236,6 +236,7 @@
   .chip svg.ehero { margin:-3px 4px -3px -4px; }
   .ohero { font-size:13px; line-height:20px; color:var(--muted); margin:3px 0; display:flex; align-items:center; gap:6px; } .ohero span { line-height:20px; } .ohero svg.ehero, .rhead svg.ehero, .verdict svg.ehero { margin:0 !important; }
   .hpow { display:block; font-size:12.5px; color:var(--ok); margin:1px 0 2px; }
+  .drawline { margin-top:6px; font-size:13.5px; color:var(--muted); } .drawline.hi { color:var(--warn); font-weight:600; }
 </style>
 </head>
 <body>
@@ -903,6 +904,12 @@
   const liqChip = r => r && r.liquid ? `<span class="chip fin" title="Mercato liquido: il prezzo di Pinnacle è affidabile, basta un vantaggio dal 2%">${heroImg('oceano', 20)}Aquaman · liquida</span>` : '';
   const awayChip = r => r && r.awayThin ? `<span class="chip warnc" title="Nei campionati minori la squadra in trasferta vince meno di quanto dice Pinnacle: dal 1° novembre non è tra le ⭐">${heroImg('muro', 20)}Superman · trasferta nei minori</span>` : '';
   // nelle ⭐ di Oggi solo l'avviso che chiede di fare qualcosa: quota molto sopra gli altri siti, controllare che ci sia ancora
+  // 🤝 il pareggio in vista (4 novembre 2026): quasi meta' delle giocate perse e' finita pari. Alto da 28% in su
+  function drawLine(r) {
+    if (!r || r.draw_prob === null || r.draw_prob === undefined || r.selection === 'draw') return '';
+    const p = r.draw_prob, hi = p >= 0.28;
+    return `<div class="drawline${hi ? ' hi' : ''}">${hi ? '⚠️' : '⚖️'} Pareggio ${num(p * 100, 0)}%${hi ? ' · alto: con un pari perdi' : ''}</div>`;
+  }
   function isoChip(r) {
     const k = r && r.consensus; if (!k || !k.median) return '';
     const ratio = (r.play ? r.play.odd : r.odd) / k.median;
@@ -927,6 +934,7 @@
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.liquid ? 'Aquaman' : 'Capitan America'}</span></div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>
         <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}
+        ${drawLine(r)}
         <div class="ochips">${isoChip(r)}</div>
         ${r.played || r.skipped ? '' : bookLink(r)}
         ${playActions(r)}</div>
@@ -1054,6 +1062,7 @@
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="pick"><span>${it && r.play ? `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
             ${it && r.verdict ? `<div class="verdict ${r.verdict.play}"><b>${r.verdict.play === 'yes' ? `🟢 GIOCALA · ${heroImg(r.liquid ? 'oceano' : 'fascia', 22)} ${r.liquid ? 'Aquaman' : 'Capitan America'}` : r.verdict.play === 'wait' ? '🟡 ASPETTA' : '🔴 NON GIOCARE'}</b><span>${esc(r.verdict.text)}</span></div>` : ''}
+            ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? drawLine(r) : ''}
             ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? bookLink(r) : ''}
             ${it && (r.played || r.skipped || (r.verdict && r.verdict.play === 'yes')) ? playActions(r) : ''}
             ${it && !r.verdict && !r.play && !r.played && !r.skipped ? '<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>' : ''}
