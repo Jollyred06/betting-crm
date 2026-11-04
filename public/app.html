@@ -238,7 +238,8 @@
   .hpow { display:block; font-size:12.5px; color:var(--ok); margin:1px 0 2px; }
   .drawline { margin-top:6px; font-size:13.5px; color:var(--muted); } .drawline.hi { color:var(--warn); font-weight:600; }
   .vote { margin-left:8px; padding:1px 8px; border-radius:999px; font-weight:800; font-size:12.5px; border:1.5px solid var(--line); color:var(--ink); } .vote.hi { border-color:var(--ok); color:var(--ok); } .vote.lo { border-color:var(--warn); color:var(--warn); } .ohero .vote:first-child { margin-left:0; }
-  .trow { display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--line); } .trow span { display:block; } .tstate { font-size:13.5px; margin-top:2px; } .tnum { font-size:12.5px; } .tprop { margin-top:6px; font-size:13.5px; } .tprop .playbtn { margin-top:6px; }
+  .prow { display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--line); } .prow span { display:block; } .tstate { font-size:13.5px; margin-top:2px; } .tnum { font-size:12.5px; } .tprop { margin-top:6px; font-size:13.5px; } .tprop .playbtn { margin-top:6px; }
+  .tverd { display:block; margin-top:3px; font-size:13px; } .tverd.yes { color:var(--ok); font-weight:700; } .tverd.wait { color:var(--warn); } .tverd.no { color:var(--muted); }
 </style>
 </head>
 <body>
@@ -865,9 +866,10 @@
     try {
       const d = await getJson('/api/tracker/italia'), now = Date.now();
       const best = new Set(d.best || []);
-      const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now && (r.play || r.played)).sort((a, b) => (best.has(b.id) - best.has(a.id)) || ((b.final4 || b.final || b.final2 || b.final3) - (a.final4 || a.final || a.final2 || a.final3)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
+      const vr = r => (r.played ? 3 : !r.verdict ? 0 : r.verdict.play === 'yes' ? 2 : r.verdict.play === 'wait' ? 1 : 0);
+      const list = (d.recent || []).filter(r => Date.parse(r.commence_time) > now && (r.play || r.played)).sort((a, b) => (vr(b) - vr(a)) || (best.has(b.id) - best.has(a.id)) || ((b.final4 || b.final || b.final2 || b.final3) - (a.final4 || a.final || a.final2 || a.final3)) || (Date.parse(a.commence_time) - Date.parse(b.commence_time))).slice(0, 4);
       $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
-        <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a></b><small>Punta <b style="display:inline">${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : r.min_odd ? ' · minimo ' + num(r.min_odd, 2) : ''}${best.has(r.id) ? ' · <span class="chip now">⭐ da giocare</span>' : r.final4 ? ' · <span class="chip fin">⭐ F2+</span>' : ''}${r.final ? ' · <span class="chip fin">✅ F</span>' : ''}${r.six ? ' · <span class="chip fin">🎯</span>' : ''}${r.final2 ? ' · <span class="chip fin">✅ F2</span>' : ''}${r.final3 ? ' · <span class="chip fin">✅ F3</span>' : ''}</small></div>
+        <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a></b><small>${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')} su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : ''}</small>${r.played ? '' : r.verdict ? `<small class="tverd ${r.verdict.play}">${r.verdict.play === 'yes' ? `🟢 Giocala · ${heroImg(r.liquid ? 'oceano' : 'fascia', 16)} ${r.liquid ? 'Aquaman' : 'Capitan America'}${r.score ? ' · 🧮 ' + r.score.vote : ''}` : r.verdict.play === 'wait' ? '🟡 ' + esc(r.verdict.text) : '🔴 ' + esc(r.verdict.text)}</small>` : ''}</div>
         <div class="q">${num(r.played ? r.played.odd : r.play.odd, 2)}</div></div>`).join('')
         : '<div class="empty">Nessun segnale giocabile sui tuoi siti in arrivo per ora. Il CRM controlla circa ogni 2 ore, dalle 9 alle 22.</div>';
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
@@ -902,7 +904,7 @@
       const nums = m.measured ? `${m.measured} con chiusura · valore ${pct(m.avgClvPct, 1)}${m.clvCi95 ? ` (da ${pct(m.clvCi95[0], 1)} a ${pct(m.clvCi95[1], 1)})` : ''} · ${m.won} vinte su ${m.settled}, attese ${num(m.expected, 1)} · ${signedMoney(m.pnlEur)}` : 'ancora nessun dato';
       const prop = m.proposal ? `<div class="tprop">💡 Proposta: <b>${m.kind === 'filter' ? (m.proposal === 'off' ? 'togliere questo filtro' : 'rimettere questo filtro') : (m.proposal === 'on' ? 'metterla in campo (le sue partite diventano ⭐)' : 'toglierla dalle ⭐')}</b>
         <button class="playbtn" ${T.brakeUntil ? 'disabled' : ''} onclick="approveTeam('${m.key}', ${m.proposal === 'on'}, this)">${T.brakeUntil ? 'freno attivo' : 'Approvo'}</button></div>` : '';
-      return `<div class="trow">${heroImg(m.key === 'liquidi8' ? 'oceano' : m.key, 34)}<div><b>${esc(m.key === 'liquidi8' ? 'Aquaman junior' : heroName(m.key))}</b> <small class="muted">${esc(m.what)}</small>
+      return `<div class="prow">${heroImg(m.key === 'liquidi8' ? 'oceano' : m.key, 34)}<div><b>${esc(m.key === 'liquidi8' ? 'Aquaman junior' : heroName(m.key))}</b> <small class="muted">${esc(m.what)}</small>
         <span class="tstate">${m.kind === 'filter' ? (m.on ? '🛡️ filtro attivo' : 'filtro spento') : (m.on ? '⚽ in campo' : '🪑 in panchina')} · ${sdot(lv)} ${lab}</span><span class="muted tnum">${nums}</span>${prop}</div></div>`; };
     const props = T.members.filter(m => m.proposal).length;
     return `<div class="strat"><div class="sh"><div class="letter" style="font-size:26px">📋</div><div><b>La pagella della squadra</b><span>Il CRM giudica ogni supereroe su tutti i risultati: 🟢 da ${T.rules.minN} segnali con valore sicuramente positivo e vinte nella norma. Propone, tu approvi${T.brakeUntil ? ` · prossimo cambio dal ${new Date(T.brakeUntil).toLocaleDateString('it-IT')}` : ''}</span></div></div>
