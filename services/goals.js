@@ -169,6 +169,45 @@ async function setWatchScore(pool, eventId, sc) {
   await pool.query(`UPDATE goal_watch SET result_score = $2, goals = $3, settled_at = NOW() WHERE event_id = $1 AND result_score IS NULL`, [eventId, sc, g]);
 }
 
+/**
+ * 💥 THOR IN ANTICIPO (4 novembre 2026): prima del 12 le quote Over/Under si chiedono SOLO per le partite Valanga in arrivo
+ * (entro 3 ore), una richiesta per gruppo, una volta per partita: circa 1-2 richieste al giorno, dentro il margine del piano odss.
+ * Il nome del mercato Over/Under di odss non e' documentato: si prova 'over_under', poi 'totals', 'ou', 'goals';
+ * un nome che torna vuoto non si riprova.
+ */
+const OU_MARKETS = ['over_under', 'totals', 'ou', 'goals'];
+async function valangaOdds(pool, c, { nowMs = Date.now(), http } = {}) {
+  if (c.ouEnabled) return { thor: 'ci pensa la lettura completa' };
+  await ensureGoals(pool);
+  await pool.query(`ALTER TABLE goal_watch ADD COLUMN IF NOT EXISTS ou_tried_at TIMESTAMPTZ`);
+  const ev = (await pool.query(`SELECT * FROM goal_watch WHERE valanga AND ou_tried_at IS NULL AND event_id NOT LIKE 'oa:%'
+    AND commence_time BETWEEN to_timestamp($1::double precision / 1000) + INTERVAL '15 minutes' AND to_timestamp($1::double precision / 1000) + INTERVAL '3 hours'`, [nowMs])).rows;
+  if (!ev.length) return { thor: 'nessuna Valanga in arrivo' };
+  const I = require('./italia');
+  const rem = (await pool.query(`SELECT quota_remaining FROM italia_requests WHERE quota_remaining IS NOT NULL ORDER BY id DESC LIMIT 1`)).rows[0];
+  if (rem) { const plan = await I.planOf(pool, c, Number(rem.quota_remaining), nowMs); if (Number(rem.quota_remaining) <= plan.reserve + 5) return { thor: 'richieste odss da tenere per le chiusure' }; }
+  const failed = new Set((await pool.query(`SELECT note FROM italia_requests WHERE kind = 'ou_valanga' AND note LIKE 'ou:%:0'`)).rows.map(r => r.note.split(':')[1]));
+  const market = OU_MARKETS.find(m => !failed.has(m));
+  if (!market) return { thor: 'mercato Over/Under non trovato su odss' };
+  const books = [...new Set([...c.myBooks, ...c.books])];
+  await pool.query(`UPDATE goal_watch SET ou_tried_at = NOW() WHERE event_id = ANY($1)`, [ev.map(r => r.event_id)]);   // una volta sola, anche se va male
+  let records;
+  try { records = await I.fetchOdds(pool, c, { market, event_id: ev.map(r => r.event_id).join(','), bookmakers: ['pinnacle', ...books].join(',') }, 'ou_valanga', http); }
+  catch (e) { await pool.query(`UPDATE italia_requests SET note = $1 WHERE id = (SELECT MAX(id) FROM italia_requests WHERE kind = 'ou_valanga')`, [`ou:${market}:0`]); return { thor: 'errore', mercato: market, errore: e.message }; }
+  const totals = parseTotals(records);
+  await pool.query(`UPDATE italia_requests SET note = $1 WHERE id = (SELECT MAX(id) FROM italia_requests WHERE kind = 'ou_valanga')`, [`ou:${market}:${totals.size}`]);
+  const pin1x2 = new Map(ev.map(r => [r.event_id, { league: r.league, fair: fair1x2(r.pin_h, r.pin_d, r.pin_a) }]));
+  const found = findGoalSignals(totals, books, pin1x2, nowMs);
+  let nuovi = 0;
+  for (const x of found) {
+    const r = await pool.query(`INSERT INTO goal_signals (strategy, event_id, league, home, away, commence_time, line, side, book, odd, fair_prob, edge_pct, pin_over, pin_under)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (event_id, strategy, line, side) DO NOTHING`,
+      [x.strategy, x.ev.event_id, x.ev.league, x.ev.home, x.ev.away, x.ev.commence_time, x.line, x.side, x.book, x.odd, x.fair_prob, x.edge_pct, x.pin && x.pin.over, x.pin && x.pin.under]);
+    nuovi += r.rowCount;
+  }
+  return { thor: 'letta', mercato: market, partite: ev.length, conQuote: totals.size, nuoviGol: nuovi };
+}
+
 /** Parte 2 (spenta finche' OU_ENABLED non e' 'true'): una richiesta Over/Under per scansione, sugli stessi orari. */
 async function scanTotals(pool, c, { nowMs = Date.now(), http, merged = [], trio } = {}) {
   if (!c.ouEnabled) return { gol: 'spenti' };
@@ -231,5 +270,5 @@ async function getGoals(pool, env = process.env) {
   };
 }
 
-module.exports = { FORMULA, RULES, VALANGA, GSTAR, REFERENCE, fair1x2, expGoals, isValanga, noVig2, goalsOf, sideWon, parseTotals, findGoalSignals, overStats,
+module.exports = { valangaOdds, OU_MARKETS, FORMULA, RULES, VALANGA, GSTAR, REFERENCE, fair1x2, expGoals, isValanga, noVig2, goalsOf, sideWon, parseTotals, findGoalSignals, overStats,
   ensureGoals, watch, settleGoals, pendingWatch, setWatchScore, scanTotals, ouCheck, getGoals };

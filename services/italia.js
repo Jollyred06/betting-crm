@@ -369,7 +369,8 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   // ⚽ gol: prezzo 1X2 di Pinnacle di tutte le partite viste (gratis) e, se accese, le quote Over/Under (una richiesta in piu')
   let golOut = {};
   try { const merged = mergeWithPinnacle(records), G = require('./goals'); golOut.partiteGol = await G.watch(pool, merged, trio, nowMs);
-    try { Object.assign(golOut, await G.scanTotals(pool, c, { nowMs, http, merged, trio })); } catch (e) { golOut.erroreGol = e.message; } } catch (e) { /* facoltativo */ }
+    try { Object.assign(golOut, await G.scanTotals(pool, c, { nowMs, http, merged, trio })); } catch (e) { golOut.erroreGol = e.message; }
+    try { Object.assign(golOut, await G.valangaOdds(pool, c, { nowMs, http })); } catch (e) { golOut.erroreThor = e.message; } } catch (e) { /* facoltativo */ }
   const found = findSignals(records, c, nowMs);
   const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
   const foundT = c.tEnabled ? findSignals(records, cfgFor(c, 'T'), nowMs) : [];
