@@ -18,6 +18,8 @@ const MEMBERS = [
   { key: 'coro', what: '👥 F2+ con 4+ siti d\'accordo', kind: 'star', on: false },
   { key: 'saracinesca', what: '🔒 7 su 10', kind: 'star', on: false },
   { key: 'liquidi8', what: '💧 F2+ nei mercati con margine sotto l\'8%', kind: 'star', on: false },
+  { key: 'strange', what: '⚖️ il pareggio (X dal 2%)', kind: 'star', on: false },
+  { key: 'wolverine', what: '🧓 la veterana F (2–6%, quote 1,60–3,50) fuori dai mercati liquidi', kind: 'star', on: false },
   { key: 'muro', what: '🏠 niente trasferte nei minori', kind: 'filter', on: true }
 ];
 
@@ -75,12 +77,16 @@ async function getTeam(pool, { nowMs = Date.now() } = {}) {
   const mk = (f, o) => { const m = f(all, o); return r => !!(m.get(r.id) || {}).final; };
   const f6 = mk(I.markFinal6, { ignoreSince: true }), f4 = mk(I.markFinal4, { ignoreSince: true }), lq = mk(I.markLiquid, { ignoreSince: true });
   const f8 = mk(I.markFinal8, { ignoreSince: true }), f9 = mk(I.markFinal9, { ignoreSince: true });
+  const dr = mk(I.markDraw), fF = (() => { const m = I.markFinal(I.primaryRows(all)); return r => !!(m.get(r.id) || {}).final; })();
   const sets = {
     fascia: all.filter(r => base(r) && f6(r) && !I.isAwayThin(r)),
     oceano: all.filter(r => base(r) && lq(r)),
     coro: all.filter(r => base(r) && f4(r) && ((consOf(r) || {}).above || 0) >= 4),
     saracinesca: all.filter(r => base(r) && f8(r)),
     liquidi8: all.filter(r => base(r) && f9(r)),
+    strange: all.filter(r => base(r) && dr(r)),
+    // solo quello che AGGIUNGE: le F fuori dai mercati liquidi (quelle liquide le gioca gia' Aquaman)
+    wolverine: I.primaryRows(all).filter(r => base(r) && fF(r) && !((I.pinMarginPct(r) ?? 99) < 6)),
     muro: all.filter(r => base(r) && f6(r) && I.isAwayThin(r))   // le ESCLUSE dal filtro
   };
   const brakeUntil = st.lastChange ? new Date(Date.parse(st.lastChange) + BRAKE_DAYS * 86400000) : null;
