@@ -222,3 +222,15 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.verdictOf({ ...r, odd: 3.0, play: { book: 'Snai', odd: 3.0 }, awayThin: false, selection: 'home', win_prob: 0.4, commence_time: '2026-11-03T18:00:00Z' }, { bc, nowMs: now }).play, 'wait');
   console.log('verdetto ordine e notte: ok');
 }
+// 🧮 voto delle stelle
+{
+  const I = require('../services/italia');
+  const base = { pin_h: 2.0, pin_d: 3.5, pin_a: 4.0, edge_pct: 4, created_at: '2026-11-04T10:00:00Z', commence_time: '2026-11-04T12:00:00Z', selection: 'home', league: 'Serie B', odd: 2.1 };
+  const good = I.scoreOf(base, { above: 5, ratio: 1.0 }), iso = I.scoreOf(base, { above: 1, ratio: 1.2 }), thin = I.scoreOf({ ...base, pin_h: 1.9, pin_d: 3.2, pin_a: 3.5 }, { above: 5, ratio: 1.0 });
+  assert.ok(good.vote > iso.vote && good.vote > thin.vote && good.vote <= 100 && iso.vote >= 0);
+  assert.strictEqual(I.scoreOf({ ...base, pin_h: 0 }), null);
+  const items = [{ id: 1, event_id: 'a', final4: true, final6: true, play: { book: 'Snai', odd: 2.1 }, odd: 2.1, win_prob: 0.5, league: 'Serie B', commence_time: '2099-01-01T00:00:00Z', score: { vote: 40 } },
+    { id: 2, event_id: 'b', final4: true, final6: true, play: { book: 'Snai', odd: 2.1 }, odd: 2.1, win_prob: 0.5, league: 'Serie B', commence_time: '2099-01-01T00:00:00Z', score: { vote: 80 } }];
+  assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate' }), [2, 1]);
+  console.log('voto delle stelle: ok');
+}

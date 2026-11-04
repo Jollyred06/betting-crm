@@ -237,6 +237,7 @@
   .ohero { font-size:13px; line-height:20px; color:var(--muted); margin:3px 0; display:flex; align-items:center; gap:6px; } .ohero span { line-height:20px; } .ohero svg.ehero, .rhead svg.ehero, .verdict svg.ehero { margin:0 !important; }
   .hpow { display:block; font-size:12.5px; color:var(--ok); margin:1px 0 2px; }
   .drawline { margin-top:6px; font-size:13.5px; color:var(--muted); } .drawline.hi { color:var(--warn); font-weight:600; }
+  .vote { margin-left:8px; padding:1px 8px; border-radius:999px; font-weight:800; font-size:12.5px; border:1.5px solid var(--line); color:var(--ink); } .vote.hi { border-color:var(--ok); color:var(--ok); } .vote.lo { border-color:var(--warn); color:var(--warn); } .ohero .vote:first-child { margin-left:0; }
 </style>
 </head>
 <body>
@@ -728,7 +729,9 @@
         ${f.retro && f.retro.measured ? `<div><dt>Stesse regole all'indietro</dt><dd class="muted">${f.retro.signals} segnali · ${itStat(f.retro)}${f.retro.results && f.retro.results.settled ? ' · ' + resVsExp(f.retro.results) : ''}</dd></div>` : ''}</dl></div>`;
     return `<details class="fold"><summary><span>🧪 Prove sulla carta</span><small>non si giocano: tra qualche settimana vediamo se battono le ⭐</small></summary>
       ${row(heroLetter('saracinesca'), 'Hulk · 🔒 7 su 10', '🦸 ' + HERO.saracinesca.p + '. Le ⭐ F2+ che Pinnacle dà vincenti dal 65% (quota circa 1,30–1,55), niente coppe', i.final8)}
-      ${row('💧', 'Liquidi (prova del 1° novembre)', 'Le ⭐ F2+ solo nei mercati più liquidi (margine Pinnacle sotto l\'8%), quota fino a 3,50, niente coppe', i.final9)}      ${i.liquidStar ? (() => { const Lq = i.liquidStar, st = f => `${f.signals} · ${f.measured >= 5 ? `<span class="${cls(f.avgClvPct)}">${itStat(f)}</span>` : 'ancora pochi'} · ${resVsExp(f.results)}`;
+      ${row('💧', 'Liquidi (prova del 1° novembre)', 'Le ⭐ F2+ solo nei mercati più liquidi (margine Pinnacle sotto l\'8%), quota fino a 3,50, niente coppe', i.final9)}      ${i.scoreBands ? `<div class="strat"><div class="sh"><div class="letter" style="font-size:26px">🧮</div><div><b>Il voto delle ⭐</b><span>Dal 4 novembre: la formula stima il valore di ogni segnale (0-100). Se funziona, i voti alti rendono di più</span></div></div>
+        <dl class="facts">${i.scoreBands.map(b => `<div><dt>Voto ${b.hi > 100 ? 'da ' + b.lo : b.lo ? b.lo + '–' + (b.hi - 1) : 'sotto ' + b.hi}</dt><dd>${b.signals} segnali · ${b.measured >= 5 ? `<span class="${cls(b.avgClvPct)}">${itStat(b)}</span>` : 'ancora pochi'} · ${resVsExp(b.results)}</dd></div>`).join('')}</dl></div>` : ''}
+      ${i.liquidStar ? (() => { const Lq = i.liquidStar, st = f => `${f.signals} · ${f.measured >= 5 ? `<span class="${cls(f.avgClvPct)}">${itStat(f)}</span>` : 'ancora pochi'} · ${resVsExp(f.results)}`;
         return `<div class="strat final"><div class="sh">${heroLetter('oceano')}<div><b>Aquaman · 💧 liquide, tra le ⭐ dal 2 novembre</b><small class="hpow">🦸 ${esc(HERO['oceano'].p)}</small><span>Campionati principali (margine Pinnacle sotto il ${num(Lq.rules.maxMarginPct, 0)}%), vantaggio dal ${num(Lq.rules.minEdge, 0)}%, entro 3 ore, niente coppe</span></div></div>
         <dl class="facts"><div><dt>Da oggi</dt><dd>${st(Lq)}</dd></div><div><dt>All'indietro</dt><dd class="muted">${st(Lq.retro)}</dd></div></dl></div>`; })() : ''}
       ${i.homeField ? (() => { const H = i.homeField, st = f => `${f.signals} da oggi · ${f.measured >= 5 ? `<span class="${cls(f.avgClvPct)}">${itStat(f)}</span>` : 'ancora pochi'} · ${resVsExp(f.results)}`;
@@ -905,6 +908,8 @@
   const awayChip = r => r && r.awayThin ? `<span class="chip warnc" title="Nei campionati minori la squadra in trasferta vince meno di quanto dice Pinnacle: dal 1° novembre non è tra le ⭐">${heroImg('muro', 20)}Superman · trasferta nei minori</span>` : '';
   // nelle ⭐ di Oggi solo l'avviso che chiede di fare qualcosa: quota molto sopra gli altri siti, controllare che ci sia ancora
   // 🤝 il pareggio in vista (4 novembre 2026): quasi meta' delle giocate perse e' finita pari. Alto da 28% in su
+  // 🧮 voto 0-100 della ⭐ (stima del valore contro la chiusura): verde da 65, grigio 40-64, giallo sotto 40
+  const voteChip = r => { const v = r && r.score && r.score.vote; if (v === undefined || v === null) return ''; return `<span class="vote ${v >= 65 ? 'hi' : v >= 40 ? 'mid' : 'lo'}" title="Voto della formula: più alto = più valore atteso">🧮 ${v}</span>`; };
   function drawLine(r) {
     if (!r || r.draw_prob === null || r.draw_prob === undefined || r.selection === 'draw') return '';
     const p = r.draw_prob, hi = p >= 0.28;
@@ -931,7 +936,7 @@
     const t = Date.parse(r.commence_time), until = new Date(t - 30 * 60000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     return `<article class="orow${isNow(r) ? ' now' : ''}">
       <div class="ot"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
-      <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.liquid ? 'Aquaman' : 'Capitan America'}</span></div>
+      <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.liquid ? 'Aquaman' : 'Capitan America'}</span>${voteChip(r)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>
         <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}
         ${drawLine(r)}
@@ -1062,7 +1067,7 @@
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="pick"><span>${it && r.play ? `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
             ${it && r.verdict ? `<div class="verdict ${r.verdict.play}"><b>${r.verdict.play === 'yes' ? `🟢 GIOCALA · ${heroImg(r.liquid ? 'oceano' : 'fascia', 22)} ${r.liquid ? 'Aquaman' : 'Capitan America'}` : r.verdict.play === 'wait' ? '🟡 ASPETTA' : '🔴 NON GIOCARE'}</b><span>${esc(r.verdict.text)}</span></div>` : ''}
-            ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? drawLine(r) : ''}
+            ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? `<div class="ohero">${voteChip(r)}</div>` + drawLine(r) : ''}
             ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? bookLink(r) : ''}
             ${it && (r.played || r.skipped || (r.verdict && r.verdict.play === 'yes')) ? playActions(r) : ''}
             ${it && !r.verdict && !r.play && !r.played && !r.skipped ? '<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>' : ''}
