@@ -238,6 +238,7 @@
   .hpow { display:block; font-size:12.5px; color:var(--ok); margin:1px 0 2px; }
   .drawline { margin-top:6px; font-size:13.5px; color:var(--muted); } .drawline.hi { color:var(--warn); font-weight:600; }
   .vote { margin-left:8px; padding:1px 8px; border-radius:999px; font-weight:800; font-size:12.5px; border:1.5px solid var(--line); color:var(--ink); } .vote.hi { border-color:var(--ok); color:var(--ok); } .vote.lo { border-color:var(--warn); color:var(--warn); } .ohero .vote:first-child { margin-left:0; }
+  .trow { display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--line); } .trow span { display:block; } .tstate { font-size:13.5px; margin-top:2px; } .tnum { font-size:12.5px; } .tprop { margin-top:6px; font-size:13.5px; } .tprop .playbtn { margin-top:6px; }
 </style>
 </head>
 <body>
@@ -829,8 +830,8 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L, BK, GL] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null)]);
-      $('italia').innerHTML = ruleCard(i) + heroTeam() + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+      const [i, b, L, BK, GL, TM] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null)]);
+      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + heroTeam() + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
         + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
@@ -893,6 +894,33 @@
   const heroImg = (k, size = 44) => { const h = HERO[k]; if (!h) return ''; return `<span class="eemo" style="font-size:${Math.round(size * 0.78)}px;width:${size}px;height:${size}px" role="img" aria-label="${h.n}">${h.e}</span>`; };
   const heroName = k => (HERO[k] ? HERO[k].n : '');
   const heroLetter = k => `<div class="letter heroL">${heroImg(k, 54)}</div>`;
+  // 🦸 PAGELLA: il CRM giudica ogni strategia e propone chi mettere in campo; si cambia solo con il tuo ok (un cambio ogni 7 giorni)
+  function teamCard(T) {
+    if (!T || !T.members) return '';
+    const g = { green: ['ok', 'in forma'], yellow: ['warn', 'da vedere'], red: ['bad', 'fuori forma'] };
+    const row = m => { const [lv, lab] = g[m.grade] || g.yellow;
+      const nums = m.measured ? `${m.measured} con chiusura · valore ${pct(m.avgClvPct, 1)}${m.clvCi95 ? ` (da ${pct(m.clvCi95[0], 1)} a ${pct(m.clvCi95[1], 1)})` : ''} · ${m.won} vinte su ${m.settled}, attese ${num(m.expected, 1)} · ${signedMoney(m.pnlEur)}` : 'ancora nessun dato';
+      const prop = m.proposal ? `<div class="tprop">💡 Proposta: <b>${m.kind === 'filter' ? (m.proposal === 'off' ? 'togliere questo filtro' : 'rimettere questo filtro') : (m.proposal === 'on' ? 'metterla in campo (le sue partite diventano ⭐)' : 'toglierla dalle ⭐')}</b>
+        <button class="playbtn" ${T.brakeUntil ? 'disabled' : ''} onclick="approveTeam('${m.key}', ${m.proposal === 'on'}, this)">${T.brakeUntil ? 'freno attivo' : 'Approvo'}</button></div>` : '';
+      return `<div class="trow">${heroImg(m.key === 'liquidi8' ? 'oceano' : m.key, 34)}<div><b>${esc(m.key === 'liquidi8' ? 'Aquaman junior' : heroName(m.key))}</b> <small class="muted">${esc(m.what)}</small>
+        <span class="tstate">${m.kind === 'filter' ? (m.on ? '🛡️ filtro attivo' : 'filtro spento') : (m.on ? '⚽ in campo' : '🪑 in panchina')} · ${sdot(lv)} ${lab}</span><span class="muted tnum">${nums}</span>${prop}</div></div>`; };
+    const props = T.members.filter(m => m.proposal).length;
+    return `<div class="strat"><div class="sh"><div class="letter" style="font-size:26px">📋</div><div><b>La pagella della squadra</b><span>Il CRM giudica ogni supereroe su tutti i risultati: 🟢 da ${T.rules.minN} segnali con valore sicuramente positivo e vinte nella norma. Propone, tu approvi${T.brakeUntil ? ` · prossimo cambio dal ${new Date(T.brakeUntil).toLocaleDateString('it-IT')}` : ''}</span></div></div>
+      ${props ? `<div class="callout ok">💡 ${props === 1 ? 'C\'è una proposta' : 'Ci sono ' + props + ' proposte'} da approvare</div>` : '<p class="muted" style="margin:0 0 6px;font-size:14px;">Nessuna proposta: per ora la squadra resta così.</p>'}
+      ${T.members.map(row).join('')}</div>`;
+  }
+  async function approveTeam(hk, on, btn) {
+    if (!(await ensureKey())) return;
+    if (!confirm(`${heroName(hk)}: confermi ${on ? 'in campo' : 'fuori'}? Per 7 giorni non si potranno fare altri cambi.`)) return;
+    btn.disabled = true;
+    try {
+      const r = await fetch('/api/tracker/team/' + hk, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ on, note: 'approvato dalla pagella' }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova.'); btn.disabled = false; return; }
+      if (!r.ok) { alert(d.error || 'Errore ' + r.status); btn.disabled = false; return; }
+      try { memo.clear(); localStorage.removeItem('swr:/api/tracker/team'); localStorage.removeItem('swr:/api/tracker/italia'); } catch (e) { /* facoltativo */ } loadItalia();
+    } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
+  }
   // la squadra al completo, con il superpotere di ognuno
   function heroTeam() {
     const order = [['fascia', '✅ consigliate'], ['oceano', '💧 liquide'], ['muro', '🏠 fattore campo'], ['coro', '👥 consenso dei siti'], ['guardalinee', '⚠️ quota isolata'], ['saracinesca', '🔒 7 su 10'], ['bomber', '💥 Valanga'], ['mago', '📐 formula del pareggio'], ['rapace', '⭐ gol Over/Under'], ['autogol', '🚫 al contrario (bocciata)']];

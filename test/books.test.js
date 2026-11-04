@@ -258,3 +258,20 @@ console.log('books.test.js: tutti i controlli passati');
     console.log('Thor in anticipo: ok');
   })().catch(e => { console.error(e); process.exit(1); });
 }
+// 📋 pagella della squadra
+{
+  const TM = require('../services/team');
+  assert.strictEqual(TM.grade({ measured: 45, avgClvPct: 4, clvCi95: [1, 7], z: -0.5 }), 'green');
+  assert.strictEqual(TM.grade({ measured: 45, avgClvPct: 4, clvCi95: [1, 7], z: -2 }), 'yellow');
+  assert.strictEqual(TM.grade({ measured: 45, avgClvPct: -1, clvCi95: [-3, 1], z: 0 }), 'red');
+  assert.strictEqual(TM.grade({ measured: 20, avgClvPct: 6, clvCi95: [3, 9], z: 1 }), 'yellow');
+  const star = { kind: 'star' }, filt = { kind: 'filter' };
+  assert.strictEqual(TM.propose(star, 'green', false), 'on'); assert.strictEqual(TM.propose(star, 'red', true), 'off'); assert.strictEqual(TM.propose(star, 'green', true), null);
+  assert.strictEqual(TM.propose(filt, 'green', true), 'off'); assert.strictEqual(TM.propose(filt, 'red', false), 'on');
+  const I = require('../services/italia'), ko = '2099-01-01T00:00:00Z', b = { play: { book: 'Snai', odd: 2 }, odd: 2, win_prob: 0.5, league: 'Serie B', commence_time: ko };
+  const items = [{ ...b, id: 1, event_id: 'a', final8: true }, { ...b, id: 2, event_id: 'b', final4: true, final6: true }];
+  assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate' }), [2]);
+  assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', team: { saracinesca: true } }).sort(), [1, 2]);
+  assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', team: { fascia: false, saracinesca: true } }), [1]);
+  console.log('pagella della squadra: ok');
+}

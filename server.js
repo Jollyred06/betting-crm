@@ -46,7 +46,7 @@ app.use('/api', (req, res, next) => {
     res.on('finish', () => { cache.clearMatching(re); cache.warm({ port: PORT, delayMs: 2500, paths: ['/api/tracker/italia', '/api/tracker/played'] }); });
     return next();
   }
-  cache.clear(); res.on('finish', () => cache.clearAndWarm({ port: PORT }));
+  cache.clear(); res.on('finish', () => cache.clearAndWarm({ port: PORT }));   // (anche /team: cambia la lista delle ⭐)
   next();
 });
 app.use('/api/tracker', cache.middleware(5 * 60000));

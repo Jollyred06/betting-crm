@@ -66,7 +66,7 @@ function staticGzip(file) {
  * Ripreparazione in background delle pagine principali (31 ottobre 2026). Si chiama dopo ogni clear:
  * aspetta qualche secondo (piu' salvataggi di fila = una sola ripreparazione) e chiede le pagine al server stesso, una alla volta.
  */
-const WARM_PATHS = ['/api/tracker/italia', '/api/tracker/goals', '/api/tracker/overview', '/api/tracker/health', '/api/tracker/advice', '/api/tracker/milestones', '/api/tracker/bankroll',
+const WARM_PATHS = ['/api/tracker/italia', '/api/tracker/team', '/api/tracker/goals', '/api/tracker/overview', '/api/tracker/health', '/api/tracker/advice', '/api/tracker/milestones', '/api/tracker/bankroll',
   '/api/tracker/played', '/api/tracker/learning', '/api/tracker/italia?s=B', '/api/tracker/training', '/api/tracker/archive?days=7', '/api/tracker/strategies', '/api/tracker/books', '/api/tracker/credits'];
 let warmTimer = null, warming = false, warmed = 0;
 function warm({ port = process.env.PORT || 3000, delayMs = 3000, paths = WARM_PATHS, get = null } = {}) {

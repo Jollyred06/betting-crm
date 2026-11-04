@@ -799,7 +799,9 @@ function winCheck(rows, minN = 30) {
  * Solo F2+ non ancora iniziate, giocabili sui tuoi siti (MY_BOOKS) a quota almeno minima, non gia' giocate;
  * ordinate per valore della quota consigliata, al massimo maxPerDay meno quelle gia' giocate oggi. Niente se il budget e' allo stop.
  */
-function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null, maxOdd = 3.5, noAwayThin = false } = {}) {
+function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null, maxOdd = 3.5, noAwayThin = false, team = null } = {}) {
+  // 4 novembre 2026: la squadra in campo (pagella approvata da Christian). Senza, come prima: consigliate + liquide
+  const tm = { fascia: true, oceano: true, coro: false, saracinesca: false, liquidi8: false, ...(team || {}) };
   if (stopped) return [];
   const room = Math.max(0, maxPerDay - playedToday);
   const value = r => r.play && r.win_prob ? r.play.odd * r.win_prob - 1 : -1;
@@ -813,9 +815,11 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   // perche' sono giocate legate tra loro (se una vince l'altra perde). Non cambia nessuna misura, solo la lista da giocare.
   const seen = new Set();
   // 2 novembre 2026: anche le 💧 liquide (mercato liquido, vantaggio dal 2%), e vengono per prime
-  const okLiq = r => r.liquid && !isCup(r.league) && !(Number(r.odd) > maxOdd) && !(r.play && r.play.odd > maxOdd);
+  const baseOk = r => !isCup(r.league) && !(Number(r.odd) > maxOdd) && !(r.play && r.play.odd > maxOdd);
+  const okLiq = r => tm.oceano && r.liquid && baseOk(r);
+  const okExtra = r => baseOk(r) && ((tm.coro && r.final4 && r.consensus && r.consensus.above >= 4) || (tm.saracinesca && r.final8) || (tm.liquidi8 && r.final9));
   const liq = r => (okLiq(r) ? 1 : 0);
-  return items.filter(r => ((r.final4 && ok(r)) || okLiq(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs)
+  return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs)
     .sort((a, b) => ((b.score ? b.score.vote : -1) - (a.score ? a.score.vote : -1)) || (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);   // 4 novembre: prima il 🧮 voto piu' alto
 }
 
@@ -1046,7 +1050,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     out.budget = budget;
     const bc = budgetCfg(env);
     out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule; out.myBooks = c.myBooks.map(k => BOOK_NAMES[k] || k);
-    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd, noAwayThin: bc.noAwayThin });
+    let team = null; try { team = (await require('./team').stateOf(pool)).on; } catch (e) { /* pagella facoltativa */ }
+    if (team) bc.noAwayThin = bc.noAwayThin && team.muro !== false;
+    out.team = team;
+    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd, noAwayThin: bc.noAwayThin, team });
     out.bestMaxOdd = bc.maxOdd; out.bestNoAwayThin = bc.noAwayThin;
     // 1° novembre 2026: su ogni scheda un verdetto chiaro, GIOCALA o NON GIOCARE con il motivo (solo partite non ancora iniziate)
     const bestSet = new Set(out.best), nowV = Date.now();

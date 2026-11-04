@@ -82,6 +82,15 @@ router.post('/ou-check', async (req, res) => {
   if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
   try { res.json(await require('../services/goals').ouCheck(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// 🦸 pagella della squadra: chi e' in forma, chi mettere in campo (solo numeri) e approvazione di Christian (con la chiave)
+router.get('/team', async (req, res) => {
+  try { res.json(await require('../services/team').getTeam(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+router.post('/team/:key', async (req, res) => {
+  if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json({ success: true, ...(await require('../services/team').setMember(pool, req.params.key, !!(req.body && req.body.on), { note: req.body && req.body.note })) }); }
+  catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
 // 💳 crediti di tutte le piattaforme (solo numeri)
 router.get('/credits', async (req, res) => {
   try { res.json(await require('../services/credits').getCredits(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
