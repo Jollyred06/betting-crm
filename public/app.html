@@ -240,6 +240,8 @@
   .vote { margin-left:8px; padding:1px 8px; border-radius:999px; font-weight:800; font-size:12.5px; border:1.5px solid var(--line); color:var(--ink); } .vote.hi { border-color:var(--ok); color:var(--ok); } .vote.lo { border-color:var(--warn); color:var(--warn); } .ohero .vote:first-child { margin-left:0; }
   .prow { display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--line); } .prow span { display:block; } .tstate { font-size:13.5px; margin-top:2px; } .tnum { font-size:12.5px; } .tprop { margin-top:6px; font-size:13.5px; } .tprop .playbtn { margin-top:6px; }
   .tverd { display:block; margin-top:3px; font-size:13px; } .tverd.yes { color:var(--ok); font-weight:700; } .tverd.wait { color:var(--warn); } .tverd.no { color:var(--muted); }
+  /* 5 novembre 2026: le etichette lunghe vanno a capo invece di uscire dalla scheda (anche con caratteri grandi sul telefono) */
+  .ochips .chip, .foot .chip, .ohero .vote { white-space:normal; max-width:100%; } .ochips .chip, .foot .chip { border-radius:12px; } #trainTabs { grid-auto-flow:row; grid-template-columns:repeat(3, 1fr); } .seg button { min-width:0; } .ochips, .foot { min-width:0; } .om, .tmain { min-width:0; overflow-wrap:anywhere; }
 </style>
 </head>
 <body>
@@ -952,7 +954,7 @@
   function isoChip(r) {
     const k = r && r.consensus; if (!k || !k.median) return '';
     const ratio = (r.play ? r.play.odd : r.odd) / k.median;
-    return ratio > 1.08 ? `<span class="chip warnc">${heroImg('guardalinee', 20)}Loki: quota isolata, controlla che ci sia ancora</span>` : '';
+    return ratio > 1.08 ? `<span class="chip warnc">${heroImg('guardalinee', 20)}Loki · quota isolata: controlla che ci sia</span>` : '';
   }
   function consChip(r) {
     const k = r && r.consensus; if (!k) return awayChip(r) + liqChip(r);
