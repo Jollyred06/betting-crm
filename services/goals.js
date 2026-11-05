@@ -175,7 +175,8 @@ async function setWatchScore(pool, eventId, sc) {
  * Il nome del mercato Over/Under di odss non e' documentato: si prova 'over_under', poi 'totals', 'ou', 'goals';
  * un nome che torna vuoto non si riprova.
  */
-const OU_MARKETS = ['over_under', 'totals', 'ou', 'goals'];
+const OU_MARKETS = ['ou', 'over_under', 'totals', 'goals'];   // 'ou' e' quello giusto (trovato il 4 novembre)
+const THOR_PER_DAY = 3;
 async function valangaOdds(pool, c, { nowMs = Date.now(), http } = {}) {
   if (c.ouEnabled) return { thor: 'ci pensa la lettura completa' };
   await ensureGoals(pool);
@@ -184,6 +185,9 @@ async function valangaOdds(pool, c, { nowMs = Date.now(), http } = {}) {
     AND commence_time BETWEEN to_timestamp($1::double precision / 1000) + INTERVAL '15 minutes' AND to_timestamp($1::double precision / 1000) + INTERVAL '3 hours'`, [nowMs])).rows;
   if (!ev.length) return { thor: 'nessuna Valanga in arrivo' };
   const I = require('./italia');
+  // 5 novembre 2026: al massimo THOR_PER_DAY richieste al giorno, per non togliere controlli alle ⭐ e alle chiusure
+  const today = (await pool.query(`SELECT COUNT(*)::int AS n FROM italia_requests WHERE kind = 'ou_valanga' AND at >= date_trunc('day', NOW())`)).rows[0].n;
+  if (today >= THOR_PER_DAY) return { thor: `tetto di oggi raggiunto (${THOR_PER_DAY})` };
   const rem = (await pool.query(`SELECT quota_remaining FROM italia_requests WHERE quota_remaining IS NOT NULL ORDER BY id DESC LIMIT 1`)).rows[0];
   if (rem) { const plan = await I.planOf(pool, c, Number(rem.quota_remaining), nowMs); if (Number(rem.quota_remaining) <= plan.reserve + 5) return { thor: 'richieste odss da tenere per le chiusure' }; }
   const failed = new Set((await pool.query(`SELECT note FROM italia_requests WHERE kind = 'ou_valanga' AND note LIKE 'ou:%:0'`)).rows.map(r => r.note.split(':')[1]));

@@ -242,6 +242,7 @@ console.log('books.test.js: tutti i controlli passati');
     const ev = { event_id: 'v1', league: 'Tercera', home: 'A', away: 'B', commence_time: '2026-11-04T13:30:00Z', pin_h: 1.2, pin_d: 7, pin_a: 8, valanga: true };
     const pool = { query: async (sql, p) => {
       if (/SELECT \* FROM goal_watch WHERE valanga/.test(sql)) return { rows: calls.length ? [] : [ev] };
+      if (/kind = 'ou_valanga' AND at >=/.test(sql)) return { rows: [{ n: 0 }] };
       if (/quota_remaining FROM italia_requests/.test(sql)) return { rows: [{ quota_remaining: 150 }] };
       if (/kind = 'ou_valanga' AND note LIKE/.test(sql)) return { rows: notes.filter(n => /:0$/.test(n)).map(note => ({ note })) };
       if (/UPDATE italia_requests SET note/.test(sql)) { notes.push(p[0]); return { rows: [] }; }
@@ -253,7 +254,7 @@ console.log('books.test.js: tutti i controlli passati');
     const http = { get: async (url, o) => ({ headers: { 'x-quota-remaining': '149' }, data: { odds: [
       { event_id: 'v1', market: o.params.market, line: 3.5, league: 'Tercera', home_team: 'A', away_team: 'B', commence_time: ev.commence_time, bookmakers: [{ key: 'pinnacle', outcomes: { OVER: 1.9, UNDER: 1.9 } }, { key: 'snai', outcomes: { OVER: 2.0, UNDER: 1.8 } }] }] } }) };
     const r = await G.valangaOdds(pool, c, { nowMs: now, http });
-    assert.strictEqual(r.thor, 'letta'); assert.strictEqual(r.mercato, 'over_under'); assert.strictEqual(r.conQuote, 1); assert.ok(r.nuoviGol >= 1);
+    assert.strictEqual(r.thor, 'letta'); assert.strictEqual(r.mercato, 'ou'); assert.strictEqual(r.conQuote, 1); assert.ok(r.nuoviGol >= 1);
     const r2 = await G.valangaOdds(pool, c, { nowMs: now, http }); assert.strictEqual(r2.thor, 'nessuna Valanga in arrivo');
     console.log('Thor in anticipo: ok');
   })().catch(e => { console.error(e); process.exit(1); });
