@@ -241,7 +241,14 @@
   .prow { display:flex; gap:12px; align-items:flex-start; padding:10px 0; border-top:1px solid var(--line); } .prow span { display:block; } .tstate { font-size:13.5px; margin-top:2px; } .tnum { font-size:12.5px; } .tprop { margin-top:6px; font-size:13.5px; } .tprop .playbtn { margin-top:6px; }
   .tverd { display:block; margin-top:3px; font-size:13px; } .tverd.yes { color:var(--ok); font-weight:700; } .tverd.wait { color:var(--warn); } .tverd.no { color:var(--muted); }
   /* 5 novembre 2026: le etichette lunghe vanno a capo invece di uscire dalla scheda (anche con caratteri grandi sul telefono) */
-  .ochips .chip, .foot .chip, .ohero .vote { white-space:normal; max-width:100%; } .ochips .chip, .foot .chip { border-radius:12px; } #trainTabs { grid-auto-flow:row; grid-template-columns:repeat(3, 1fr); } .seg button { min-width:0; } .ochips, .foot { min-width:0; } .om, .tmain { min-width:0; overflow-wrap:anywhere; }
+  .ochips .chip, .foot .chip, .ohero .vote { white-space:normal; max-width:100%; } .ochips .chip, .foot .chip { border-radius:12px; } #trainTabs { grid-auto-flow:row; grid-template-columns:repeat(3, 1fr); } .seg button { min-width:0; } .ochips, .foot { min-width:0; } .om, .tmain { min-width:0; overflow-wrap:break-word; }
+  /* 5 novembre: la quota non si spezza mai in due righe; sugli schermi stretti (o caratteri grandi) tutto un po' piu' compatto */
+  .odd, .oq, .q { white-space:nowrap; overflow-wrap:normal; word-break:keep-all; flex:none; }
+  @media (max-width: 420px) {
+    .stub { width:56px; padding:10px 2px; } .stub b { font-size:24px; } .stub span { font-size:12px; }
+    .tmain { padding:12px 12px 10px; } .teams { font-size:16px; } .pick { font-size:15px; gap:8px; } .odd { font-size:22px; padding:4px 8px; }
+    .verdict { padding:8px 10px; } .verdict b { font-size:15px; } .verdict span { font-size:13px; }
+  }
 </style>
 </head>
 <body>
