@@ -694,6 +694,24 @@ function markDraw(rows) {
   return out;
 }
 
+// ------------------------------------------------------------------------------------------- 🌊 GLI OCEANI: la formazione titolare (5 novembre 2026)
+/**
+ * Regola fissata il 5 novembre 2026 alle 23:05, scelta da Christian: e' la regola delle ⭐ con i soldi veri.
+ * Mercato liquido (margine Pinnacle sotto il 6%), vantaggio dal 2%, quota da 2,00 a 3,50, niente coppe, appena compare (anche ore prima).
+ * All'indietro (prima lettura): 51 partite, 33 vinte su 19,2 attese, +82,14 euro, positiva in tutte e due le meta', valore +3,9%.
+ */
+const OCEANI = { since: '2026-11-05T22:05:00Z', maxMarginPct: 6, minEdge: 2, minOdd: 2.0, maxOdd: 3.5 };
+function isOceani(r) {
+  const m = r.pin_margin !== undefined ? r.pin_margin : pinMarginPct(r), odd = r.play ? r.play.odd : Number(r.odd);
+  return m !== null && m !== undefined && Number(m) < OCEANI.maxMarginPct && Number(r.edge_pct) >= OCEANI.minEdge && Number(r.odd) >= OCEANI.minOdd && odd >= OCEANI.minOdd && odd <= OCEANI.maxOdd && !isCup(r.league);
+}
+function markOceani(rows) {
+  const out = new Map(), first = new Map();
+  for (const r of [...rows].sort((a, b) => T(a.created_at) - T(b.created_at))) if (isOceani(r) && !first.has(sigKey(r))) first.set(sigKey(r), r);
+  for (const r of rows) out.set(r.id, { final: first.get(sigKey(r)) === r });
+  return out;
+}
+
 // ------------------------------------------------------------------------------------------- ⚡ Flash: le liquide prese in anticipo (5 novembre 2026)
 /**
  * In panchina dal 5 novembre (regola fissata alle 23): le liquide (margine Pinnacle sotto il 6%, vantaggio dal 2%, quota fino a 3,50,
@@ -832,7 +850,7 @@ function winCheck(rows, minN = 30) {
  */
 function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null, maxOdd = 3.5, noAwayThin = false, team = null } = {}) {
   // 4 novembre 2026: la squadra in campo (pagella approvata da Christian). Senza, come prima: consigliate + liquide
-  const tm = { fascia: true, oceano: true, coro: false, saracinesca: false, liquidi8: false, strange: false, wolverine: false, flash: false, ...(team || {}) };
+  const tm = { fascia: true, oceano: true, coro: false, saracinesca: false, liquidi8: false, strange: false, wolverine: false, flash: false, oceani: false, ...(team || {}) };
   if (stopped) return [];
   const room = Math.max(0, maxPerDay - playedToday);
   const value = r => r.play && r.win_prob ? r.play.odd * r.win_prob - 1 : -1;
@@ -848,10 +866,10 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   // 2 novembre 2026: anche le 💧 liquide (mercato liquido, vantaggio dal 2%), e vengono per prime
   const baseOk = r => !isCup(r.league) && !(Number(r.odd) > maxOdd) && !(r.play && r.play.odd > maxOdd);
   const okLiq = r => tm.oceano && r.liquid && baseOk(r);
-  const okExtra = r => baseOk(r) && ((tm.coro && r.final4 && r.consensus && r.consensus.above >= 4) || (tm.saracinesca && r.final8) || (tm.liquidi8 && r.final9) || (tm.strange && r.drawStar) || (tm.flash && r.liquidEarly) || (tm.wolverine && r.final && !(r.pin_margin !== null && r.pin_margin < 6)));
+  const okExtra = r => baseOk(r) && ((tm.coro && r.final4 && r.consensus && r.consensus.above >= 4) || (tm.saracinesca && r.final8) || (tm.liquidi8 && r.final9) || (tm.strange && r.drawStar) || (tm.flash && r.liquidEarly) || (tm.oceani && r.oceani) || (tm.wolverine && r.final && !(r.pin_margin !== null && r.pin_margin < 6)));
   const liq = r => (okLiq(r) ? 1 : 0);
   return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs)
-    .sort((a, b) => ((b.score ? b.score.vote : -1) - (a.score ? a.score.vote : -1)) || (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);   // 4 novembre: prima il 🧮 voto piu' alto
+    .sort((a, b) => ((tm.oceani && b.oceani ? 1 : 0) - (tm.oceani && a.oceani ? 1 : 0)) || ((b.score ? b.score.vote : -1) - (a.score ? a.score.vote : -1)) || (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);   // 4 novembre: prima il 🧮 voto piu' alto
 }
 
 /**
@@ -865,7 +883,7 @@ function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now
   const n2 = v => Number(v).toFixed(2).replace('.', ',');
   const mine = Object.entries(r.alt || {}).map(([b, v]) => `${b} ${n2(v)}`).join(', ');
   if (best.has(r.id) && r.play) return { play: 'yes', text: `Giocala su ${r.play.book} a ${n2(r.play.odd)} o più (minimo ${n2(r.min_odd)})` };
-  if (budget.stopped) return { play: 'no', text: 'Stop del budget raggiunto: niente giocate' };
+  if (budget.stopped) return { play: 'no', text: budget.stopWhy ? `Freno: ${budget.stopWhy}` : 'Stop del budget raggiunto: niente giocate' };
   // 2 novembre 2026: prima i motivi che non cambiano col tempo (coppa, quota alta, campionato minore), poi l'attesa
   const liqOk = r.liquid || (r.pin_margin !== null && r.pin_margin !== undefined && Number(r.pin_margin) < LIQUID.maxMarginPct && Number(r.edge_pct) >= LIQUID.minEdge);
   if (isCup(r.league)) return { play: 'no', text: 'Partita di coppa: formazioni incerte' };
@@ -891,6 +909,7 @@ function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now
 }
 
 /** Budget dalle giocate vere: partenza + saldo delle chiuse; "in gioco" = puntate ancora senza risultato. */
+const STOPS = { dayLosses: 3, weekLossEur: 15 };
 function budgetOf(played, c, nowMs = Date.now()) {
   const items = (played && played.items) || [];
   const pnl = items.reduce((a, x) => a + (x.pnlEur || 0), 0);
@@ -898,7 +917,15 @@ function budgetOf(played, c, nowMs = Date.now()) {
   const today = ROME_DAY.format(new Date(nowMs));
   const playedToday = items.filter(x => ROME_DAY.format(new Date(x.at)) === today).length;
   const balance = c.start + pnl;
-  return { start: c.start, stop: c.stop, maxPerDay: c.maxPerDay, balance, pnl, open, count: items.length, playedToday, stopped: balance <= c.stop };
+  // 5 novembre 2026: freni sulle perdite. Giorno: 3 perse oggi = basta per oggi. Settimana (da lunedi', ora italiana): -15 euro = pausa fino a lunedi'
+  const lostToday = items.filter(x => ROME_DAY.format(new Date(x.at)) === today && x.result === 'lost').length;
+  const wd = (new Date(new Date(nowMs).toLocaleString('en-US', { timeZone: 'Europe/Rome' })).getDay() + 6) % 7;   // 0 = lunedi'
+  const weekStart = nowMs - wd * 86400000, wkDays = new Set(Array.from({ length: wd + 1 }, (_, i) => ROME_DAY.format(new Date(weekStart + i * 86400000))));
+  const weekPnl = items.filter(x => wkDays.has(ROME_DAY.format(new Date(x.at)))).reduce((a, x) => a + (x.pnlEur || 0), 0);
+  const dayStop = lostToday >= STOPS.dayLosses, weekStop = weekPnl <= -STOPS.weekLossEur;
+  return { start: c.start, stop: c.stop, maxPerDay: c.maxPerDay, balance, pnl, open, count: items.length, playedToday, lostToday, weekPnl,
+    dayStop, weekStop, stopRule: STOPS, stopped: balance <= c.stop || dayStop || weekStop,
+    stopWhy: balance <= c.stop ? 'stop del budget' : weekStop ? `settimana a ${weekPnl.toFixed(2)} €: pausa fino a lunedì` : dayStop ? `${lostToday} perse oggi: basta per oggi` : null };
 }
 
 // ------------------------------------------------------------------------------------------- riepilogo per l'app
@@ -1064,6 +1091,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       liquid: !!(liqMap.get(r.id) || {}).final,
       drawStar: !!(drawMap.get(r.id) || {}).final,
       liquidEarly: !!(earlyMap.get(r.id) || {}).final,
+      oceani: isOceani(r),
       draw_prob: (() => { const o = { home: Number(r.pin_h), draw: Number(r.pin_d), away: Number(r.pin_a) }; return o.home > 1 && o.draw > 1 && o.away > 1 ? noVigPower(o).draw : null; })(),
       final5: !!(fin5.get(r.id) || {}).final,
       final6: !!(fin6.get(r.id) || {}).final,
@@ -1095,7 +1123,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     for (const r of out.recent) r.verdict = verdictOf(r, { best: bestSet, budget, bc, nowMs: nowV, toHour: c.toHour });
     // vinte contro attese della lista da giocare (stesse regole: selezione, niente coppe, quota fino al massimo)
     const ruleRows0 = bc.rule === 'consigliate' ? fin6Rows : bc.rule === 'sicure' ? fin5Rows : fin4Rows;
-    const ruleRows = [...ruleRows0, ...liqRows.filter(r => !ruleRows0.includes(r))];   // con le 💧 liquide dal 2 novembre
+    let ruleRows = [...ruleRows0, ...liqRows.filter(r => !ruleRows0.includes(r))];   // con le 💧 liquide dal 2 novembre
+    // dal 5 novembre: se in campo ci sono 🌊 Gli Oceani, il controllo della lista guarda le loro partite (da quando c'e' la regola)
+    if (team && team.oceani) { const mo = markOceani(all), t0 = T(OCEANI.since); ruleRows = all.filter(r => (mo.get(r.id) || {}).final && T(r.created_at) >= t0); }
+    if (team && team.oceani) out.ruleStats = { ...oddsStats(ruleRows), since: OCEANI.since };
     // 🧮 il voto si misura: da quando c'e' (4 novembre, 8:00) per fasce, sui segnali I (ultima lettura)
     { const t0 = T('2026-11-04T07:00:00Z'), lr = latestRows(all).filter(r => T(r.created_at) >= t0).map(r => ({ r, v: (scoreOf(r, consOf(r)) || {}).vote })).filter(x => x.v !== undefined);
       const band = (lo, hi) => { const l = lr.filter(x => x.v >= lo && x.v < hi).map(x => x.r); return { lo, hi, ...oddsStats(l), results: R.resultStats(l) }; };
@@ -1111,4 +1142,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { STOPS, OCEANI, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

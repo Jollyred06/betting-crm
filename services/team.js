@@ -3,8 +3,8 @@
  * su TUTTI i risultati che ha (le regole applicate anche all'indietro), e PROPONE chi mettere in campo (tra le ⭐) e chi togliere.
  * Niente cambia da solo: Christian approva con un tocco. Al massimo un cambiamento ogni 7 giorni (i freni).
  *
- *  🟢 in forma:  almeno 40 segnali con chiusura, valore contro la chiusura sicuramente positivo (forchetta sopra lo zero)
- *               e vinte non sotto le attese oltre la normale sfortuna (z sopra -1,5)
+ *  🟢 in forma:  almeno 40 segnali con chiusura, valore contro la chiusura sicuramente positivo (forchetta sopra lo zero),
+ *               vinte non sotto le attese oltre la normale sfortuna (z sopra -1,5) e saldo sulla carta non negativo
  *  🔴 fuori forma: almeno 40 segnali e valore medio negativo, oppure vinte molto sotto le attese (z sotto -2,5)
  *  🟡 da vedere:  tutto il resto (pochi dati o numeri incerti)
  * Quote fino al massimo della lista (3,50) e niente coppe, come le ⭐.
@@ -13,8 +13,9 @@ const MIN_N = 40, Z_OK = -1.5, Z_BAD = -2.5, BRAKE_DAYS = 7;
 
 // chi c'e' in squadra: kind 'star' = le sue partite diventano ⭐ quando e' in campo; 'filter' = una regola che toglie partite
 const MEMBERS = [
-  { key: 'fascia', what: '✅ consigliate', kind: 'star', on: true },
-  { key: 'oceano', what: '💧 liquide', kind: 'star', on: true },
+  { key: 'oceani', what: '🏆 formazione titolare: liquide, vantaggio dal 2%, quota 2,00–3,50, appena compare', kind: 'star', on: true },
+  { key: 'fascia', what: '✅ consigliate', kind: 'star', on: false },
+  { key: 'oceano', what: '💧 liquide (ultime 3 ore)', kind: 'star', on: false },
   { key: 'coro', what: '👥 F2+ con 4+ siti d\'accordo', kind: 'star', on: false },
   { key: 'saracinesca', what: '🔒 7 su 10', kind: 'star', on: false },
   { key: 'liquidi8', what: '💧 F2+ nei mercati con margine sotto l\'8%', kind: 'star', on: false },
@@ -28,7 +29,8 @@ const MEMBERS = [
 function grade(st) {
   const n = st.measured || 0, ci = st.clvCi95, z = st.z;
   if (n >= MIN_N && ((st.avgClvPct !== null && st.avgClvPct < 0) || (z !== null && z < Z_BAD))) return 'red';
-  if (n >= MIN_N && ci && ci[0] > 0 && (z === null || z > Z_OK)) return 'green';
+  // 5 novembre 2026: per essere 🟢 deve anche NON perdere soldi (nei campionati minori il valore contro Pinnacle puo' illudere)
+  if (n >= MIN_N && ci && ci[0] > 0 && (z === null || z > Z_OK) && !(st.pnlEur < 0)) return 'green';
   return 'yellow';
 }
 /** Proposta per un membro: per le strategie, in campo se 🟢 e fuori se 🔴; per i filtri il gruppo misurato e' quello ESCLUSO:
@@ -78,13 +80,14 @@ async function getTeam(pool, { nowMs = Date.now() } = {}) {
   const mk = (f, o) => { const m = f(all, o); return r => !!(m.get(r.id) || {}).final; };
   const f6 = mk(I.markFinal6, { ignoreSince: true }), f4 = mk(I.markFinal4, { ignoreSince: true }), lq = mk(I.markLiquid, { ignoreSince: true });
   const f8 = mk(I.markFinal8, { ignoreSince: true }), f9 = mk(I.markFinal9, { ignoreSince: true });
-  const fl = mk(I.markLiquidEarly), dr = mk(I.markDraw), fF = (() => { const m = I.markFinal(I.primaryRows(all)); return r => !!(m.get(r.id) || {}).final; })();
+  const oc = mk(I.markOceani), fl = mk(I.markLiquidEarly), dr = mk(I.markDraw), fF = (() => { const m = I.markFinal(I.primaryRows(all)); return r => !!(m.get(r.id) || {}).final; })();
   const sets = {
     fascia: all.filter(r => base(r) && f6(r) && !I.isAwayThin(r)),
     oceano: all.filter(r => base(r) && lq(r)),
     coro: all.filter(r => base(r) && f4(r) && ((consOf(r) || {}).above || 0) >= 4),
     saracinesca: all.filter(r => base(r) && f8(r)),
     liquidi8: all.filter(r => base(r) && f9(r)),
+    oceani: all.filter(r => oc(r)),
     flash: all.filter(r => base(r) && fl(r)),
     strange: all.filter(r => base(r) && dr(r)),
     // solo quello che AGGIUNGE: le F fuori dai mercati liquidi (quelle liquide le gioca gia' Aquaman)
@@ -94,7 +97,7 @@ async function getTeam(pool, { nowMs = Date.now() } = {}) {
   const brakeUntil = st.lastChange ? new Date(Date.parse(st.lastChange) + BRAKE_DAYS * 86400000) : null;
   const members = MEMBERS.map(m => {
     const rows = sets[m.key], s = I.oddsStats(rows), z = zOf(rows), res = R.resultStats(rows);
-    const g = grade({ ...s, z: z.z }), on = st.on[m.key];
+    const g = grade({ ...s, z: z.z, pnlEur: res.pnlEur }), on = st.on[m.key];
     return { key: m.key, what: m.what, kind: m.kind, on, grade: g, proposal: propose(m, g, on),
       signals: rows.length, measured: s.measured, avgClvPct: s.avgClvPct, clvCi95: s.clvCi95, positivePct: s.positivePct,
       settled: z.settled, won: z.won, expected: z.expected, z: z.z, pnlEur: res.pnlEur };

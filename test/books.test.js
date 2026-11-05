@@ -266,6 +266,7 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(TM.grade({ measured: 45, avgClvPct: 4, clvCi95: [1, 7], z: -2 }), 'yellow');
   assert.strictEqual(TM.grade({ measured: 45, avgClvPct: -1, clvCi95: [-3, 1], z: 0 }), 'red');
   assert.strictEqual(TM.grade({ measured: 20, avgClvPct: 6, clvCi95: [3, 9], z: 1 }), 'yellow');
+  assert.strictEqual(TM.grade({ measured: 45, avgClvPct: 7, clvCi95: [5, 9], z: -1, pnlEur: -12 }), 'yellow');   // valore alto ma soldi persi: non e' in forma
   const star = { kind: 'star' }, filt = { kind: 'filter' };
   assert.strictEqual(TM.propose(star, 'green', false), 'on'); assert.strictEqual(TM.propose(star, 'red', true), 'off'); assert.strictEqual(TM.propose(star, 'green', true), null);
   assert.strictEqual(TM.propose(filt, 'green', true), 'off'); assert.strictEqual(TM.propose(filt, 'red', false), 'on');
@@ -275,4 +276,27 @@ console.log('books.test.js: tutti i controlli passati');
   assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', team: { saracinesca: true } }).sort(), [1, 2]);
   assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', team: { fascia: false, saracinesca: true } }), [1]);
   console.log('pagella della squadra: ok');
+}
+// 🌊 Gli Oceani e i freni sulle perdite
+{
+  const I = require('../services/italia');
+  const r = { pin_margin: 4, edge_pct: 2.5, odd: 2.4, league: 'Serie B', play: { book: 'Snai', odd: 2.4 } };
+  assert.strictEqual(I.isOceani(r), true);
+  assert.strictEqual(I.isOceani({ ...r, pin_margin: 7 }), false);
+  assert.strictEqual(I.isOceani({ ...r, odd: 1.8, play: { book: 'Snai', odd: 1.8 } }), false);
+  assert.strictEqual(I.isOceani({ ...r, odd: 3.8, play: { book: 'Snai', odd: 3.8 } }), false);
+  assert.strictEqual(I.isOceani({ ...r, league: 'Coppa Italia' }), false);
+  const c = { start: 100, stop: 60, maxPerDay: 10 }, now = Date.parse('2026-11-05T18:00:00Z');   // giovedi'
+  const L = (at, res, p) => ({ at, result: res, pnlEur: p, stake: 2 });
+  assert.strictEqual(I.budgetOf({ items: [L('2026-11-05T10:00:00Z', 'lost', -2), L('2026-11-05T11:00:00Z', 'lost', -2)] }, c, now).stopped, false);
+  const b3 = I.budgetOf({ items: [L('2026-11-05T10:00:00Z', 'lost', -2), L('2026-11-05T11:00:00Z', 'lost', -2), L('2026-11-05T12:00:00Z', 'lost', -2)] }, c, now);
+  assert.strictEqual(b3.dayStop, true); assert.strictEqual(b3.stopped, true);
+  const wk = I.budgetOf({ items: [L('2026-11-03T10:00:00Z', 'lost', -8), L('2026-11-04T10:00:00Z', 'lost', -8)] }, c, now);
+  assert.strictEqual(wk.weekStop, true);
+  assert.strictEqual(I.budgetOf({ items: [L('2026-10-30T10:00:00Z', 'lost', -8), L('2026-10-31T10:00:00Z', 'lost', -8)] }, c, now).weekStop, false);   // settimana scorsa
+  const items = [{ id: 1, event_id: 'a', oceani: true, play: { book: 'Snai', odd: 2.4 }, odd: 2.4, league: 'Serie B', commence_time: '2099-01-01T00:00:00Z', score: { vote: 30 } },
+    { id: 2, event_id: 'b', final4: true, final6: true, play: { book: 'Snai', odd: 2.1 }, odd: 2.1, win_prob: 0.5, league: 'Serie C', commence_time: '2099-01-01T00:00:00Z', score: { vote: 80 } }];
+  assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', team: { oceani: true, fascia: false, oceano: false } }), [1]);
+  assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', team: { oceani: true } }), [1, 2]);   // le Oceani per prime
+  console.log('Oceani e freni: ok');
 }
