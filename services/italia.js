@@ -694,6 +694,22 @@ function markDraw(rows) {
   return out;
 }
 
+// ------------------------------------------------------------------------------------------- ⚡ Flash: le liquide prese in anticipo (5 novembre 2026)
+/**
+ * In panchina dal 5 novembre (regola fissata alle 23): le liquide (margine Pinnacle sotto il 6%, vantaggio dal 2%, quota fino a 3,50,
+ * niente coppe) viste PIU' di 3 ore prima, alla prima lettura. All'indietro: 43 segnali, 24 vinte su 18,3 attese, +37,30 euro,
+ * positive in tutte e due le meta'. Prende la quota prima che scenda (il motivo di quasi tutte le "non giocate").
+ */
+function markLiquidEarly(rows) {
+  const out = new Map(), first = new Map();
+  for (const r of [...rows].sort((a, b) => T(a.created_at) - T(b.created_at))) if (!first.has(sigKey(r))) first.set(sigKey(r), r);
+  for (const r of rows) {
+    const lead = (T(r.commence_time) - T(r.created_at)) / 3600000, m = pinMarginPct(r);
+    out.set(r.id, { final: first.get(sigKey(r)) === r && lead > LIQUID.maxLeadHours && Number(r.edge_pct) >= LIQUID.minEdge && m !== null && m < LIQUID.maxMarginPct && !isCup(r.league) });
+  }
+  return out;
+}
+
 // ------------------------------------------------------------------------------------------- 🧮 punteggio delle ⭐ (4 novembre 2026)
 /**
  * Formula trovata il 4 novembre 2026 sui 300 segnali I con chiusura (backup delle 3): stima il valore contro la chiusura
@@ -816,7 +832,7 @@ function winCheck(rows, minN = 30) {
  */
 function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, stopped = false, onlySafe = false, rule = null, maxOdd = 3.5, noAwayThin = false, team = null } = {}) {
   // 4 novembre 2026: la squadra in campo (pagella approvata da Christian). Senza, come prima: consigliate + liquide
-  const tm = { fascia: true, oceano: true, coro: false, saracinesca: false, liquidi8: false, strange: false, wolverine: false, ...(team || {}) };
+  const tm = { fascia: true, oceano: true, coro: false, saracinesca: false, liquidi8: false, strange: false, wolverine: false, flash: false, ...(team || {}) };
   if (stopped) return [];
   const room = Math.max(0, maxPerDay - playedToday);
   const value = r => r.play && r.win_prob ? r.play.odd * r.win_prob - 1 : -1;
@@ -832,7 +848,7 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   // 2 novembre 2026: anche le 💧 liquide (mercato liquido, vantaggio dal 2%), e vengono per prime
   const baseOk = r => !isCup(r.league) && !(Number(r.odd) > maxOdd) && !(r.play && r.play.odd > maxOdd);
   const okLiq = r => tm.oceano && r.liquid && baseOk(r);
-  const okExtra = r => baseOk(r) && ((tm.coro && r.final4 && r.consensus && r.consensus.above >= 4) || (tm.saracinesca && r.final8) || (tm.liquidi8 && r.final9) || (tm.strange && r.drawStar) || (tm.wolverine && r.final && !(r.pin_margin !== null && r.pin_margin < 6)));
+  const okExtra = r => baseOk(r) && ((tm.coro && r.final4 && r.consensus && r.consensus.above >= 4) || (tm.saracinesca && r.final8) || (tm.liquidi8 && r.final9) || (tm.strange && r.drawStar) || (tm.flash && r.liquidEarly) || (tm.wolverine && r.final && !(r.pin_margin !== null && r.pin_margin < 6)));
   const liq = r => (okLiq(r) ? 1 : 0);
   return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs)
     .sort((a, b) => ((b.score ? b.score.vote : -1) - (a.score ? a.score.vote : -1)) || (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);   // 4 novembre: prima il 🧮 voto piu' alto
@@ -968,6 +984,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const retro5Rows = all.filter(r => retro5.get(r.id) && retro5.get(r.id).final);
   const fin6 = strategy === 'I' ? markFinal6(all) : new Map();
   const drawMap = strategy === 'I' ? markDraw(all) : new Map();
+  const earlyMap = strategy === 'I' ? markLiquidEarly(all) : new Map();
   const liqMap = strategy === 'I' ? markLiquid(all) : new Map(), liqRows = all.filter(r => (liqMap.get(r.id) || {}).final);
   const liqRetro = strategy === 'I' ? (() => { const m = markLiquid(all, { ignoreSince: true }); return all.filter(r => (m.get(r.id) || {}).final); })() : [];
   const fin6Rows = all.filter(r => fin6.get(r.id) && fin6.get(r.id).final);
@@ -1046,6 +1063,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       final4: !!(fin4.get(r.id) || {}).final,
       liquid: !!(liqMap.get(r.id) || {}).final,
       drawStar: !!(drawMap.get(r.id) || {}).final,
+      liquidEarly: !!(earlyMap.get(r.id) || {}).final,
       draw_prob: (() => { const o = { home: Number(r.pin_h), draw: Number(r.pin_d), away: Number(r.pin_a) }; return o.home > 1 && o.draw > 1 && o.away > 1 ? noVigPower(o).draw : null; })(),
       final5: !!(fin5.get(r.id) || {}).final,
       final6: !!(fin6.get(r.id) || {}).final,
@@ -1093,4 +1111,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
