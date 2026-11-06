@@ -300,3 +300,23 @@ console.log('books.test.js: tutti i controlli passati');
   assert.deepStrictEqual(I.pickBest(items, { rule: 'consigliate', team: { oceani: true } }), [1, 2]);   // le Oceani per prime
   console.log('Oceani e freni: ok');
 }
+
+(async () => {   // 6 novembre 2026: le ⭐ Justice League prendono la chiusura anche sotto la soglia di vantaggio delle chiusure
+  const I = require('../services/italia');
+  const now = Date.parse('2026-11-06T20:50:00Z'), ko = '2026-11-06T21:00:00Z';
+  const cand = [
+    { id: 1, event_id: 'e1', selection: 'home', odd: 3.2, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Primera A', pin_h: 3.6, pin_d: 3.3, pin_a: 2.2 },     // ⭐ con vantaggio 2,5%
+    { id: 2, event_id: 'e2', selection: 'home', odd: 1.9, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Ligue 2', pin_h: 2.0, pin_d: 3.0, pin_a: 3.6 }        // non ⭐, sotto soglia
+  ];
+  const asked = [];
+  const pool = { query: async (sql) => {
+    if (/FROM italia_signals\s+WHERE commence_time/.test(sql)) return { rows: cand };
+    if (/COUNT\(\*\)::int AS n FROM italia_requests/.test(sql)) return { rows: [{ n: 0 }] };
+    if (/quota_remaining FROM italia_requests/.test(sql)) return { rows: [{ quota_remaining: 100 }] };
+    return { rows: [], rowCount: 0 };
+  } };
+  const http = { get: async (url, o) => { asked.push(o.params.event_id); return { data: { odds: [] }, headers: {} }; } };
+  await I.captureClosing(pool, { closeWindowMin: 45, closeMinEdge: 4, closeTriggerMin: 15, monthlyCap: 9999, books: [], myBooks: [], key: 'x' }, { nowMs: now, http });
+  assert.deepStrictEqual(asked, ['e1']);
+  console.log('Chiusure delle ⭐: ok');
+})().catch(e => { console.error(e); process.exit(1); });

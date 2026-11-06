@@ -399,11 +399,14 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
 }
 
 async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
-  const { rows } = await pool.query(
-    `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min, COALESCE(strategy, 'I') AS strategy FROM italia_signals
+  const { rows: cand } = await pool.query(
+    `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min, COALESCE(strategy, 'I') AS strategy, edge_pct, league, pin_h, pin_d, pin_a FROM italia_signals
      WHERE commence_time > to_timestamp($1::double precision / 1000) AND commence_time <= to_timestamp($1::double precision / 1000) + make_interval(mins => $2::int)
-       AND close_captured_at IS NULL AND close_tried_at IS NULL AND COALESCE(edge_pct, 0) >= $3`,
-    [nowMs, c.closeWindowMin, c.closeMinEdge]);
+       AND close_captured_at IS NULL AND close_tried_at IS NULL`,
+    [nowMs, c.closeWindowMin]);
+  // 6 novembre 2026: le ⭐ della Justice League (vantaggio dal 2%) prendono SEMPRE la chiusura, anche sotto la soglia di vantaggio
+  // delle chiusure (ITALIA_CLOSE_MIN_EDGE): prima quelle tra 2% e 4% non venivano mai misurate e la pagella non poteva giudicarle.
+  const rows = cand.filter(r => Number(r.edge_pct || 0) >= c.closeMinEdge || (r.strategy === 'I' && isOceani(r)));
   // 1° novembre 2026: anche i segnali T (tutti i siti italiani) prendono la chiusura, per giudicare i bookmaker sul valore.
   // Non fanno mai partire una richiesta da soli: si aggiungono a quella dei segnali I e B (una richiesta = stesso costo).
   if (!rows.some(r => r.strategy !== 'T')) return { chiusure: 0 };
@@ -1142,4 +1145,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { STOPS, OCEANI, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { captureClosing, STOPS, OCEANI, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

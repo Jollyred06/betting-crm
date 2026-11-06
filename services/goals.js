@@ -176,7 +176,7 @@ async function setWatchScore(pool, eventId, sc) {
  * un nome che torna vuoto non si riprova.
  */
 const OU_MARKETS = ['ou', 'over_under', 'totals', 'goals'];   // 'ou' e' quello giusto (trovato il 4 novembre)
-const THOR_PER_DAY = 3;
+const THOR_PER_DAY = 2;   // 6 novembre 2026: da 3 a 2, il credito in piu' va alle chiusure delle ⭐
 async function valangaOdds(pool, c, { nowMs = Date.now(), http } = {}) {
   if (c.ouEnabled) return { thor: 'ci pensa la lettura completa' };
   await ensureGoals(pool);
