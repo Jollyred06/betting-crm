@@ -60,7 +60,8 @@ function buildBooks(rows, { my = ['888sport_it', 'snai'], names = {}, nowMs = Da
   for (const key of my) {   // anche i miei siti senza segnali: e' proprio quando spariscono che servono gli avvisi
     const p = presence(key), b = books.find(x => x.key === key), name = names[key] || key;
     if (p.recent !== null && p.before !== null && p.nRecent >= 10 && p.nBefore >= 20 && p.before >= 0.5 && p.recent < p.before * 0.5)
-      alerts.push({ level: 'bad', kind: 'sparisce', book: name, text: `${name}: negli ultimi 3 giorni ha la quota solo sul ${Math.round(100 * p.recent)}% delle partite (prima ${Math.round(100 * p.before)}%). Se non trovi più le quote sul sito, potrebbe averti limitato il conto.` });
+      // 6 novembre 2026: le quote arrivano dal servizio dati, non dal conto di Christian: il calo e' nei dati, non un limite al conto
+      alerts.push({ level: 'info', kind: 'sparisce', book: name, text: `${name}: negli ultimi 3 giorni compare solo sul ${Math.round(100 * p.recent)}% delle partite (prima ${Math.round(100 * p.before)}%). È un calo nei dati delle quote, non riguarda il tuo conto: per ora da ${name} arriveranno meno segnali.` });
     if (b) b.presence = p;
   }
   const missed = books.filter(b => !b.mine).reduce((a, b) => a + b.recent14, 0);

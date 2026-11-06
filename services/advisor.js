@@ -120,7 +120,7 @@ async function getAdvice(pool) {
     }
   } catch (e) { /* facoltativo */ }
   // 1° novembre 2026: avvisi sui bookmaker (sito da aprire, sito in calo, quote che spariscono)
-  try { for (const x of (await require('./books').getBooks(pool)).alerts) advice.push({ level: x.level === 'bad' ? 'bad' : 'info', key: 'libro', title: x.kind === 'apri' ? `📊 Sito da valutare: ${x.book}` : x.kind === 'calo' ? `📊 ${x.book} in calo` : `📊 ${x.book}: quote che spariscono`, text: x.text }); }
+  try { for (const x of (await require('./books').getBooks(pool)).alerts) advice.push({ level: x.level === 'bad' ? 'bad' : 'info', key: 'libro', title: x.kind === 'apri' ? `📊 Sito da valutare: ${x.book}` : x.kind === 'calo' ? `📊 ${x.book} in calo` : `📊 ${x.book}: meno quote nei dati`, text: x.text }); }
   catch (e) { /* facoltativo */ }
   return { advice, minN: MIN_N, updatedAt: new Date().toISOString() };
 }
