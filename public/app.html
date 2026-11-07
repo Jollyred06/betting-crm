@@ -1501,16 +1501,27 @@
     const text = lastRuns.map(r => `=== ${r.at} (${r.success ? 'ok' : 'errore'}) ===\n${r.success ? r.lines.map(l => l.text).join('\n') : r.error}`).join('\n\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' })); a.download = 'log_tracker.txt'; a.click();
   }
+  // 7 novembre 2026: le impostazioni mostrano le regole vere (Justice League, livelli, siti, freni); la vecchia strategia A e' in fondo, in archivio
   async function loadInfo() {
     try {
-      const c = await getJson('/api/tracker/config');
-      const tg = c.notify.telegram || c.notify.email || c.notify.whatsapp;
-      $('config').innerHTML = `
-        <div>${marker('info')}<div><b>Campionati seguiti (${c.competitions.length})</b><span class="muted">${c.competitions.map(x => esc(x.name)).join(', ')}</span></div></div>
-        <div>${marker('info')}<div><b>Vantaggio minimo</b><span class="muted">${num(c.minEdgePct, 1)}%, massimo ${c.maxEdgePct}%: sopra, di solito è una quota sbagliata</span></div></div>
-        <div>${marker('info')}<div><b>Puntata di carta</b><span class="muted">${c.stake}€ fissi per ogni segnale, non sono soldi veri</span></div></div>
-        <div>${marker('info')}<div><b>Massimo segnali al giorno</b><span class="muted">${c.maxDailySignals}</span></div></div>
-        <div>${marker(tg ? 'ok' : 'warn')}<div><b>Riepilogo come messaggio</b><span class="muted">${[c.notify.telegram && 'Telegram', c.notify.email && 'email', c.notify.whatsapp && 'WhatsApp'].filter(Boolean).join(', ') || 'Non collegato: il riepilogo si legge qui in Home e in Azioni.'}</span></div></div>`;
+      const [c, i] = await Promise.all([getJson('/api/tracker/config'), getJson('/api/tracker/italia').catch(() => null)]);
+      const tg = c.notify.telegram || c.notify.email || c.notify.whatsapp, b = (i && i.budget) || {}, tm = (i && i.team) || {}, sr = b.stopRule || {};
+      const onKeys = Object.keys(tm).filter(k => tm[k] && HERO[k]);
+      const item = (lv, t, v) => `<div>${marker(lv)}<div><b>${t}</b><span class="muted">${v}</span></div></div>`;
+      $('config').innerHTML = [
+        item('ok', '🦸 La regola che giochi', tm.oceani ? 'Justice League: campionati grandi (margine Pinnacle sotto il 6%), vantaggio dal 2%, quota da 2,00 a 3,50, niente coppe, appena compare' : 'Le ⭐ in Oggi'),
+        item('info', 'I livelli', '💎 Top: vantaggio dal 3% e margine sotto il 5% · ⭐ Buona: le altre Justice League · ⚪ Debole: tutto il resto, registrato ma da non giocare'),
+        item('info', 'In campo', onKeys.length ? onKeys.map(k => `${HERO[k].e} ${esc(HERO[k].n)}`).join(', ') + ' · i cambi li propone la pagella in Analisi, li approvi tu' : '—'),
+        item(i && i.myBooks && i.myBooks.length ? 'ok' : 'warn', 'I tuoi siti', i && i.myBooks && i.myBooks.length ? esc(i.myBooks.join(', ')) + ' · si cambiano su Render, variabile MY_BOOKS' : 'Non impostati: su Render, variabile MY_BOOKS'),
+        item('info', 'Puntata', `${money(2)} a partita · al massimo ${b.maxPerDay || 10} al giorno`),
+        item(b.stopped ? 'bad' : 'ok', 'I freni', `Ti fermi dopo ${sr.dayLosses || 3} perse in un giorno, ${money(sr.weekLossEur || 15)} persi in una settimana (da lunedì) o con il budget sotto ${money(b.stop || 60)}${b.balance !== undefined ? ` · ora ${money(b.balance)}` : ''}`),
+        item('info', 'Lettura delle quote', `Dalle 9 alle 22, più volte al giorno, e la chiusura di Pinnacle poco prima del calcio d'inizio${i && i.quotaRemaining !== undefined && i.quotaRemaining !== null ? ` · crediti rimasti ${i.quotaRemaining} (si ricaricano il 12)` : ''}`),
+        item(tg ? 'ok' : 'warn', 'Messaggi su Telegram', [c.notify.telegram && 'Telegram', c.notify.email && 'email', c.notify.whatsapp && 'WhatsApp'].filter(Boolean).join(', ') || 'Non collegato: per ora tutto si legge qui nell\'app.'),
+        `<details class="fold"><summary><span>🗂️ Strategia A (in archivio)</span><small>non gira più</small></summary>
+          ${item('info', `Campionati seguiti (${c.competitions.length})`, c.competitions.map(x => esc(x.name)).join(', '))}
+          ${item('info', 'Vantaggio', `dal ${num(c.minEdgePct, 1)}% al ${c.maxEdgePct}%`)}
+          ${item('info', 'Massimo segnali al giorno', c.maxDailySignals)}</details>`
+      ].join('');
     } catch (e) { $('config').innerHTML = '<div class="empty">Non riesco a caricare le impostazioni: ' + esc(e.message) + '</div>'; }
   }
 
