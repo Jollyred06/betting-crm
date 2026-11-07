@@ -970,6 +970,8 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
   const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY commence_time DESC, id DESC`)).rows;
   const prim = primaryRows(all), fin = markFinal(prim), fin3 = markFinal3(prim), fin2 = markFinal2(all), fin4 = markFinal4(all), fin5 = markFinal5(all), fin6 = markFinal6(all);
   const firstOf = new Map(prim.map(r => [sigKey(r), r.id]));
+  // 7 novembre 2026: per ogni partita si segna se e' una Justice League (e se 💎 Top), guardando la sua prima lettura valida
+  const mo = markOceani(all), jlByKey = new Map(all.filter(r => (mo.get(r.id) || {}).final).map(r => [sigKey(r), r]));
   const played = await require('./played').playedSignalIds(pool);
   const playedByKey = new Map(all.filter(r => played.get(Number(r.id))).map(r => [sigKey(r), played.get(Number(r.id))]));
   const romeDay = ms => ROME_DAY.format(new Date(ms));   // AAAA-MM-GG
@@ -982,11 +984,13 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
       return { id: r.id, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book,
         odd: Number(r.odd), clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null, result: r.result || null, result_score: r.result_score || null,
         win_prob: r.fair_prob ? Number(r.fair_prob) : null, final: !!(fin.get(first) || {}).final, final2: !!(fin2.get(r.id) || {}).final, final3: !!(fin3.get(first) || {}).final, final4: !!(fin4.get(r.id) || {}).final, final5: !!(fin5.get(r.id) || {}).final, final6: !!(fin6.get(r.id) || {}).final, thin: pinMarginPct(r) !== null && pinMarginPct(r) >= FINAL6.thinMarginPct,
+        jl: jlByKey.has(sigKey(r)), top: jlByKey.has(sigKey(r)) && isTop(jlByKey.get(sigKey(r))),
         six: !!(fin.get(first) || {}).final && isSix(r), played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null };
     });
     const cl = items.map(i => i.clv_pct).filter(v => v !== null);
     return { day, count: items.length, avgClvPct: cl.length ? cl.reduce((a, b) => a + b, 0) / cl.length : null, positivePct: cl.length ? 100 * cl.filter(v => v > 0).length / cl.length : null,
-      results: R.resultStats(items), items };
+      results: R.resultStats(items), jl: (() => { const j = items.filter(i => i.jl), t = j.filter(i => i.top), rs = R.resultStats(j), rt = R.resultStats(t);
+        return { count: j.length, won: rs.won, settled: rs.settled, pnlEur: rs.pnlEur, top: t.length, topWon: rt.won, topSettled: rt.settled }; })(), items };
   });
   const oldest = dayList[dayList.length - 1];
   return { days: out, more: !!oldest && past.some(r => romeDay(T(r.commence_time)) < oldest), next: oldest || null, totalPast: past.length };
