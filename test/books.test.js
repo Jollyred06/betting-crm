@@ -320,3 +320,14 @@ console.log('books.test.js: tutti i controlli passati');
   assert.deepStrictEqual(asked, ['e1']);
   console.log('Chiusure delle ⭐: ok');
 })().catch(e => { console.error(e); process.exit(1); });
+
+{ // 💎 Top (7 novembre 2026): Justice League con vantaggio dal 3% e margine Pinnacle sotto il 5%
+  const I = require('../services/italia');
+  const jl = { odd: 2.8, edge_pct: 3.5, league: 'Allsvenskan', pin_h: 2.7, pin_d: 3.5, pin_a: 2.75 };      // margine circa 1,2%
+  assert.strictEqual(I.isOceani(jl), true); assert.strictEqual(I.isTop(jl), true);
+  assert.strictEqual(I.isTop({ ...jl, edge_pct: 2.5 }), false);                                            // vantaggio sotto il 3%
+  assert.strictEqual(I.isTop({ ...jl, pin_h: 2.6, pin_d: 3.3, pin_a: 2.75 }), false);                      // margine 5,1%: liquida ma non Top
+  assert.strictEqual(I.isOceani({ ...jl, pin_h: 2.6, pin_d: 3.3, pin_a: 2.75 }), true);
+  assert.strictEqual(I.isTop({ ...jl, odd: 1.9 }), false);                                                 // fuori dalla Justice League
+  console.log('💎 Top: ok');
+}

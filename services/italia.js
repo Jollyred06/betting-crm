@@ -708,6 +708,15 @@ function isOceani(r) {
   const m = r.pin_margin !== undefined ? r.pin_margin : pinMarginPct(r), odd = r.play ? r.play.odd : Number(r.odd);
   return m !== null && m !== undefined && Number(m) < OCEANI.maxMarginPct && Number(r.edge_pct) >= OCEANI.minEdge && Number(r.odd) >= OCEANI.minOdd && odd >= OCEANI.minOdd && odd <= OCEANI.maxOdd && !isCup(r.league);
 }
+/** 💎 TOP (7 novembre 2026, 21:15, scelta da Christian): le Justice League con vantaggio dal 3% e margine Pinnacle sotto il 5%.
+ *  All'indietro: 25 partite, 17 vinte su 9,5 attese, valore +6,0% (forchetta sopra lo zero); le altre Justice League +1,7% (incerto).
+ *  Per ora e' solo un segno: si gioca tutto a 2 euro; a fine novembre si decide (scartare le altre o puntare di piu' sulle Top). */
+const TOP = { since: '2026-11-07T20:15:00Z', minEdge: 3, maxMarginPct: 5 };
+function isTop(r) {
+  if (!isOceani(r)) return false;
+  const m = r.pin_margin !== undefined ? r.pin_margin : pinMarginPct(r);
+  return Number(r.edge_pct) >= TOP.minEdge && Number(m) < TOP.maxMarginPct;
+}
 function markOceani(rows) {
   const out = new Map(), first = new Map();
   for (const r of [...rows].sort((a, b) => T(a.created_at) - T(b.created_at))) if (isOceani(r) && !first.has(sigKey(r))) first.set(sigKey(r), r);
@@ -1095,6 +1104,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       drawStar: !!(drawMap.get(r.id) || {}).final,
       liquidEarly: !!(earlyMap.get(r.id) || {}).final,
       oceani: isOceani(r),
+      top: isTop(r),
       draw_prob: (() => { const o = { home: Number(r.pin_h), draw: Number(r.pin_d), away: Number(r.pin_a) }; return o.home > 1 && o.draw > 1 && o.away > 1 ? noVigPower(o).draw : null; })(),
       final5: !!(fin5.get(r.id) || {}).final,
       final6: !!(fin6.get(r.id) || {}).final,
@@ -1130,6 +1140,11 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     // dal 5 novembre: se in campo ci sono 🌊 Gli Oceani, il controllo della lista guarda le loro partite (da quando c'e' la regola)
     if (team && team.oceani) { const mo = markOceani(all), t0 = T(OCEANI.since); ruleRows = all.filter(r => (mo.get(r.id) || {}).final && T(r.created_at) >= t0); }
     if (team && team.oceani) out.ruleStats = { ...oddsStats(ruleRows), since: OCEANI.since };
+    // 💎 Top contro le altre Justice League: su tutte (regole applicate all'indietro, prima lettura) e da quando c'e' il segno
+    { const mo = markOceani(all), jl = all.filter(r => (mo.get(r.id) || {}).final), t0 = T(TOP.since);
+      const part = l => { const res = R.resultStats(l), d = l.filter(r => r.result === 'won' || r.result === 'lost'); return { ...oddsStats(l), results: { ...res, expected: d.reduce((a, r) => a + Number(r.fair_prob || 0), 0) } }; };
+      out.topStats = { rules: TOP, top: part(jl.filter(isTop)), rest: part(jl.filter(r => !isTop(r))),
+        sinceTop: part(jl.filter(r => isTop(r) && T(r.created_at) >= t0)), sinceRest: part(jl.filter(r => !isTop(r) && T(r.created_at) >= t0)) }; }
     // 🧮 il voto si misura: da quando c'e' (4 novembre, 8:00) per fasce, sui segnali I (ultima lettura)
     { const t0 = T('2026-11-04T07:00:00Z'), lr = latestRows(all).filter(r => T(r.created_at) >= t0).map(r => ({ r, v: (scoreOf(r, consOf(r)) || {}).vote })).filter(x => x.v !== undefined);
       const band = (lo, hi) => { const l = lr.filter(x => x.v >= lo && x.v < hi).map(x => x.r); return { lo, hi, ...oddsStats(l), results: R.resultStats(l) }; };
@@ -1145,4 +1160,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { captureClosing, STOPS, OCEANI, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { captureClosing, STOPS, OCEANI, TOP, isTop, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
