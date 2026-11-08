@@ -253,6 +253,7 @@
 @media (prefers-color-scheme: dark){.chip.top{background:#1a2a44;color:#9cc0ff;border-color:#2f4a75}}
 .probline{font-size:13.5px;color:var(--muted);margin-top:4px}.probline b.pos{color:var(--ok)}.probline b.neg{color:var(--bad)}
 .aday summary .jlline{display:block;margin-top:4px;font-size:15px}.aday summary .allline{display:block;margin-top:2px;font-size:12.5px}
+.myval{border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 14px}.myval.good{border-color:var(--ok)}.myval.bad{border-color:var(--bad)}.myval .mvh{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:baseline}.myval .mvh span{font-size:13.5px;color:var(--muted)}.myval .mvbig{font-size:34px;font-weight:700;margin:4px 0}.myval p{margin:4px 0;font-size:14px}.myval b.pos{color:var(--ok)}
 </style>
 </head>
 <body>
@@ -1269,7 +1270,14 @@
     let d; try { d = await getJson('/api/tracker/played'); } catch (e) { $('playedBox').innerHTML = '<div class="empty">Giocate non disponibili: ' + esc(e.message) + '</div>'; return; }
     if (!d.count) { $('playedBox').innerHTML = '<div class="empty">Nessuna giocata ancora. Quando giochi un segnale, tocca <b>✍️ Ho giocato</b> sulla sua scheda (Segnali) e scrivi quota e bookmaker.</div>'; return; }
     const sel = { home: '1', draw: 'X', away: '2' };
-    $('playedBox').innerHTML = `<dl class="facts">
+    const V = d.myValue, sl = { home: '1', draw: 'X', away: '2' };
+    const vbox = !V ? '' : `<div class="myval ${V.verdict}"><div class="mvh">🎯 <b>Il tuo valore</b><span>${V.verdict === 'good' ? '🟢 stai battendo il mercato' : V.verdict === 'bad' ? '🔴 stai prendendo quote peggiori del mercato' : V.need ? `🟡 giudizio dopo 20 giocate misurate (ne mancano ${V.need})` : '🟡 ancora incerto'}</span></div>
+      <div class="mvbig ${V.measured ? cls(V.avgClvPct) : ''}">${V.measured ? pct(V.avgClvPct, 1) : '—'}</div>
+      <p class="muted">${V.measured ? `La quota che hai preso tu contro la chiusura di Pinnacle, su ${V.measured} giocate${V.clvCi95 ? ` · forchetta da ${pct(V.clvCi95[0], 1)} a ${pct(V.clvCi95[1], 1)}` : ''} · positive ${num(V.positivePct, 0)}%` : 'Si misura poco prima del calcio d\'inizio di ogni partita che giochi.'}</p>
+      ${V.measured ? `<p class="muted">⭐ Justice League: ${V.jl.measured ? pct(V.jl.avgClvPct, 1) + ' su ' + V.jl.measured : '—'} · le altre: ${V.other.measured ? pct(V.other.avgClvPct, 1) + ' su ' + V.other.measured : '—'}</p>
+      <p class="muted">👍 ${V.best.map(x => `${esc(shortTeam(x.home))}–${esc(shortTeam(x.away))} ${sl[x.selection] || ''} <b class="pos">${pct(x.clvPct, 1)}</b>`).join(' · ')}<br>👎 ${V.worst.map(x => `${esc(shortTeam(x.home))}–${esc(shortTeam(x.away))} ${sl[x.selection] || ''} <b class="${cls(x.clvPct)}">${pct(x.clvPct, 1)}</b>`).join(' · ')}</p>` : ''}
+      <p class="muted" style="font-size:13px">Più alto è, meglio stai giocando: anche con qualche partita persa, se è positivo stai facendo la cosa giusta.</p></div>`;
+    $('playedBox').innerHTML = vbox + `<dl class="facts">
         <div><dt>Giocate</dt><dd>${d.count} · ${money(d.staked)} puntati</dd></div>
         <div><dt>Saldo</dt><dd class="${d.settled ? cls(d.pnlEur) : ''}">${d.settled ? signedMoney(d.pnlEur) + ` (${d.won} vinte su ${d.settled})` : 'nessun risultato ancora'}</dd></div>
         <div><dt>Valore delle tue quote vs chiusura</dt><dd class="${d.measured ? cls(d.avgClvPct) : ''}">${d.measured ? pct(d.avgClvPct) + `, positive ${num(d.positivePct, 0)}%` : 'da misurare'}</dd></div>

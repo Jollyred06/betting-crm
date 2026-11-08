@@ -109,9 +109,27 @@ async function skippedSignalIds(pool) {
 async function getPlayed(pool) {
   await ensurePlayed(pool);
   const { rows } = await pool.query(
-    `SELECT p.*, s.home, s.away, s.selection, s.commence_time, s.odd AS signal_odd, s.book AS signal_book, s.fair_prob, s.closing_fair_prob, s.result, s.result_score
+    `SELECT p.*, s.home, s.away, s.selection, s.commence_time, s.odd AS signal_odd, s.book AS signal_book, s.fair_prob, s.result, s.result_score,
+       s.event_id, s.league, s.edge_pct, s.pin_h, s.pin_d, s.pin_a,
+       -- 8 novembre 2026: se la riga giocata non ha la chiusura, si prende quella di un'altra lettura della stessa partita e scelta
+       COALESCE(s.closing_fair_prob, (SELECT x.closing_fair_prob FROM italia_signals x WHERE x.event_id = s.event_id AND x.selection = s.selection AND x.closing_fair_prob IS NOT NULL ORDER BY x.created_at DESC LIMIT 1)) AS closing_fair_prob
      FROM played_bets p JOIN italia_signals s ON s.id = p.signal_id ORDER BY p.created_at DESC LIMIT 500`);
   const out = summarize(rows);
+  // 🎯 IL TUO VALORE (8 novembre 2026): la quota che hai preso tu contro la chiusura di Pinnacle, con la forchetta e un giudizio
+  try {
+    const I = require('./italia'), m = out.items.filter(x => x.clvPct !== null), n = m.length;
+    const mean = n ? m.reduce((a, x) => a + x.clvPct, 0) / n : null;
+    const sd = n > 1 ? Math.sqrt(m.reduce((a, x) => a + (x.clvPct - mean) ** 2, 0) / (n - 1)) : null;
+    const ci = n >= 5 && sd !== null ? [mean - 1.96 * sd / Math.sqrt(n), mean + 1.96 * sd / Math.sqrt(n)] : null;
+    const jlIds = new Set(); { const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I'`)).rows, mo = I.markOceani(all), key = r => r.event_id + '|' + r.selection;
+      const jlKeys = new Set(all.filter(r => (mo.get(r.id) || {}).final).map(key)); for (const r of rows) if (jlKeys.has(r.event_id + '|' + r.selection)) jlIds.add(r.id); }
+    const part = list => { const k = list.filter(x => x.clvPct !== null); return { measured: k.length, avgClvPct: k.length ? k.reduce((a, x) => a + x.clvPct, 0) / k.length : null }; };
+    const verdict = n < 20 ? 'wait' : ci && ci[0] > 0 ? 'good' : mean < 0 ? 'bad' : 'wait';
+    const sorted = [...m].sort((a, b) => b.clvPct - a.clvPct), pick = x => ({ home: x.home, away: x.away, selection: x.selection, book: x.book, odd: x.odd, clvPct: x.clvPct });
+    out.myValue = { measured: n, avgClvPct: mean, clvCi95: ci, positivePct: out.positivePct, verdict, need: Math.max(0, 20 - n),
+      jl: part(out.items.filter(x => jlIds.has(x.id))), other: part(out.items.filter(x => !jlIds.has(x.id))),
+      best: sorted.slice(0, 3).map(pick), worst: sorted.slice(-3).reverse().map(pick) };
+  } catch (e) { out.myValue = null; }
   try {
     await ensureSkipped(pool);
     const sk = (await pool.query(`SELECT k.*, s.home, s.away, s.selection, s.commence_time, s.clv_pct FROM skipped_bets k JOIN italia_signals s ON s.id = k.signal_id ORDER BY k.created_at DESC LIMIT 500`)).rows;
