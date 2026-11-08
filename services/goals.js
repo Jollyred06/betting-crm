@@ -124,6 +124,9 @@ async function ensureGoals(pool) {
   await pool.query(`CREATE TABLE IF NOT EXISTS goal_signals (id SERIAL PRIMARY KEY, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), strategy TEXT, event_id TEXT, league TEXT, home TEXT, away TEXT,
     commence_time TIMESTAMPTZ, line NUMERIC(4,1), side TEXT, book TEXT, odd NUMERIC(8,3), fair_prob NUMERIC(6,4), edge_pct NUMERIC(7,2), pin_over NUMERIC(8,3), pin_under NUMERIC(8,3),
     result TEXT, goals INT, settled_at TIMESTAMPTZ, UNIQUE (event_id, strategy, line, side))`);
+  // ⚡ 8 novembre 2026: la storia delle quote di Pinnacle (una riga solo quando cambiano), per Quicksilver
+  await pool.query(`CREATE TABLE IF NOT EXISTS pin_history (id SERIAL PRIMARY KEY, event_id TEXT NOT NULL, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), pin_h NUMERIC(8,3), pin_d NUMERIC(8,3), pin_a NUMERIC(8,3))`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS pin_history_event ON pin_history (event_id, at)`);
   ready = true;
 }
 
@@ -135,6 +138,11 @@ async function watch(pool, merged, trio, nowMs = Date.now()) {
     if (!(Date.parse(r.commence_time) > nowMs)) continue;
     const b = (r.bookmakers || []).find(x => x.key === 'pinnacle'), q = b && trio(b.outcomes), f = q && fair1x2(q.home, q.draw, q.away);
     if (!f) continue;
+    try {   // storia: una riga se il prezzo di Pinnacle e' cambiato dall'ultima lettura (o e' la prima)
+      const last = (await pool.query(`SELECT pin_h, pin_d, pin_a FROM pin_history WHERE event_id = $1 ORDER BY at DESC LIMIT 1`, [r.event_id])).rows[0];
+      if (!last || Number(last.pin_h) !== Number(q.home) || Number(last.pin_d) !== Number(q.draw) || Number(last.pin_a) !== Number(q.away))
+        await pool.query(`INSERT INTO pin_history (event_id, at, pin_h, pin_d, pin_a) VALUES ($1, to_timestamp($2::double precision / 1000), $3, $4, $5)`, [r.event_id, nowMs, q.home, q.draw, q.away]);
+    } catch (e) { /* la storia e' facoltativa */ }
     await pool.query(`INSERT INTO goal_watch (event_id, league, home, away, commence_time, pin_h, pin_d, pin_a, margin_pct, draw_prob, exp_goals, valanga)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
       ON CONFLICT (event_id) DO UPDATE SET league=$2, home=$3, away=$4, commence_time=$5, pin_h=$6, pin_d=$7, pin_a=$8, margin_pct=$9, draw_prob=$10, exp_goals=$11, valanga=$12, updated_at=NOW()

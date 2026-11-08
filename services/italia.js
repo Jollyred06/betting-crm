@@ -878,7 +878,7 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   // 2 novembre 2026: anche le 💧 liquide (mercato liquido, vantaggio dal 2%), e vengono per prime
   const baseOk = r => !isCup(r.league) && !(Number(r.odd) > maxOdd) && !(r.play && r.play.odd > maxOdd);
   const okLiq = r => tm.oceano && r.liquid && baseOk(r);
-  const okExtra = r => baseOk(r) && ((tm.coro && r.final4 && r.consensus && r.consensus.above >= 4) || (tm.saracinesca && r.final8) || (tm.liquidi8 && r.final9) || (tm.strange && r.drawStar) || (tm.flash && r.liquidEarly) || (tm.oceani && r.oceani) || (tm.wolverine && r.final && !(r.pin_margin !== null && r.pin_margin < 6)));
+  const okExtra = r => baseOk(r) && ((tm.quicksilver && r.quick) || (tm.coro && r.final4 && r.consensus && r.consensus.above >= 4) || (tm.saracinesca && r.final8) || (tm.liquidi8 && r.final9) || (tm.strange && r.drawStar) || (tm.flash && r.liquidEarly) || (tm.oceani && r.oceani) || (tm.wolverine && r.final && !(r.pin_margin !== null && r.pin_margin < 6)));
   const liq = r => (okLiq(r) ? 1 : 0);
   return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs && !(r.market && r.market.dir === 'contro'))
     .sort((a, b) => ((tm.oceani && b.oceani ? 1 : 0) - (tm.oceani && a.oceani ? 1 : 0)) || ((b.score ? b.score.vote : -1) - (a.score ? a.score.vote : -1)) || (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);   // 4 novembre: prima il 🧮 voto piu' alto
@@ -894,6 +894,39 @@ function selProb(r, sel = r.selection) {
   if (!(h > 1 && d > 1 && a > 1)) return null;
   const v = { home: 1 / h, draw: 1 / d, away: 1 / a }, t = v.home + v.draw + v.away;
   return v[sel] / t;
+}
+/** ⚡ QUICKSILVER (8 novembre 2026, sulla carta): il vantaggio nasce perche' Pinnacle si e' appena mosso a nostro favore
+ *  (la nostra scelta sale di almeno 1 punto rispetto alla lettura precedente, nelle 6 ore prima) e il sito italiano non ha ancora
+ *  aggiornato la quota. Mercato liquido, vantaggio dal 2%, quota 1,60–3,50, niente coppe, prima lettura. Si misura da adesso
+ *  (la storia di Pinnacle si salva dall'8 novembre). hist: Map event_id -> [{at, pin_h, pin_d, pin_a}] in ordine di tempo. */
+const QUICK = { since: '2026-11-08T19:15:00Z', minRisePts: 1, lookbackH: 6, maxMarginPct: 6, minEdge: 2, minOdd: 1.6, maxOdd: 3.5 };
+function quickRise(r, hist) {
+  const h = hist && hist.get(r.event_id); if (!h || h.length < 2) return null;
+  const t = T(r.created_at) + 5 * 60000;
+  const upTo = h.filter(x => T(x.at) <= t); if (upTo.length < 2) return null;
+  const cur = upTo[upTo.length - 1], prev = upTo.slice(0, -1).filter(x => T(x.at) >= T(cur.at) - QUICK.lookbackH * 3600000);
+  if (!prev.length) return null;
+  const pc = selProb(cur, r.selection), pp = Math.min(...prev.map(x => selProb(x, r.selection)).filter(v => v !== null));
+  return pc === null || !Number.isFinite(pp) ? null : 100 * (pc - pp);
+}
+function markQuick(rows, hist) {
+  const out = new Map(), seen = new Set();
+  for (const r of [...rows].sort((a, b) => T(a.created_at) - T(b.created_at))) {
+    const k = sigKey(r); if (seen.has(k)) continue;
+    const m = pinMarginPct(r), odd = Number(r.odd);
+    if (isCup(r.league) || !(m !== null && m < QUICK.maxMarginPct) || !(Number(r.edge_pct) >= QUICK.minEdge) || !(odd >= QUICK.minOdd && odd <= QUICK.maxOdd)) continue;
+    const rise = quickRise(r, hist);
+    if (rise === null) continue;
+    seen.add(k);
+    if (rise >= QUICK.minRisePts) out.set(r.id, { final: true, rise });
+  }
+  return out;
+}
+async function pinHistory(pool, eventIds = null) {
+  try {
+    const { rows } = await pool.query(eventIds ? `SELECT event_id, at, pin_h, pin_d, pin_a FROM pin_history WHERE event_id = ANY($1) ORDER BY at` : `SELECT event_id, at, pin_h, pin_d, pin_a FROM pin_history ORDER BY at`, eventIds ? [eventIds] : []);
+    const m = new Map(); for (const r of rows) (m.get(r.event_id) || m.set(r.event_id, []).get(r.event_id)).push(r); return m;
+  } catch (e) { return new Map(); }
 }
 function marketOf(first, latest) {
   if (!first || !latest || first.id === latest.id) return null;
@@ -1093,6 +1126,9 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const pinNow = new Map();
   if (strategy === 'I') { try { const ids = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))];
     if (ids.length) for (const g of (await pool.query(`SELECT event_id, pin_h, pin_d, pin_a, updated_at FROM goal_watch WHERE event_id = ANY($1)`, [ids])).rows) pinNow.set(g.event_id, g); } catch (e) { /* tabella facoltativa */ } }
+  // ⚡ Quicksilver: storia di Pinnacle delle partite in lista
+  let qsMap = new Map(); if (strategy === 'I') { const ids = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))]; if (ids.length) qsMap = markQuick(all.filter(r => ids.includes(r.event_id)), await pinHistory(pool, ids)); }
+  const quickKeys = new Set(all.filter(r => qsMap.get(r.id)).map(sigKey));
   const latestPin = r => { const g = pinNow.get(r.event_id); return g && T(g.updated_at) > T(r.created_at) + 60000 ? { ...g, id: 'gw:' + r.event_id, selection: r.selection } : r; };
   const firstRowOf = new Map(); for (const r of [...all].sort((x, y) => T(x.created_at) - T(y.created_at))) if (!firstRowOf.has(sigKey(r))) firstRowOf.set(sigKey(r), r);
   const out = {
@@ -1121,7 +1157,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     ],
     requestsThisMonth: used, quotaRemaining: last && last.quota_remaining !== null ? Number(last.quota_remaining) : null, lastRequest: last,
     recent: latestRows(all).slice(0, 30).map(r => ({
-      market: marketOf(firstRowOf.get(sigKey(r)), latestPin(r)),
+      market: marketOf(firstRowOf.get(sigKey(r)), latestPin(r)), quick: quickKeys.has(sigKey(r)),
       id: r.id, event_id: r.event_id, created_at: r.created_at, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away,
       selection: r.selection, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book, odd: Number(r.odd), edge_pct: Number(r.edge_pct),
       netwin_odd: r.netwin_odd !== null ? Number(r.netwin_odd) : null, clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null,
@@ -1196,4 +1232,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { captureClosing, STOPS, OCEANI, TOP, isTop, MARKET, marketOf, selProb, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { captureClosing, STOPS, OCEANI, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

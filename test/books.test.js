@@ -348,3 +348,17 @@ console.log('books.test.js: tutti i controlli passati');
   assert.deepStrictEqual(I.pickBest([card], { team: { oceano: true } }), []);
   console.log('📉 Mercato contro: ok');
 }
+
+{ // ⚡ Quicksilver (8 novembre 2026): Pinnacle sale di almeno 1 punto sulla nostra scelta prima del segnale
+  const I = require('../services/italia');
+  const t0 = Date.parse('2026-11-09T12:00:00Z');
+  const hist = new Map([['e1', [
+    { at: new Date(t0 - 2 * 3600000).toISOString(), pin_h: 2.6, pin_d: 3.4, pin_a: 2.9 },
+    { at: new Date(t0).toISOString(), pin_h: 2.4, pin_d: 3.4, pin_a: 3.15 }]]]);
+  const sig = { id: 1, event_id: 'e1', selection: 'home', created_at: new Date(t0 + 60000).toISOString(), odd: 2.6, edge_pct: 3, league: 'Eredivisie', pin_h: 2.4, pin_d: 3.4, pin_a: 3.15 };
+  assert.ok(I.quickRise(sig, hist) >= 1);
+  assert.strictEqual(I.markQuick([sig], hist).get(1).final, true);
+  assert.strictEqual(I.markQuick([{ ...sig, selection: 'away' }], hist).size, 0);      // per il 2 Pinnacle e' sceso: non e' Quicksilver
+  assert.strictEqual(I.markQuick([sig], new Map()).size, 0);                             // senza storia non si giudica
+  console.log('⚡ Quicksilver: ok');
+}
