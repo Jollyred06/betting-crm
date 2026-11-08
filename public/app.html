@@ -1484,10 +1484,10 @@
     document.querySelectorAll('.rows button').forEach(b => { b.disabled = true; });
     $('resultCard').style.display = 'block'; $('resultTitle').textContent = a.title; $('result').innerHTML = '<div class="info">Un momento…</div>';
     try {
-      const r = await fetch(a.path, { method: a.method, headers: { 'x-run-key': key } });
+      const r = await fetch(a.path, { method: a.method, headers: { 'x-run-key': key }, cache: 'no-store' });
       if (a.download && r.ok) {
-        const link = document.createElement('a'); link.href = URL.createObjectURL(await r.blob()); link.download = a.filename ? a.filename.replace('backup_betting_crm.', 'backup_betting_crm_' + new Date().toISOString().slice(0, 10) + '.') : 'segnali_tracker.csv'; link.click();
-        $('result').innerHTML = '<div class="info">File scaricato: lo trovi nella cartella Download.' + (a.filename ? ' Conservalo in un posto sicuro.' : ' Caricalo in chat.') + '</div>'; return;
+        const link = document.createElement('a'); link.href = URL.createObjectURL(await r.blob()); link.download = a.filename ? a.filename.replace('backup_betting_crm.', 'backup_betting_crm_' + (() => { const n = new Date(), p = v => String(v).padStart(2, '0'); return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}_${p(n.getHours())}-${p(n.getMinutes())}`; })() + '.') : 'segnali_tracker.csv'; link.click();
+        $('result').innerHTML = '<div class="info">File scaricato: lo trovi nella cartella Download' + (a.filename ? ', con data e ora nel nome (' + esc(link.download) + '). Conservalo e mandami sempre l\'ultimo.' : ' Caricalo in chat.') + '</div>'; return;
       }
       const d = await r.json().catch(() => ({}));
       if (r.status === 401) { lock(); $('result').innerHTML = '<div class="warn">La chiave non è più valida: riprova e inseriscila di nuovo.</div>'; return; }

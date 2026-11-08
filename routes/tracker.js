@@ -166,7 +166,10 @@ router.get('/backup.json', async (req, res) => {
   if (!authorized(req)) return res.status(401).json({ error: 'Chiave non valida' });
   try {
     const b = await require('../services/backup').buildBackup(pool);
-    const name = `backup_betting_crm_${b.creato.slice(0, 10)}.json`, body = Buffer.from(JSON.stringify(b));
+    // 8 novembre 2026: nel nome anche l'ora di Roma (piu' copie nello stesso giorno non si confondono) e mai dalla cache del telefono
+    const hm = new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(b.creato)).replace(':', '-');
+    const name = `backup_betting_crm_${b.creato.slice(0, 10)}_${hm}.json`, body = Buffer.from(JSON.stringify(b));
+    res.setHeader('Cache-Control', 'no-store');
     // compressa di base (circa un decimo del peso); ?plain=1 per il file normale
     if (req.query.plain === '1') {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
