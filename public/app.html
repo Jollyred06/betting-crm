@@ -334,7 +334,7 @@
     <section class="block train">
       <h3>🏋️ Bankroll di allenamento</h3>
       <p class="muted sub">Sulla carta, nessun soldo vero. Tre casse da 500 € per ogni selezione, con tre modi di puntare sugli stessi segnali. Si ferma da sola se perde il 25%.</p>
-      <div class="seg" id="trainTabs"><button class="on" data-k="F2+C" onclick="setTrain(this)">🛡️ Capitan Am.</button><button data-k="F2+S" onclick="setTrain(this)">🐾 Black Panther</button><button data-k="F2+" onclick="setTrain(this)">⚙️ Iron Man</button><button data-k="F" onclick="setTrain(this)">🐺 Wolverine</button><button data-k="F2" onclick="setTrain(this)">🎯 Occhio di F.</button><button data-k="F3" onclick="setTrain(this)">🐜 Ant-Man</button></div>
+      <div class="seg" id="trainTabs"><button class="on" data-k="JL" onclick="setTrain(this)">🦸 Justice L.</button><button data-k="TOP" onclick="setTrain(this)">💎 Top</button><button data-k="F2+C" onclick="setTrain(this)">🛡️ Capitan Am.</button><button data-k="F2+S" onclick="setTrain(this)">🐾 Black Panther</button><button data-k="F2+" onclick="setTrain(this)">⚙️ Iron Man</button><button data-k="F" onclick="setTrain(this)">🐺 Wolverine</button><button data-k="F2" onclick="setTrain(this)">🎯 Occhio di F.</button><button data-k="F3" onclick="setTrain(this)">🐜 Ant-Man</button></div>
       <div id="trainBox"><div class="sk box"></div></div>
     </section>
     <section class="block">
@@ -600,7 +600,7 @@
       </dl>
       <h4>Ultimi movimenti</h4>` + (b.movements.length ? b.movements.map(m => `<div class="move"><span>${esc((m.note || (m.manual ? 'Movimento manuale' : 'Segnale chiuso')).replace(/: won\b/, ': vinta').replace(/: lost\b/, ': persa').replace(/: void\b/, ': annullata'))}<small>${fmtDate(m.at)}</small></span><b class="${cls(m.amount)}">${signedMoney(m.amount)}</b></div>`).join('') : '<div class="empty">Nessun movimento.</div>');
   }
-  let trainData = null, trainKey = 'F2+C';
+  let trainData = null, trainKey = 'JL';
   function setTrain(el) { document.querySelectorAll('#trainTabs button').forEach(b => b.classList.remove('on')); el.classList.add('on'); trainKey = el.dataset.k; renderTrain(); }
   function renderTrain() {
     const d = trainData; if (!d) return;

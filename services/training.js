@@ -75,7 +75,11 @@ async function getTraining(pool) {
   const { rows } = await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY created_at`);
   const prim = I.primaryRows(rows);   // F e F3 sulla prima uscita, F2 anche sulle riletture vicino al calcio d'inizio
   const pick = (mark, list = prim) => { const m = mark(list); return list.filter(r => m.get(r.id) && m.get(r.id).final); };
+  // 8 novembre 2026: in testa le due che si giocano davvero (regole applicate anche all'indietro, prima lettura valida)
+  const jl = pick(I.markOceani, rows);
   const sel = [
+    { key: 'JL', title: '🦸 Justice League', rows: jl },
+    { key: 'TOP', title: '💎 Top', rows: jl.filter(I.isTop) },
     { key: 'F', title: 'Selezione F', rows: pick(I.markFinal) },
     { key: 'F2', title: 'Selezione F2', rows: pick(I.markFinal2, rows) },
     { key: 'F3', title: 'Selezione F3 (favoriti)', rows: pick(I.markFinal3) },
