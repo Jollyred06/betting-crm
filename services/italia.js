@@ -880,8 +880,27 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   const okLiq = r => tm.oceano && r.liquid && baseOk(r);
   const okExtra = r => baseOk(r) && ((tm.coro && r.final4 && r.consensus && r.consensus.above >= 4) || (tm.saracinesca && r.final8) || (tm.liquidi8 && r.final9) || (tm.strange && r.drawStar) || (tm.flash && r.liquidEarly) || (tm.oceani && r.oceani) || (tm.wolverine && r.final && !(r.pin_margin !== null && r.pin_margin < 6)));
   const liq = r => (okLiq(r) ? 1 : 0);
-  return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs)
+  return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs && !(r.market && r.market.dir === 'contro'))
     .sort((a, b) => ((tm.oceani && b.oceani ? 1 : 0) - (tm.oceani && a.oceani ? 1 : 0)) || ((b.score ? b.score.vote : -1) - (a.score ? a.score.vote : -1)) || (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);   // 4 novembre: prima il 🧮 voto piu' alto
+}
+
+/** 📈 MERCATO (8 novembre 2026, scelto da Christian): quanto si e' spostato Pinnacle sulla nostra scelta dalla prima lettura
+ *  del segnale a quella piu' recente, in punti di probabilita'. Nei dati (308 partite con chiusura): mercato fermo +53,82 euro,
+ *  mercato contro di 1 punto o piu' 25 vinte su 31,5 attese, -22,66 euro. Se va contro di 1 punto o piu': non si gioca.
+ *  Le partite saltate per questo si misurano a parte (marketStats) per controllare che la regola aiuti davvero. */
+const MARKET = { since: '2026-11-08T18:40:00Z', againstPts: 1, withPts: 0.5 };
+function selProb(r, sel = r.selection) {
+  const h = Number(r.pin_h), d = Number(r.pin_d), a = Number(r.pin_a);
+  if (!(h > 1 && d > 1 && a > 1)) return null;
+  const v = { home: 1 / h, draw: 1 / d, away: 1 / a }, t = v.home + v.draw + v.away;
+  return v[sel] / t;
+}
+function marketOf(first, latest) {
+  if (!first || !latest || first.id === latest.id) return null;
+  const p1 = selProb(first), p2 = selProb(latest, first.selection);
+  if (p1 === null || p2 === null) return null;
+  const mv = 100 * (p2 - p1);
+  return { mv, dir: mv <= -MARKET.againstPts ? 'contro' : mv >= MARKET.withPts ? 'con' : 'fermo' };
 }
 
 /**
@@ -894,6 +913,7 @@ function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now
   if (!(t > nowMs)) return null;
   const n2 = v => Number(v).toFixed(2).replace('.', ',');
   const mine = Object.entries(r.alt || {}).map(([b, v]) => `${b} ${n2(v)}`).join(', ');
+  if (r.market && r.market.dir === 'contro') return { play: 'no', text: `Il mercato si è girato contro: Pinnacle ha abbassato le possibilità di ${n2(Math.abs(r.market.mv))} punti dal segnale` };
   if (best.has(r.id) && r.play) return { play: 'yes', text: `Giocala su ${r.play.book} a ${n2(r.play.odd)} o più (minimo ${n2(r.min_odd)})` };
   if (budget.stopped) return { play: 'no', text: budget.stopWhy ? `Freno: ${budget.stopWhy}` : 'Stop del budget raggiunto: niente giocate' };
   // 2 novembre 2026: prima i motivi che non cambiano col tempo (coppa, quota alta, campionato minore), poi l'attesa
@@ -1069,6 +1089,12 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const f2c = strategy === 'I' ? all.filter(r => fin4.get(r.id) && fin4.get(r.id).final && Number(r.odd) <= 3.5).map(r => ({ r, k: consOf(r) })).filter(x => x.k) : [];
   const since = T(CONSENSUS.since), consGroup = test => { const l = f2c.filter(x => test(x.k)); const now = l.filter(x => T(x.r.created_at) >= since).map(x => x.r), all2 = l.map(x => x.r);
     return { ...oddsStats(now), results: R.resultStats(now), retro: { ...oddsStats(all2), results: R.resultStats(all2) } }; };
+  // ultima lettura di Pinnacle di ogni partita (goal_watch si aggiorna a ogni giro, anche quando il vantaggio e' sparito e non nasce una riga nuova)
+  const pinNow = new Map();
+  if (strategy === 'I') { try { const ids = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))];
+    if (ids.length) for (const g of (await pool.query(`SELECT event_id, pin_h, pin_d, pin_a, updated_at FROM goal_watch WHERE event_id = ANY($1)`, [ids])).rows) pinNow.set(g.event_id, g); } catch (e) { /* tabella facoltativa */ } }
+  const latestPin = r => { const g = pinNow.get(r.event_id); return g && T(g.updated_at) > T(r.created_at) + 60000 ? { ...g, id: 'gw:' + r.event_id, selection: r.selection } : r; };
+  const firstRowOf = new Map(); for (const r of [...all].sort((x, y) => T(x.created_at) - T(y.created_at))) if (!firstRowOf.has(sigKey(r))) firstRowOf.set(sigKey(r), r);
   const out = {
     ...base, checks, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
     final: strategy === 'I' ? { ...oddsStats(finRows), rules: FINAL, stake: STAKE, expectedEur: expectedEur(finRows), results: R.resultStats(finRows),
@@ -1095,6 +1121,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     ],
     requestsThisMonth: used, quotaRemaining: last && last.quota_remaining !== null ? Number(last.quota_remaining) : null, lastRequest: last,
     recent: latestRows(all).slice(0, 30).map(r => ({
+      market: marketOf(firstRowOf.get(sigKey(r)), latestPin(r)),
       id: r.id, event_id: r.event_id, created_at: r.created_at, commence_time: r.commence_time, league: r.league, home: r.home, away: r.away,
       selection: r.selection, pick: SEL_NAME[r.selection], book: BOOK_NAMES[r.book] || r.book, odd: Number(r.odd), edge_pct: Number(r.edge_pct),
       netwin_odd: r.netwin_odd !== null ? Number(r.netwin_odd) : null, clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null,
@@ -1144,6 +1171,11 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     // dal 5 novembre: se in campo ci sono 🌊 Gli Oceani, il controllo della lista guarda le loro partite (da quando c'e' la regola)
     if (team && team.oceani) { const mo = markOceani(all), t0 = T(OCEANI.since); ruleRows = all.filter(r => (mo.get(r.id) || {}).final && T(r.created_at) >= t0); }
     if (team && team.oceani) out.ruleStats = { ...oddsStats(ruleRows), since: OCEANI.since };
+    // 📈 Justice League per movimento del mercato (prima lettura -> chiusura di Pinnacle): quanto valgono quelle che la regola fa saltare
+    { const mo = markOceani(all), part = l => { const res = R.resultStats(l), d = l.filter(r => r.result === 'won' || r.result === 'lost'); return { ...oddsStats(l), results: { ...res, expected: d.reduce((a, r) => a + Number(r.fair_prob || 0), 0) } }; };
+      const jl = all.filter(r => (mo.get(r.id) || {}).final), mvOf = r => { if (!r.close_pin_h) return null; const p1 = selProb(r), p2 = selProb({ pin_h: r.close_pin_h, pin_d: r.close_pin_d, pin_a: r.close_pin_a }, r.selection); return p1 === null || p2 === null ? null : 100 * (p2 - p1); };
+      const withMv = jl.map(r => ({ r, mv: mvOf(r) })).filter(x => x.mv !== null);
+      out.marketStats = { rules: MARKET, against: part(withMv.filter(x => x.mv <= -MARKET.againstPts).map(x => x.r)), other: part(withMv.filter(x => x.mv > -MARKET.againstPts).map(x => x.r)) }; }
     // 💎 Top contro le altre Justice League: su tutte (regole applicate all'indietro, prima lettura) e da quando c'e' il segno
     { const mo = markOceani(all), jl = all.filter(r => (mo.get(r.id) || {}).final), t0 = T(TOP.since);
       const part = l => { const res = R.resultStats(l), d = l.filter(r => r.result === 'won' || r.result === 'lost'); return { ...oddsStats(l), results: { ...res, expected: d.reduce((a, r) => a + Number(r.fair_prob || 0), 0) } }; };
@@ -1164,4 +1196,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { captureClosing, STOPS, OCEANI, TOP, isTop, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { captureClosing, STOPS, OCEANI, TOP, isTop, MARKET, marketOf, selProb, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

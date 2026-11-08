@@ -698,6 +698,8 @@
       ${i.topStats && tm.oceani ? (() => { const T = i.topStats, line = x => `${x.results && x.results.settled ? `${x.results.won} vinte su ${x.results.settled}, attese ${num(x.results.expected, 1)} · ` : ''}valore ${x.measured >= 5 ? pct(x.avgClvPct, 1) : 'pochi dati'}`;
         const tl = T.top.measured < 20 || !T.top.clvCi95 ? 'info' : T.top.clvCi95[0] > 0 ? 'ok' : 'warn';
         return row(tl, '💎 Top contro le altre', `Top: ${line(T.top)}`, `Altre: ${line(T.rest)} · Top = vantaggio dal ${num(T.rules.minEdge, 0)}% e margine Pinnacle sotto il ${num(T.rules.maxMarginPct, 0)}%. Per ora si gioca tutto a 2 €: a fine novembre si decide`); })() : ''}
+      ${i.marketStats && tm.oceani ? (() => { const M = i.marketStats, line = x => `${x.results && x.results.settled ? `${x.results.won} vinte su ${x.results.settled}, attese ${num(x.results.expected, 1)}, ${signedMoney(x.results.pnlEur || 0)}` : 'nessun risultato'}`;
+        return row('info', '📉 Mercato contro: non si gioca', `Justice League con Pinnacle spostato contro di ${num(M.rules.againstPts, 0)} punto o più: ${line(M.against)}`, `Le altre: ${line(M.other)} · Se dopo il segnale il mercato si gira contro, il verdetto diventa 🔴`); })() : ''}
       ${row(bl, 'Il tuo budget', b ? `${money(b.balance)} (${signedMoney(b.pnl)})` : '—', b ? (b.stopWhy ? `🛑 Freno: ${esc(b.stopWhy)}` : `stop a ${money(b.stop)} · freni: ${b.stopRule ? b.stopRule.dayLosses : 3} perse in un giorno, ${b.stopRule ? b.stopRule.weekLossEur : 15} € persi in una settimana`) : '')}
     </div>`;
   }
@@ -973,7 +975,8 @@
     const p = r && Number(r.win_prob), odd = r && Number(r.play ? r.play.odd : r.odd);
     if (!(p > 0 && p < 1) || !(odd > 1)) return '';
     const ev = 2 * (odd * p - 1);
-    return `<div class="probline">📊 Vince il <b>${num(p * 100, 0)}%</b> (circa ${num(p * 10, 0)} su 10) · guadagno atteso <b class="${ev >= 0 ? 'pos' : 'neg'}">${ev >= 0 ? '+' : '−'}${money(Math.abs(ev))}</b> su 2 €</div>`;
+    const m = r.market, mk = !m ? '' : m.dir === 'contro' ? ` · <b class="neg">📉 mercato contro (−${num(Math.abs(m.mv), 1)} punti)</b>` : m.dir === 'con' ? ` · <b class="pos">📈 mercato con noi (+${num(m.mv, 1)})</b>` : ' · ➖ mercato fermo';
+    return `<div class="probline">📊 Vince il <b>${num(p * 100, 0)}%</b> (circa ${num(p * 10, 0)} su 10) · guadagno atteso <b class="${ev >= 0 ? 'pos' : 'neg'}">${ev >= 0 ? '+' : '−'}${money(Math.abs(ev))}</b> su 2 €${mk}</div>`;
   }
   function drawLine(r) {
     if (!r || r.draw_prob === null || r.draw_prob === undefined || r.selection === 'draw') return '';

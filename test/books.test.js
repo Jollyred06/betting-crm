@@ -331,3 +331,20 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.isTop({ ...jl, odd: 1.9 }), false);                                                 // fuori dalla Justice League
   console.log('💎 Top: ok');
 }
+
+{ // 📉 mercato contro (8 novembre 2026): se Pinnacle abbassa la nostra scelta di 1 punto o piu' dopo il segnale, non si gioca
+  const I = require('../services/italia');
+  const first = { id: 1, selection: 'away', pin_h: 2.0, pin_d: 3.6, pin_a: 3.9 };
+  const now = { id: 2, selection: 'away', pin_h: 1.85, pin_d: 3.7, pin_a: 4.4 };
+  const m = I.marketOf(first, now);
+  assert.strictEqual(m.dir, 'contro'); assert.ok(m.mv < -1);
+  assert.strictEqual(I.marketOf(first, { ...first, id: 3 }).dir, 'fermo');
+  assert.strictEqual(I.marketOf(first, { id: 4, pin_h: 2.1, pin_d: 3.6, pin_a: 3.6 }).dir, 'con');
+  assert.strictEqual(I.marketOf(first, first), null);
+  const later = Date.now() + 3600000;
+  const card = { id: 9, commence_time: new Date(later).toISOString(), league: 'Serie A', odd: 3.4, edge_pct: 3, liquid: true, final4: true, play: { book: 'Goldbet', odd: 3.4 }, min_odd: 3.2, market: m };
+  const v = I.verdictOf(card, { best: new Set([9]), nowMs: Date.now() });
+  assert.strictEqual(v.play, 'no'); assert.ok(/mercato/i.test(v.text));
+  assert.deepStrictEqual(I.pickBest([card], { team: { oceano: true } }), []);
+  console.log('📉 Mercato contro: ok');
+}
