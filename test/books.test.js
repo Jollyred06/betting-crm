@@ -362,3 +362,16 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.markQuick([sig], new Map()).size, 0);                             // senza storia non si giudica
   console.log('⚡ Quicksilver: ok');
 }
+
+{ // 🧪 Prova (10 novembre 2026): liquide dal 2%, quota 2,00-4,00, fuori dalle Justice League (coppe e quote 3,50-4,00)
+  const I = require('../services/italia');
+  const jl = { odd: 2.8, edge_pct: 3.5, league: 'Allsvenskan', pin_h: 2.7, pin_d: 3.5, pin_a: 2.75 };
+  assert.strictEqual(I.isOceani(jl), true); assert.strictEqual(I.isProva(jl), false);                      // le Justice League restano Justice League
+  assert.strictEqual(I.isProva({ ...jl, odd: 3.8 }), true);                                                // quota 3,50-4,00
+  assert.strictEqual(I.isProva({ ...jl, odd: 4.2 }), false);                                               // oltre 4,00
+  assert.strictEqual(I.isProva({ ...jl, league: 'EFL Trophy' }), true);                                    // coppa
+  assert.strictEqual(I.isProva({ ...jl, odd: 1.8 }), false);                                              // sotto 2,00
+  assert.strictEqual(I.isProva({ ...jl, league: 'EFL Trophy', pin_h: 2.3, pin_d: 3.0, pin_a: 2.4 }), false);  // mercato sottile (margine oltre 6%)
+  assert.strictEqual(I.isProva({ ...jl, league: 'EFL Trophy', edge_pct: 1.5 }), false);                    // vantaggio sotto il 2%
+  console.log('🧪 Prova: ok');
+}

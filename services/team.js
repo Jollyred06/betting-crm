@@ -22,6 +22,7 @@ const MEMBERS = [
   { key: 'flash', what: '💧 liquide prese in anticipo (oltre 3 ore prima)', kind: 'star', on: false },
   { key: 'strange', what: '⚖️ il pareggio (X dal 2%)', kind: 'star', on: false },
   { key: 'quicksilver', what: '⚡ Pinnacle si muove a favore e il sito italiano e\' ancora indietro (liquide, dal 2%, quota 1,60–3,50). Misurata dall\'8 novembre', kind: 'star', on: false },
+  { key: 'prova', what: '🧪 Prova (solo simulata): liquide dal 2%, quota 2,00–4,00, fuori dalle Justice League (coppe e quote 3,50–4,00). Dal 10 novembre', kind: 'star', on: true },
   { key: 'wolverine', what: '🧓 la veterana F (2–6%, quote 1,60–3,50) fuori dai mercati liquidi', kind: 'star', on: false },
   { key: 'muro', what: '🏠 niente trasferte nei minori', kind: 'filter', on: true }
 ];
@@ -83,6 +84,7 @@ async function getTeam(pool, { nowMs = Date.now() } = {}) {
   const f8 = mk(I.markFinal8, { ignoreSince: true }), f9 = mk(I.markFinal9, { ignoreSince: true });
   const qsMap = I.markQuick(all, await I.pinHistory(pool)), qs = r => !!(qsMap.get(r.id) || {}).final;
   const oc = mk(I.markOceani), fl = mk(I.markLiquidEarly), dr = mk(I.markDraw), fF = (() => { const m = I.markFinal(I.primaryRows(all)); return r => !!(m.get(r.id) || {}).final; })();
+  const pv = I.markProva(all);
   const sets = {
     fascia: all.filter(r => base(r) && f6(r) && !I.isAwayThin(r)),
     oceano: all.filter(r => base(r) && lq(r)),
@@ -94,6 +96,7 @@ async function getTeam(pool, { nowMs = Date.now() } = {}) {
     strange: all.filter(r => base(r) && dr(r)),
     // solo quello che AGGIUNGE: le F fuori dai mercati liquidi (quelle liquide le gioca gia' Aquaman)
     quicksilver: all.filter(r => qs(r)),
+    prova: all.filter(r => I.isProva(r) && !!(pv.get(r.id) || {}).final),
     wolverine: I.primaryRows(all).filter(r => base(r) && fF(r) && !((I.pinMarginPct(r) ?? 99) < 6)),
     muro: all.filter(r => base(r) && f6(r) && I.isAwayThin(r))   // le ESCLUSE dal filtro
   };
