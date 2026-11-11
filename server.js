@@ -46,6 +46,10 @@ app.use('/api', (req, res, next) => {
     res.on('finish', () => { cache.clearMatching(re); cache.warm({ port: PORT, delayMs: 2500, paths: ['/api/tracker/italia', '/api/tracker/played'] }); });
     return next();
   }
+  // 11 novembre 2026: i giri automatici (controllo ogni 30 minuti, giro giornaliero, controllo di sistema) NON buttano piu' la copia pronta:
+  // ogni volta si ricalcolavano 16 pagine (8,6 MB letti da Supabase) anche quando non era cambiato niente (48 volte al giorno: sforato il limite di banda).
+  // Se i giri trovano davvero qualcosa di nuovo, lo dicono loro (routes/run.js) e la copia si butta solo allora.
+  if (/^\/(capture-closing|run-daily|run-daily-if-missing|system-check)/.test(req.path)) return next();
   cache.clear(); res.on('finish', () => cache.clearAndWarm({ port: PORT }));   // (anche /team: cambia la lista delle ⭐)
   next();
 });
@@ -58,7 +62,9 @@ app.use('/api/tracker', trackerRouter);
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server avviato sulla porta ${PORT}`);
-  cache.warm({ port: PORT, delayMs: 8000 });   // all'avvio (aggiornamento o risveglio di Render) le pagine principali si preparano subito
+  // 11 novembre 2026: NIENTE ripreparazione all'avvio. Render gratuito si addormenta e si risveglia a ogni controllo (ogni 30 minuti):
+  // ogni risveglio rileggeva 8,6 MB da Supabase per niente (limite di banda sforato). Le pagine si preparano quando qualcuno le apre.
+  // (dopo un salvataggio dall'app la ripreparazione resta, perche' c'e' qualcuno davanti)
   // sicurezza Supabase: chiude l'accesso dall'API pubblica a tutte le tabelle (anche a quelle create dopo, a ogni avvio e ogni 6 ore)
   const { enableRls } = require('./db/secure'), pool = require('./db/pool');
   const run = () => enableRls(pool).then(r => { if (r.attivata && r.attivata.length) console.log('RLS attivata su:', r.attivata.join(', ')); if (r.errore) console.log('RLS non attivata:', r.errore); });

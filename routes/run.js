@@ -80,10 +80,13 @@ router.post('/capture-closing', async (req, res) => {
   const italiaInBackground = () => {
     if (italiaRunning) return;
     italiaRunning = true;
-    require('../services/italia').tick(pool, { notify: sendTelegramNotification })
+    // 11 novembre 2026: la copia pronta si butta (e si riprepara) solo se i segnali sono davvero cambiati: nuovi, chiusure prese o risultati
+    const finger = async () => { try { const r = (await pool.query(`SELECT COUNT(*) n, COALESCE(MAX(id),0) m, COUNT(close_captured_at) c, COUNT(result) r, COUNT(settled_at) s FROM italia_signals`)).rows[0]; return [r.n, r.m, r.c, r.r, r.s].join('|'); } catch (e) { return null; } };
+    let before = null;
+    finger().then(f => { before = f; return require('../services/italia').tick(pool, { notify: sendTelegramNotification }); })
       .then(r => { if (r && (r.erroreScansione || r.erroreChiusura || r.errore)) console.error('Strategia I:', JSON.stringify(r)); })
       .catch(e => console.error('Strategia I:', e.message))
-      .finally(() => { italiaRunning = false; require('../services/cache').clearAndWarm(); });   // segnali nuovi: via la copia pronta, poi si ripreparano le pagine
+      .finally(async () => { italiaRunning = false; const after = await finger(); if (before === null || after === null || after !== before) require('../services/cache').clearAndWarm(); });   // solo se qualcosa e' cambiato: via la copia pronta, poi si ripreparano le pagine
   };
   try {
     const cc = require('../services/closingCapture'), odds = require('../services/oddsApi');
