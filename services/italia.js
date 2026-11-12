@@ -256,6 +256,14 @@ function romeHour(nowMs) {
   return Number(ROME_HOUR.format(new Date(nowMs))) % 24;
 }
 
+/** 12 novembre 2026: il giorno della ricarica odss il conto mostrato e' quello vecchio (ultima lettura di ieri) e il piano credeva
+ *  "30 giorni alla ricarica", quindi bloccava la lettura che avrebbe scoperto i crediti nuovi. Parte pura (testata):
+ *  vero se OGGI (ora italiana) e' il giorno di ricarica e oggi non c'e' ancora nessuna lettura con la quota: serve UNA lettura di sondaggio. */
+const ROME_DAYNUM = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', day: 'numeric' });
+function resetProbe(nowMs, resetDay, readsWithQuotaToday) {
+  return Number(ROME_DAYNUM.format(new Date(nowMs))) === Number(resetDay) && Number(readsWithQuotaToday) === 0;
+}
+
 /** Quota minima da accettare sul sito: sotto questa il vantaggio sul prezzo giusto di Pinnacle scende sotto la soglia. */
 function minOdd(fairProb, minEdgePct) { return Math.ceil((1 + minEdgePct / 100) / fairProb * 100) / 100; }
 
@@ -353,10 +361,11 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   if (nowMs - lastOk < every * 60000 - 5 * 60000) return { scan: 'non ancora' };   // 5 minuti di tolleranza: il giro passa ogni 10
   if (lastKo > lastOk && nowMs - lastKo < 30 * 60000) return { scan: 'in pausa dopo un errore' };    // chiave sbagliata o servizio giu': non insistere ogni 10 minuti
   if (await usedThisMonth(pool) >= c.monthlyCap - c.closeReserve) return { scan: 'tetto mensile' };
-  if (rem !== null && rem <= (plan ? plan.reserve : c.closeReserve)) return { scan: 'quota odss quasi finita: restano solo le chiusure' };
+  const probe = resetProbe(nowMs, c.resetDay, (await pool.query(`SELECT COUNT(*)::int AS n FROM italia_requests WHERE ok AND quota_remaining IS NOT NULL AND at >= date_trunc('day', NOW() AT TIME ZONE 'Europe/Rome') AT TIME ZONE 'Europe/Rome'`)).rows[0].n);   // giorno di ricarica: una lettura per scoprire i crediti nuovi
+  if (!probe && rem !== null && rem <= (plan ? plan.reserve : c.closeReserve)) return { scan: 'quota odss quasi finita: restano solo le chiusure' };
   // 1° novembre 2026: richieste distribuite fino alla ricarica. Budget di oggi = rimaste / giorni alla ricarica;
   // se oggi e' gia' stato speso, niente scansione (le chiusure, che misurano il valore, continuano).
-  if (rem !== null) {
+  if (rem !== null && !probe) {
     const p = odssPace(rem, (await pool.query(`SELECT COUNT(*)::int AS n FROM italia_requests WHERE at >= date_trunc('day', NOW())`)).rows[0].n, c.resetDay, nowMs);
     if (p.over) return { scan: `budget di oggi finito (${p.usedToday} su ${p.perDay})` };
   }
@@ -1249,4 +1258,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

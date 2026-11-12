@@ -25,7 +25,7 @@ async function getCredits(pool, env = process.env, nowMs = Date.now()) {
     out.push({ key: 'odss', name: 'odss-api.com (quote italiane)', remaining: r, unit: 'richieste', usedToday: today, perDay: p && p.perDay, avgPerDay: Math.round(avg * 10) / 10,
       resetAt: p && p.resetAt, daysLeft: p && p.daysLeft, plan,
       level: r === null ? 'info' : r <= plan.reserve ? 'bad' : enough === false ? 'warn' : 'ok',
-      text: r === null ? 'Nessuna lettura ancora.' : `${r} rimaste, ${p.daysLeft} giorni alla ricarica. Piano: scansione ogni ${plan.everyMin / 60} ore (${plan.scansPerDay} al giorno) + circa ${plan.closesPerDay} chiusure = ${plan.perDay} al giorno; ${plan.reserve} tenute da parte per le chiusure; alla ricarica ne restano circa ${plan.leftAtReset}. Oggi ${today}, media 7 giorni ${avg.toFixed(1)}.` });
+      text: r === null ? 'Nessuna lettura ancora.' : I.resetProbe(nowMs, c.resetDay, today) ? `Oggi è il giorno della ricarica: il conto (${r}) è quello di ieri. Il primo giro di oggi legge i crediti nuovi.` : `${r} rimaste, ${p.daysLeft} giorni alla ricarica. Piano: scansione ogni ${plan.everyMin / 60} ore (${plan.scansPerDay} al giorno) + circa ${plan.closesPerDay} chiusure = ${plan.perDay} al giorno; ${plan.reserve} tenute da parte per le chiusure; alla ricarica ne restano circa ${plan.leftAtReset}. Oggi ${today}, media 7 giorni ${avg.toFixed(1)}.` });
   });
 
   await safe(async () => {

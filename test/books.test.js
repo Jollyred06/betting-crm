@@ -375,3 +375,13 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.isProva({ ...jl, league: 'EFL Trophy', edge_pct: 1.5 }), false);                    // vantaggio sotto il 2%
   console.log('🧪 Prova: ok');
 }
+
+{ // giorno di ricarica odss (12): una lettura di sondaggio, poi si torna al piano
+  const I = require('../services/italia');
+  const noon = d => Date.UTC(2026, 10, d, 8, 0);                    // 9:00 ora italiana
+  assert.strictEqual(I.resetProbe(noon(12), 12, 0), true);          // il 12, nessuna lettura oggi: sondaggio
+  assert.strictEqual(I.resetProbe(noon(12), 12, 1), false);         // il 12 ma ha gia' letto: piano normale
+  assert.strictEqual(I.resetProbe(noon(13), 12, 0), false);         // un altro giorno
+  assert.strictEqual(I.resetProbe(Date.UTC(2026, 10, 11, 23, 30), 12, 0), true);   // 00:30 ora italiana del 12
+  console.log('ricarica odss: ok');
+}
