@@ -400,6 +400,8 @@ console.log('books.test.js: tutti i controlli passati');
   const I = require('../services/italia');
   assert.strictEqual(I.cfg({}).ouEnabled, false);
   assert.strictEqual(I.cfg({ OU_ENABLED: 'true' }).ouEnabled, true);
+  assert.strictEqual(I.cfg({ OU_ENABLED: 'True' }).ouEnabled, true);   // come lo scrive Render
+  assert.strictEqual(I.cfg({ OU_ENABLED: ' TRUE ' }).ouEnabled, true);
   assert.strictEqual(I.cfg({ OU_ENABLED: '1' }).ouEnabled, false);   // "1" NON accende: ci vuole "true"
   assert.strictEqual(I.cfg({}).ouMarket, 'ou');
   console.log('Over/Under: accensione ok');
