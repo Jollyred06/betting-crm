@@ -79,7 +79,7 @@ function cfg(env = process.env) {
     tBooks: (env.T_BOOKS ? env.T_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : DEFAULT_T_BOOKS),
     tEnabled: env.T_ENABLED !== 'false',
     // ⚽ gol (1° novembre 2026): quote Over/Under sulla carta, una richiesta in piu' a scansione. Spente finche' OU_ENABLED non e' 'true'
-    ouEnabled: env.OU_ENABLED === 'true', ouMarket: String(env.OU_MARKET || 'over_under').trim(),
+    ouEnabled: env.OU_ENABLED === 'true', ouMarket: String(env.OU_MARKET || 'ou').trim(),
     // 1° novembre 2026: i siti dove Christian ha il conto (MY_BOOKS su Render, chiavi del feed separate da virgola).
     // "👉 Gioca su" sceglie la quota piu' alta tra questi.
     myBooks: (env.MY_BOOKS ? env.MY_BOOKS.split(',').map(s => s.trim()).filter(Boolean) : ['888sport_it', 'snai', 'netwin', 'eurobet', 'goldbet'])

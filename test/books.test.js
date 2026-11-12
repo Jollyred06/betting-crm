@@ -395,3 +395,12 @@ console.log('books.test.js: tutti i controlli passati');
   assert.deepStrictEqual(I.cfg({ ITALIA_SCAN_HOURS: '' }).scanHours, []);                 // vuoto = come prima
   console.log('Orari di scansione: ok');
 }
+
+{ // Over/Under: si accende solo con OU_ENABLED=true e il mercato odss giusto e' 'ou' (trovato il 4 novembre)
+  const I = require('../services/italia');
+  assert.strictEqual(I.cfg({}).ouEnabled, false);
+  assert.strictEqual(I.cfg({ OU_ENABLED: 'true' }).ouEnabled, true);
+  assert.strictEqual(I.cfg({ OU_ENABLED: '1' }).ouEnabled, false);   // "1" NON accende: ci vuole "true"
+  assert.strictEqual(I.cfg({}).ouMarket, 'ou');
+  console.log('Over/Under: accensione ok');
+}
