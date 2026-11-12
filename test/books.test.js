@@ -306,7 +306,9 @@ console.log('books.test.js: tutti i controlli passati');
   const now = Date.parse('2026-11-06T20:50:00Z'), ko = '2026-11-06T21:00:00Z';
   const cand = [
     { id: 1, event_id: 'e1', selection: 'home', odd: 3.2, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Primera A', pin_h: 3.6, pin_d: 3.3, pin_a: 2.2 },     // ⭐ con vantaggio 2,5%
-    { id: 2, event_id: 'e2', selection: 'home', odd: 1.9, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Ligue 2', pin_h: 2.0, pin_d: 3.0, pin_a: 3.6 }        // non ⭐, sotto soglia
+    { id: 2, event_id: 'e2', selection: 'home', odd: 1.9, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Ligue 2', pin_h: 2.0, pin_d: 3.0, pin_a: 3.6 },       // non ⭐, sotto soglia
+    { id: 3, event_id: 'e3', selection: 'home', odd: 1.9, commence_time: ko, strategy: 'I', edge_pct: 6.0, league: 'Ligue 2', pin_h: 2.0, pin_d: 3.0, pin_a: 3.6 },       // 12 novembre: mai giocata, anche con vantaggio alto non si chiude piu'
+    { id: 4, event_id: 'e4', selection: 'away', odd: 2.3, commence_time: ko, strategy: 'I', edge_pct: 3.0, league: 'Ligue 2', pin_h: 3.0, pin_d: 3.2, pin_a: 2.1 }         // Superman (trasferta, mercato sottile): si misura ancora
   ];
   const asked = [];
   const pool = { query: async (sql) => {
@@ -317,7 +319,7 @@ console.log('books.test.js: tutti i controlli passati');
   } };
   const http = { get: async (url, o) => { asked.push(o.params.event_id); return { data: { odds: [] }, headers: {} }; } };
   await I.captureClosing(pool, { closeWindowMin: 45, closeMinEdge: 4, closeTriggerMin: 15, monthlyCap: 9999, books: [], myBooks: [], key: 'x' }, { nowMs: now, http });
-  assert.deepStrictEqual(asked, ['e1']);
+  assert.deepStrictEqual(asked.join(',').split(',').sort(), ['e1', 'e4']);   // una sola richiesta per tutte le partite: solo la ⭐ e Superman, non e2 ne' e3
   console.log('Chiusure delle ⭐: ok');
 })().catch(e => { console.error(e); process.exit(1); });
 
@@ -384,4 +386,12 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.resetProbe(noon(13), 12, 0), false);         // un altro giorno
   assert.strictEqual(I.resetProbe(Date.UTC(2026, 10, 11, 23, 30), 12, 0), true);   // 00:30 ora italiana del 12
   console.log('ricarica odss: ok');
+}
+
+{ // 12 novembre 2026: scansioni solo alle ore 9, 12, 15, 18, 21 (ora italiana)
+  const I = require('../services/italia');
+  assert.deepStrictEqual(I.cfg({}).scanHours, [9, 12, 15, 18, 21]);
+  assert.deepStrictEqual(I.cfg({ ITALIA_SCAN_HOURS: '10, 14' }).scanHours, [10, 14]);
+  assert.deepStrictEqual(I.cfg({ ITALIA_SCAN_HOURS: '' }).scanHours, []);                 // vuoto = come prima
+  console.log('Orari di scansione: ok');
 }

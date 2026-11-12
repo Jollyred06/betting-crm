@@ -57,6 +57,9 @@ function cfg(env = process.env) {
     minLeadMin: n('ITALIA_MIN_LEAD_MIN', 15),  // non segnalare partite che iniziano tra meno di 15 minuti
     scanEveryMin: n('ITALIA_SCAN_EVERY_MIN', 180),
     fromHour: n('ITALIA_FROM_HOUR', 9), toHour: n('ITALIA_TO_HOUR', 22),
+    // 12 novembre 2026: scansioni solo a queste ore (ora italiana). 53 Justice League su 62 sono comparse alle 9, 12, 15, 18 e 21: le altre ore trovavano quasi niente.
+    // Vuoto (ITALIA_SCAN_HOURS=) = come prima, una scansione ogni ITALIA_SCAN_EVERY_MIN.
+    scanHours: String(env.ITALIA_SCAN_HOURS === undefined ? '9,12,15,18,21' : env.ITALIA_SCAN_HOURS).split(',').map(x => x.trim()).filter(x => x !== '').map(Number).filter(x => Number.isFinite(x) && x >= 0 && x < 24),
     monthlyCap: n('ITALIA_MONTHLY_CAP', 400),
     closeReserve: n('ITALIA_CLOSE_RESERVE', 60),
     // giorno del mese in cui odss ricarica le richieste (1° novembre 2026: 12)
@@ -353,11 +356,13 @@ async function planOf(pool, c, rem, nowMs = Date.now()) {
 async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   const h = romeHour(nowMs);
   if (h < c.fromHour || h >= c.toHour) return { scan: 'fuori orario' };
+  if (c.scanHours.length && !c.scanHours.includes(h)) return { scan: 'non e\' un orario di scansione' };
   const { rows } = await pool.query(`SELECT MAX(at) FILTER (WHERE ok) AS last_ok, MAX(at) FILTER (WHERE NOT ok) AS last_ko FROM italia_requests WHERE kind = 'scan'`);
   const lastOk = rows[0].last_ok ? T(rows[0].last_ok) : 0, lastKo = rows[0].last_ko ? T(rows[0].last_ko) : 0;
   const rem = await lastRemaining(pool);
   const plan = rem !== null ? await planOf(pool, c, rem, nowMs) : null;
-  const every = plan ? Math.min(plan.everyMin, Math.max(c.scanEveryMin, 240)) : c.scanEveryMin;
+  let every = plan ? Math.min(plan.everyMin, Math.max(c.scanEveryMin, 240)) : c.scanEveryMin;
+  if (c.scanHours.length) every = Math.min(every, 170);   // gli orari fissi distano 3 ore: basta evitare un doppio giro nella stessa ora
   if (nowMs - lastOk < every * 60000 - 5 * 60000) return { scan: 'non ancora' };   // 5 minuti di tolleranza: il giro passa ogni 10
   if (lastKo > lastOk && nowMs - lastKo < 30 * 60000) return { scan: 'in pausa dopo un errore' };    // chiave sbagliata o servizio giu': non insistere ogni 10 minuti
   if (await usedThisMonth(pool) >= c.monthlyCap - c.closeReserve) return { scan: 'tetto mensile' };
@@ -415,7 +420,9 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
     [nowMs, c.closeWindowMin]);
   // 6 novembre 2026: le ⭐ della Justice League (vantaggio dal 2%) prendono SEMPRE la chiusura, anche sotto la soglia di vantaggio
   // delle chiusure (ITALIA_CLOSE_MIN_EDGE): prima quelle tra 2% e 4% non venivano mai misurate e la pagella non poteva giudicarle.
-  const rows = cand.filter(r => Number(r.edge_pct || 0) >= c.closeMinEdge || (r.strategy === 'I' && (isOceani(r) || isProva(r))));
+  // 12 novembre 2026: le chiusure (1 credito odss ciascuna) solo per cio' che si gioca o si misura: Justice League, Prova e Superman (trasferte nei minori).
+  // Prima si chiudevano anche i segnali mai giocati (3 su 4): credito sprecato. Le altre strategie (B, T) restano com'erano.
+  const rows = cand.filter(r => r.strategy === 'I' ? (isOceani(r) || isProva(r) || isAwayThin(r)) : Number(r.edge_pct || 0) >= c.closeMinEdge);
   // 1° novembre 2026: anche i segnali T (tutti i siti italiani) prendono la chiusura, per giudicare i bookmaker sul valore.
   // Non fanno mai partire una richiesta da soli: si aggiungono a quella dei segnali I e B (una richiesta = stesso costo).
   if (!rows.some(r => r.strategy !== 'T')) return { chiusure: 0 };
