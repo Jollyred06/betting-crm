@@ -404,3 +404,13 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(I.cfg({}).ouMarket, 'ou');
   console.log('Over/Under: accensione ok');
 }
+
+{ // 12 novembre 2026: piano con orari fissi e Over/Under (ogni scansione costa una richiesta in piu')
+  const I = require('../services/italia');
+  const a = I.planScans({ remaining: 495, daysLeft: 30, closesPerDay: 4, hours: [9, 12, 15, 18, 21] });
+  assert.strictEqual(a.scansPerDay, 5); assert.strictEqual(a.perDay, 5 + a.closesPerDay); assert.deepStrictEqual(a.hours, [9, 12, 15, 18, 21]);
+  const b = I.planScans({ remaining: 495, daysLeft: 30, closesPerDay: 4, hours: [9, 12, 15, 18, 21], perScanExtra: 1 });
+  assert.strictEqual(b.perDay, 10 + b.closesPerDay); assert.strictEqual(b.ou, true);
+  assert.ok(b.leftAtReset < a.leftAtReset);
+  console.log('Piano crediti con orari fissi: ok');
+}

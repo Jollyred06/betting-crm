@@ -230,10 +230,15 @@ function odssPace(remaining, usedToday, resetDay = 12, nowMs = Date.now()) {
  * (media degli ultimi 7 giorni, con un margine), non piu' una riserva fissa di 60 che alla ricarica andava sprecata.
  * Con quello che resta si sceglie la scansione piu' frequente che ci sta: ogni 2 ore, 3 ore o 4 ore (dalle 9 alle 22).
  */
-function planScans({ remaining, daysLeft, closesPerDay, usedToday = 0, fromHour = 9, toHour = 22, options = [120, 180, 240], maxReserve = 60, margin = 10 }) {
+function planScans({ remaining, daysLeft, closesPerDay, usedToday = 0, fromHour = 9, toHour = 22, options = [120, 180, 240], maxReserve = 60, margin = 10, hours = [], perScanExtra = 0 }) {
   const days = Math.max(1, daysLeft), closes = Math.max(4, Math.ceil(closesPerDay * 1.2));   // +20% per le giornate piene
   const reserve = Math.min(maxReserve, closes * days + margin);
-  const scansPerDay = m => Math.floor((toHour - fromHour) * 60 / m) + 1;
+  // 12 novembre 2026: con gli orari fissi (9, 12, 15, 18, 21) le scansioni sono quelle e non una ogni N ore; ogni scansione costa 1 + perScanExtra (le Over/Under: +1)
+  if (hours.length) {
+    const perDay = hours.length * (1 + perScanExtra) + closes;
+    return { reserve, everyMin: 180, scansPerDay: hours.length, hours, ou: perScanExtra > 0, closesPerDay: closes, perDay, leftAtReset: Math.max(0, remaining - perDay * days) };
+  }
+  const scansPerDay = m => (Math.floor((toHour - fromHour) * 60 / m) + 1) * (1 + perScanExtra);
   const need = m => (scansPerDay(m) + closes) * days + margin;
   const pick = options.find(m => need(m) <= remaining) || options[options.length - 1];
   return { reserve, everyMin: pick, scansPerDay: scansPerDay(pick), closesPerDay: closes, perDay: scansPerDay(pick) + closes,
@@ -350,7 +355,7 @@ async function planOf(pool, c, rem, nowMs = Date.now()) {
   const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE kind = 'close' AND at >= NOW() - INTERVAL '7 days')::int AS closes,
     COUNT(*) FILTER (WHERE at >= date_trunc('day', NOW()))::int AS today FROM italia_requests`);
   const pace = odssPace(rem, rows[0].today, c.resetDay, nowMs);
-  return { ...planScans({ remaining: rem, daysLeft: pace.daysLeft, closesPerDay: rows[0].closes / 7, fromHour: c.fromHour, toHour: c.toHour, maxReserve: c.closeReserve }), daysLeft: pace.daysLeft, resetAt: pace.resetAt };
+  return { ...planScans({ remaining: rem, daysLeft: pace.daysLeft, closesPerDay: rows[0].closes / 7, fromHour: c.fromHour, toHour: c.toHour, maxReserve: c.closeReserve, hours: c.scanHours, perScanExtra: c.ouEnabled ? 1 : 0 }), daysLeft: pace.daysLeft, resetAt: pace.resetAt };
 }
 
 async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
