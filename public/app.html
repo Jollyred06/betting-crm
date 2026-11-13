@@ -852,8 +852,8 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L, BK, GL, TM] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null)]);
-      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + heroTeam() + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+      const [i, b, L, BK, GL, TM, BR] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null)]);
+      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + brainCard(BR) + heroTeam() + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
         + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
@@ -938,6 +938,20 @@
     return `<div class="strat"><div class="sh"><div class="letter" style="font-size:26px">📋</div><div><b>La pagella della squadra</b><span>Il CRM giudica ogni supereroe su tutti i risultati: 🟢 da ${T.rules.minN} segnali con valore sicuramente positivo e vinte nella norma. Propone, tu approvi${T.brakeUntil ? ` · prossimo cambio dal ${new Date(T.brakeUntil).toLocaleDateString('it-IT')}` : ''}</span></div></div>
       ${props ? `<div class="callout ok">💡 ${props === 1 ? 'C\'è una proposta' : 'Ci sono ' + props + ' proposte'} da approvare</div>` : '<p class="muted" style="margin:0 0 6px;font-size:14px;">Nessuna proposta: per ora la squadra resta così.</p>'}
       ${T.members.map(row).join('')}</div>`;
+  }
+  // 🧠 CERVELLO: dove si vince e dove si perde, per gruppi. Sola lettura: non cambia nessuna regola
+  function brainCard(B) {
+    if (!B || !B.dimensions) return '';
+    const V = { forte: ['ok', 'sopra'], debole: ['bad', 'sotto'], norma: ['warn', 'nella norma'], pochi: ['info', 'pochi dati'] };
+    const row = g => { const [lv, lab] = V[g.verdict] || V.pochi;
+      const oos = g.oos && g.oos.settled ? ` · dal 5/11: ${g.oos.won} su ${g.oos.settled} (attese ${num(g.oos.expected, 1)})` : '';
+      return `<div class="prow"><span class="sdot ${lv}"></span><div><b>${esc(g.name)}</b> <small class="muted">${sdot0(lab)}</small>
+        <span class="muted tnum">${g.settled} chiuse · ${g.won} vinte, attese ${num(g.expected, 1)} · saldo ${pct(g.roiPct, 0)}${g.measured >= 5 ? ` · valore ${pct(g.avgClvPct, 1)}${g.clvCi95 ? ` (da ${pct(g.clvCi95[0], 1)} a ${pct(g.clvCi95[1], 1)})` : ''}` : ''}${oos}</span></div></div>`; };
+    const sdot0 = x => x;
+    return `<details class="fold"><summary><span>🧠 Il cervello</span><small>dove si vince e dove si perde, per gruppi</small></summary>
+      <p class="muted" style="font-size:14px;">Tutte le prime segnalazioni chiuse, divise per gruppo. Un gruppo si giudica solo da ${B.rules.minN} partite chiuse: sotto, è "pochi dati". "Sopra" solo se valore, vinte e saldo sono tutti positivi; il solo valore contro la chiusura inganna nei mercati sottili. Per ora si guarda soltanto: non cambia nessuna regola.</p>
+      <p class="muted tnum" style="margin:0 0 6px;">In tutto: ${B.total.settled} chiuse · ${B.total.won} vinte, attese ${num(B.total.expected, 1)} · saldo ${pct(B.total.roiPct, 0)}</p>
+      ${B.dimensions.map(d => `<h4 style="margin:14px 0 2px;">${esc(d.title)}</h4>${d.note ? `<p class="muted" style="margin:0;font-size:13px;">${esc(d.note)}</p>` : ''}${d.groups.map(row).join('')}`).join('')}</details>`;
   }
   async function approveTeam(hk, on, btn) {
     if (!(await ensureKey())) return;
