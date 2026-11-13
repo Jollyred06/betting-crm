@@ -107,6 +107,43 @@ function findGoalSignals(totals, books, pin1x2, nowMs = Date.now()) {
   return out;
 }
 
+/** Il miglior prezzo dei siti italiani contro Pinnacle senza margine, per ogni partita/linea/lato (anche con vantaggio negativo). Solo linee 1,5 / 2,5 / 3,5. */
+const EDGE_LINES = [1.5, 2.5, 3.5];
+function ouEdges(totals, books, nowMs = Date.now()) {
+  const out = [];
+  for (const ev of totals.values()) {
+    if (!(Date.parse(ev.commence_time) > nowMs)) continue;
+    for (const line of EDGE_LINES) {
+      const L = ev.lines[line] || {}, pin = L.pinnacle, fair = pin && noVig2(pin.over, pin.under);
+      if (!fair) continue;
+      for (const side of ['over', 'under']) {
+        const p = side === 'over' ? fair[0] : fair[1];
+        let best = null;
+        for (const b of books) { const q = L[b] && L[b][side]; if (q > 1 && (!best || q > best.odd)) best = { book: b, odd: q }; }
+        if (best) out.push({ ev, line, side, ...best, fair_prob: p, edge_pct: (best.odd * p - 1) * 100, pin });
+      }
+    }
+  }
+  return out;
+}
+async function saveEdges(pool, rows) {
+  let n = 0;
+  for (const x of rows) {
+    await pool.query(`INSERT INTO goal_edges (event_id, line, side, league, home, away, commence_time, book, odd, fair_prob, edge_pct, pin_over, pin_under)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ON CONFLICT (event_id, line, side) DO UPDATE SET n_reads = goal_edges.n_reads + 1, last_seen = NOW(),
+        book = CASE WHEN EXCLUDED.edge_pct > goal_edges.edge_pct THEN EXCLUDED.book ELSE goal_edges.book END,
+        odd = CASE WHEN EXCLUDED.edge_pct > goal_edges.edge_pct THEN EXCLUDED.odd ELSE goal_edges.odd END,
+        fair_prob = CASE WHEN EXCLUDED.edge_pct > goal_edges.edge_pct THEN EXCLUDED.fair_prob ELSE goal_edges.fair_prob END,
+        pin_over = CASE WHEN EXCLUDED.edge_pct > goal_edges.edge_pct THEN EXCLUDED.pin_over ELSE goal_edges.pin_over END,
+        pin_under = CASE WHEN EXCLUDED.edge_pct > goal_edges.edge_pct THEN EXCLUDED.pin_under ELSE goal_edges.pin_under END,
+        edge_pct = GREATEST(EXCLUDED.edge_pct, goal_edges.edge_pct)`,
+      [x.ev.event_id, x.line, x.side, x.ev.league, x.ev.home, x.ev.away, x.ev.commence_time, x.book, x.odd, x.fair_prob, x.edge_pct, x.pin && x.pin.over, x.pin && x.pin.under]);
+    n++;
+  }
+  return n;
+}
+
 /** Riepilogo di righe con gol: quante, media, % Over sulle linee. */
 function overStats(goalsList) {
   const g = goalsList.filter(v => v !== null && v !== undefined), n = g.length;
@@ -127,6 +164,10 @@ async function ensureGoals(pool) {
   // ⚡ 8 novembre 2026: la storia delle quote di Pinnacle (una riga solo quando cambiano), per Quicksilver
   await pool.query(`CREATE TABLE IF NOT EXISTS pin_history (id SERIAL PRIMARY KEY, event_id TEXT NOT NULL, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), pin_h NUMERIC(8,3), pin_d NUMERIC(8,3), pin_a NUMERIC(8,3))`);
   await pool.query(`CREATE INDEX IF NOT EXISTS pin_history_event ON pin_history (event_id, at)`);
+  // 13 novembre 2026: il MIGLIOR vantaggio visto per ogni partita/linea/lato (anche negativo) sulle Over/Under, per capire quanto siamo vicini al valore. Una riga per partita, non per lettura.
+  await pool.query(`CREATE TABLE IF NOT EXISTS goal_edges (event_id TEXT NOT NULL, line NUMERIC(4,1) NOT NULL, side TEXT NOT NULL, league TEXT, home TEXT, away TEXT, commence_time TIMESTAMPTZ,
+    book TEXT, odd NUMERIC(8,3), fair_prob NUMERIC(6,4), edge_pct NUMERIC(7,2), pin_over NUMERIC(8,3), pin_under NUMERIC(8,3), n_reads INT NOT NULL DEFAULT 1,
+    first_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(), last_seen TIMESTAMPTZ NOT NULL DEFAULT NOW(), PRIMARY KEY (event_id, line, side))`);
   ready = true;
 }
 
@@ -240,7 +281,9 @@ async function scanTotals(pool, c, { nowMs = Date.now(), http, merged = [], trio
       [s.strategy, s.ev.event_id, s.ev.league, s.ev.home, s.ev.away, s.ev.commence_time, s.line, s.side, s.book, s.odd, s.fair_prob, s.edge_pct, s.pin && s.pin.over, s.pin && s.pin.under]);
     nuovi += r.rowCount;
   }
-  return { gol: 'fatta', righeOU: records.length, partiteOU: totals.size, nuoviGol: nuovi };
+  let viste = 0;
+  try { viste = await saveEdges(pool, ouEdges(totals, books, nowMs)); } catch (e) { /* facoltativo: non deve mai rompere la scansione */ }
+  return { gol: 'fatta', righeOU: records.length, partiteOU: totals.size, nuoviGol: nuovi, vantaggiSalvati: viste };
 }
 
 /** Prova manuale del formato Over/Under di odss (costa UNA richiesta): quali mercati e campi arrivano. */
@@ -282,5 +325,5 @@ async function getGoals(pool, env = process.env) {
   };
 }
 
-module.exports = { valangaOdds, OU_MARKETS, FORMULA, RULES, VALANGA, GSTAR, REFERENCE, fair1x2, expGoals, isValanga, noVig2, goalsOf, sideWon, parseTotals, findGoalSignals, overStats,
+module.exports = { ouEdges, saveEdges, valangaOdds, OU_MARKETS, FORMULA, RULES, VALANGA, GSTAR, REFERENCE, fair1x2, expGoals, isValanga, noVig2, goalsOf, sideWon, parseTotals, findGoalSignals, overStats,
   ensureGoals, watch, settleGoals, pendingWatch, setWatchScore, scanTotals, ouCheck, getGoals };

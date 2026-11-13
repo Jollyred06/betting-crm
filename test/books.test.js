@@ -416,3 +416,19 @@ console.log('books.test.js: tutti i controlli passati');
   assert.ok(b.leftAtReset < a.leftAtReset);
   console.log('Piano crediti con orari fissi: ok');
 }
+
+{ // 13 novembre 2026: il miglior vantaggio Over/Under per partita/linea/lato (anche negativo), solo linee 1,5 / 2,5 / 3,5
+  const G = require('../services/goals');
+  const ko = new Date(Date.now() + 5 * 3600000).toISOString();
+  const totals = new Map([['e1', { event_id: 'e1', league: 'Test', home: 'A', away: 'B', commence_time: ko, lines: {
+    2.5: { pinnacle: { over: 1.90, under: 1.95 }, '888sport_it': { over: 2.00, under: 1.85 }, goldbet: { over: 1.90, under: 1.90 } },
+    3.5: { goldbet: { over: 3.0, under: 1.3 } },                                   // senza Pinnacle: nessun prezzo giusto, si salta
+    4.5: { pinnacle: { over: 5.0, under: 1.18 }, goldbet: { over: 5.2, under: 1.15 } } } }]]);   // linea fuori elenco
+  const r = G.ouEdges(totals, ['888sport_it', 'goldbet']);
+  assert.strictEqual(r.length, 2);                                                  // solo la 2,5: over e under
+  const over = r.find(x => x.side === 'over'), under = r.find(x => x.side === 'under');
+  assert.strictEqual(over.book, '888sport_it'); assert.ok(over.edge_pct > 0);       // 2,00 contro un prezzo giusto di circa 0,51
+  assert.strictEqual(under.book, 'goldbet'); assert.ok(under.edge_pct < 0);         // miglior under 1,90: ancora sotto il valore
+  assert.strictEqual(G.ouEdges(totals, ['888sport_it'], Date.parse(ko) + 1).length, 0);   // partita gia' iniziata
+  console.log('Over/Under: vantaggi salvati ok');
+}
