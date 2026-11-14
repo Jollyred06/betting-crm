@@ -13,6 +13,7 @@ const band = (v, cuts, labels) => { if (v === null || v === undefined || !Number
 // dimensioni: ogni funzione restituisce l'etichetta del gruppo per quel segnale (o null se non si puo' dire)
 const DIMENSIONS = [
   { key: 'margine', title: 'Margine di Pinnacle', note: 'più è basso, più il mercato è liquido', of: r => band(r.margin, [5, 6, 8, 10], ['sotto 5%', '5–6%', '6–8%', '8–10%', '10% e oltre']) },
+  { key: 'probabilita', title: 'Probabilità di vincita (secondo Pinnacle)', note: 'quante ne dovremmo vincere su 10: confronto con quante ne vinciamo davvero', of: r => band(r.p * 100, [30, 40, 50, 60], ['sotto 30%', '30–40%', '40–50%', '50–60%', '60% e oltre']) },
   { key: 'quota', title: 'Quota', note: 'quote basse e alte a confronto', of: r => band(r.odd, [1.5, 2, 2.5, 3.5, 5], ['sotto 1,50', '1,50–2,00', '2,00–2,50', '2,50–3,50', '3,50–5,00', '5,00 e oltre']) },
   { key: 'vantaggio', title: 'Vantaggio dichiarato', note: 'vantaggio molto alto spesso è un errore di lettura', of: r => band(r.edge, [4, 8, 12], ['2–4%', '4–8%', '8–12%', 'oltre 12%']) },
   { key: 'anticipo', title: 'Anticipo sul calcio d\'inizio', of: r => band(r.leadH, [3, 12, 48], ['sotto 3 ore', '3–12 ore', '12–48 ore', 'oltre 48 ore']) },
@@ -69,7 +70,7 @@ function verdictOf(s) {
   return 'norma';
 }
 
-const ORDER = ['sotto 5%', '5–6%', '6–8%', '8–10%', '10% e oltre', 'sotto 1,50', '1,50–2,00', '2,00–2,50', '2,50–3,50', '3,50–5,00', '5,00 e oltre', '2–4%', '4–8%', '8–12%', 'oltre 12%', 'sotto 3 ore', '3–12 ore', '12–48 ore', 'oltre 48 ore', 'solo 1 sito', '2–3 siti', '4 o più siti', 'campionato', 'coppa', '1 (casa)', 'X (pareggio)', '2 (trasferta)', 'lunedì–venerdì', 'sabato e domenica'];
+const ORDER = ['sotto 30%', '30–40%', '40–50%', '50–60%', '60% e oltre', 'sotto 5%', '5–6%', '6–8%', '8–10%', '10% e oltre', 'sotto 1,50', '1,50–2,00', '2,00–2,50', '2,50–3,50', '3,50–5,00', '5,00 e oltre', '2–4%', '4–8%', '8–12%', 'oltre 12%', 'sotto 3 ore', '3–12 ore', '12–48 ore', 'oltre 48 ore', 'solo 1 sito', '2–3 siti', '4 o più siti', 'campionato', 'coppa', '1 (casa)', 'X (pareggio)', '2 (trasferta)', 'lunedì–venerdì', 'sabato e domenica'];
 function groupsOf(feats) {
   const order = new Map(ORDER.map((l, i) => [l, i]));
   return DIMENSIONS.map(d => {

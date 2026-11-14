@@ -956,7 +956,7 @@
     const row = g => { const [lv, lab] = V[g.verdict] || V.pochi;
       const oos = g.oos && g.oos.settled ? ` · dal 5/11: ${g.oos.won} su ${g.oos.settled} (attese ${num(g.oos.expected, 1)})` : '';
       return `<div class="prow"><span class="sdot ${lv}"></span><div><b>${esc(g.name)}</b> <small class="muted">${sdot0(lab)}</small>
-        <span class="muted tnum">${g.settled} chiuse · ${g.won} vinte, attese ${num(g.expected, 1)} · saldo ${pct(g.roiPct, 0)}${g.measured >= 5 ? ` · valore ${pct(g.avgClvPct, 1)}${g.clvCi95 ? ` (da ${pct(g.clvCi95[0], 1)} a ${pct(g.clvCi95[1], 1)})` : ''}` : ''}${oos}</span></div></div>`; };
+        <span class="muted tnum">${g.settled} chiuse · ${g.won} vinte (${num(100 * g.won / g.settled, 0)}%), attese ${num(g.expected, 1)} (${num(100 * g.expected / g.settled, 0)}%) · saldo ${pct(g.roiPct, 0)}${g.measured >= 5 ? ` · valore ${pct(g.avgClvPct, 1)}${g.clvCi95 ? ` (da ${pct(g.clvCi95[0], 1)} a ${pct(g.clvCi95[1], 1)})` : ''}` : ''}${oos}</span></div></div>`; };
     const sdot0 = x => x;
     return `<details class="fold"><summary><span>🧠 Il cervello</span><small>dove si vince e dove si perde, per gruppi</small></summary>
       <p class="muted" style="font-size:14px;">Tutte le prime segnalazioni chiuse, divise per gruppo. Un gruppo si giudica solo da ${B.rules.minN} partite chiuse: sotto, è "pochi dati". "Sopra" solo se valore, vinte e saldo sono tutti positivi; il solo valore contro la chiusura inganna nei mercati sottili. Per ora si guarda soltanto: non cambia nessuna regola.</p>
