@@ -49,10 +49,10 @@ async function sportCheck(pool, { sport, market }, env = process.env, { http, no
   if (!MARKETS.includes(market)) return { ok: false, motivo: `mercato non ammesso (${MARKETS.join(', ')})` };
   const I = require('./italia'), c = I.cfg(env);
   if (!c.key) return { ok: false, motivo: 'ODSS_API_KEY non impostata' };
-  const books = [...new Set([...c.myBooks, ...c.books])];
-  const records = await I.fetchOdds(pool, c, { sport, market, content: 'match', limit: 2000, bookmakers: ['pinnacle', ...books].join(','),
-    commence_from: new Date(nowMs + 15 * 60000).toISOString(), commence_to: new Date(nowMs + 24 * 3600000).toISOString() }, 'sport_check', http);
-  return { ok: true, sport, market, ...summarizeSport(records) };
+  // prova larga: nessun filtro su siti e orario, cosi' si vede cosa esiste davvero per quello sport e quel mercato
+  const records = await I.fetchOdds(pool, c, { sport, market, content: 'match', limit: 200 }, 'sport_check', http);
+  const mercati = {}; for (const r of records) mercati[r.market || '?'] = (mercati[r.market || '?'] || 0) + 1;
+  return { ok: true, sport, market, mercati, campione: records[0] ? { chiavi: Object.keys(records[0]).slice(0, 15), inizio: records[0].commence_time || null } : null, ...summarizeSport(records) };
 }
 
 module.exports = { SPORTS, MARKETS, twoWay, summarizeSport, sportCheck };

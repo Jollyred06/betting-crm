@@ -24,7 +24,7 @@ const S = require('../services/sports');
   const http = { get: async (u, o) => { calls++; params = o.params; return { data: { odds: [rec('e1', { HOME: 1.45, AWAY: 2.95 })] }, headers: {} }; } };
   const env = { ODSS_API_KEY: 'k', MY_BOOKS: 'snai', ODSS_BOOKS: 'snai,netwin' };
   const out = await S.sportCheck(pool, { sport: 'tennis', market: 'moneyline' }, env, { http });
-  assert.ok(out.ok && calls === 1 && params.sport === 'tennis' && params.market === 'moneyline' && params.content === 'match' && /pinnacle/.test(params.bookmakers));
+  assert.ok(out.ok && calls === 1 && params.sport === 'tennis' && params.market === 'moneyline' && params.content === 'match' && params.bookmakers === undefined && params.limit === 200);
   assert.strictEqual((await S.sportCheck(pool, { sport: 'calcio', market: 'moneyline' }, env, { http })).ok, false);
   assert.strictEqual((await S.sportCheck(pool, { sport: 'tennis', market: 'x; DROP' }, env, { http })).ok, false);
   assert.strictEqual(calls, 1, 'nessuna richiesta per valori non ammessi');
