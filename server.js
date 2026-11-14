@@ -10,6 +10,11 @@ const footballData = require('./services/footballData');
 const oddsApi = require('./services/oddsApi');
 
 const app = express();
+const hardening = require('./services/hardening');
+app.disable('x-powered-by'); app.set('trust proxy', 1);
+hardening.installProcessGuards();
+app.use(hardening.securityHeaders);
+app.use('/api', hardening.writeLimiter());
 const cache = require('./services/cache');
 app.use(express.json());
 // l'app compressa (prima della cartella public, che resta per tutto il resto)
