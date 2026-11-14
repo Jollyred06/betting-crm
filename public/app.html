@@ -861,8 +861,8 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L, BK, GL, TM, BR, AU, CA] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null), getJson('/api/tracker/calibration').catch(() => null)]);
-      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + autoCard(AU) + `<div class="sect">▶ Misure</div>` + brainCard(BR) + storicoCard(CA) + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<div class="sect">▶ Archivio</div>` + heroTeam() + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+      const [i, b, L, BK, GL, TM, BR, AU, CA, OP] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null), getJson('/api/tracker/calibration').catch(() => null), getJson('/api/tracker/opinion').catch(() => null)]);
+      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + autoCard(AU) + `<div class="sect">▶ Misure</div>` + brainCard(BR) + storicoCard(CA) + parereCard(OP) + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<div class="sect">▶ Archivio</div>` + heroTeam() + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
         + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
@@ -957,6 +957,18 @@
     return `<details class="fold"><summary><span>🤖 Giocate simulate</span><small>le Justice League giocate da sole a ${num(A.stake, 0)} € dal ${since}</small></summary>
       <div class="ktiles"><div class="ktile"><small class="muted">Giocate</small><b>${A.count}</b><small class="muted">${A.open} aperte</small></div><div class="ktile"><small class="muted">Vinte / attese</small><b>${A.settled ? A.won + ' / ' + num(A.expectedWon, 1) : '—'}</b><small class="muted">su ${A.settled} chiuse</small></div><div class="ktile"><small class="muted">Saldo</small><b>${A.settled ? signedMoney(A.pnlEur) : '—'}</b><small class="muted">${A.settled ? pct(A.roiPct, 0) : 'nessun risultato'}</small></div></div>
       <p class="muted" style="font-size:13.5px;">Parte da sola a ogni scansione, solo sui segnali nuovi (niente storico). Separata dalle tue giocate vere.${A.measured >= 5 ? ` Valore medio contro la chiusura: ${pct(A.avgClvPct, 1)}.` : ''}</p>${rows || '<p class="muted">Ancora nessuna giocata: arriva con la prossima Justice League.</p>'}</details>`;
+  }
+  function parereCard(P) {
+    if (!P || !P.ready) return '';
+    const V = { conferma: ['ok', 'confermati'], dubbio: ['warn', 'in dubbio'], contraddice: ['bad', 'contraddetti'], senza: ['info', 'senza parere'] };
+    const row = (k, g) => { if (!g || !g.settled) return `<div class="prow"><span class="sdot ${V[k][0]}"></span><div><b>${V[k][1]}</b> <span class="muted tnum">nessuna chiusa</span></div></div>`;
+      return `<div class="prow"><span class="sdot ${V[k][0]}"></span><div><b>${V[k][1]}</b> <span class="muted tnum">${g.settled} chiuse · ${g.won} vinte, attese ${num(g.expected, 1)} · saldo ${pct(g.roiPct, 0)}${g.measured >= 5 ? ` · valore ${pct(g.avgClvPct, 1)}` : ''}</span></div></div>`; };
+    const grp = g => ['conferma', 'dubbio', 'contraddice', 'senza'].map(k => row(k, g[k])).join('');
+    const open = (P.open || []).map(x => { const v = x.op ? V[x.op.verdict] : V.senza; return `<div class="prow"><span class="sdot ${v[0]}"></span><div><b>${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">${esc(({ home: '1', draw: 'X', away: '2' })[x.selection] || x.selection)} a ${num(x.odd, 2)} · vantaggio ${num(x.edge, 1)}%${x.op ? ` → corretto ${num(x.op.edgeAdj, 1)}% (${x.op.league ? esc(x.op.league) : 'generale'}, ${x.op.n} partite) · ${v[1]}` : ''}</span></div></div>`; }).join('');
+    return `<details class="fold"><summary><span>🔎 Secondo parere</span><small>il vantaggio corretto con la storia di Pinnacle</small></summary>
+      <p class="muted" style="font-size:14px;">Ogni segnale viene ricalcolato con quanto Pinnacle ha sbagliato in passato in quella fascia e campionato (${num(P.histMatches, 0)} partite). <b>Confermati</b>: vantaggio corretto ancora almeno 2%. <b>In dubbio</b>: tra 0 e 2%. <b>Contraddetti</b>: sotto zero. Solo misura: non cambia nessuna regola. Campionato trovato per ${P.mapped} segnali su ${P.total}.</p>
+      <h4 style="margin:12px 0 2px;">Justice League</h4>${grp(P.jl)}<h4 style="margin:12px 0 2px;">Tutti i segnali</h4>${grp(P.all)}
+      ${open ? `<h4 style="margin:12px 0 2px;">Justice League aperte adesso</h4>${open}` : ''}</details>`;
   }
   function storicoCard(C) {
     if (!C || C.error) return '';
