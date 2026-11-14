@@ -1,0 +1,28 @@
+name: copia-esterna
+# Ogni domenica scarica l'ultima copia automatica del CRM e la salva CIFRATA (il repository e' pubblico: mai in chiaro).
+# La cifratura usa la stessa chiave RUN_KEY gia' nei segreti. Per aprirla: openssl enc -d -aes-256-cbc -pbkdf2 -in copia.gz.enc -out copia.json.gz -pass pass:LA_TUA_CHIAVE
+on:
+  schedule:
+    - cron: '30 2 * * 0'
+  workflow_dispatch:
+jobs:
+  copia:
+    runs-on: ubuntu-latest
+    steps:
+      - name: sveglia il CRM
+        run: |
+          for i in 1 2 3 4 5 6 7 8; do curl -sf -o /dev/null -m 60 https://betting-crm.onrender.com/api/status && break; sleep 15; done
+      - name: scarica e cifra
+        env:
+          RUN_KEY: ${{ secrets.RUN_KEY }}
+        run: |
+          test -n "$RUN_KEY" || { echo "manca il segreto RUN_KEY"; exit 1; }
+          curl -sf -m 120 -H "x-run-key: $RUN_KEY" -o copia.json.gz https://betting-crm.onrender.com/api/tracker/backups/latest
+          test "$(stat -c %s copia.json.gz)" -gt 1000
+          openssl enc -aes-256-cbc -pbkdf2 -salt -in copia.json.gz -out copia.json.gz.enc -pass env:RUN_KEY
+          rm copia.json.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: copia-cifrata-${{ github.run_id }}
+          path: copia.json.gz.enc
+          retention-days: 90
