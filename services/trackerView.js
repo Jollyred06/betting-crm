@@ -172,6 +172,20 @@ async function getRuns(pool, limit = 14) {
   return rows.map(parseRun);
 }
 
+
+/** Il registro delle letture italiane (14 novembre 2026): scansioni, chiusure e Over/Under, con i segnali nuovi trovati da ogni scansione.
+ *  Sostituisce nella pagina Log il vecchio giro giornaliero della strategia A, che ormai trova sempre 0 segnali. */
+const SCAN_KINDS = { scan: 'Scansione quote', scan_ou: 'Over/Under', close: 'Chiusura Pinnacle', ou_valanga: 'Valanga' };
+async function getScans(pool, limit = 40) {
+  const n = Math.max(1, Math.min(200, Number(limit) || 40));
+  const { rows } = await pool.query(
+    `SELECT r.at, r.kind, r.ok, r.records, r.quota_remaining, r.note,
+       CASE WHEN r.kind = 'scan' THEN (SELECT COUNT(*)::int FROM italia_signals s WHERE s.strategy = 'I' AND s.created_at BETWEEN r.at - interval '3 minutes' AND r.at + interval '1 minute') END AS new_signals
+     FROM italia_requests r WHERE r.kind IN ('scan', 'scan_ou', 'close', 'ou_valanga') ORDER BY r.id DESC LIMIT $1`, [n]);
+  return rows.map(r => ({ at: r.at, kind: r.kind, label: SCAN_KINDS[r.kind] || r.kind, ok: r.ok !== false, records: r.records === null ? null : Number(r.records),
+    newSignals: r.new_signals === null || r.new_signals === undefined ? null : Number(r.new_signals), credits: r.quota_remaining === null ? null : Number(r.quota_remaining), note: r.note || null }));
+}
+
 function getConfig(env = process.env) {
   const active = (env.COMPETITIONS || DEFAULT_COMPETITIONS).split(',').map(s => s.trim()).filter(c => LEAGUES[c]);
   return {
@@ -245,4 +259,4 @@ async function getStrategies(pool) {
   };
 }
 
-module.exports = { getBankroll, getStrategies, getOverview, getSignals, signalsCsv, getHealth, getRuns, getConfig, verdict, pick, parseRun, TARGET_SETTLED };
+module.exports = { getBankroll, getStrategies, getOverview, getSignals, signalsCsv, getHealth, getRuns, getScans, getConfig, verdict, pick, parseRun, TARGET_SETTLED };

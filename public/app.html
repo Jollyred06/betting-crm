@@ -1536,9 +1536,12 @@
   async function loadRuns() {
     const el = $('runs');
     try {
-      lastRuns = await getJson('/api/tracker/runs?limit=14');
-      el.innerHTML = lastRuns.length ? lastRuns.map(r => `<details><summary>${fmtDate(r.at)}, ${r.success ? (r.signals || 0) + ' segnali' : '<span class="neg">errore</span>'}${r.credits ? ` <span class="muted">(crediti rimasti ${r.credits.remaining})</span>` : ''}</summary>
-        <div class="log" style="margin-top:8px;">${r.success ? logHtml(r.lines.map(l => l.text)) : esc(r.error)}</div></details>`).join('') : '<div class="empty">Nessun giro registrato.</div>';
+      const [sc, old] = await Promise.all([getJson('/api/tracker/scans?limit=40').catch(() => []), getJson('/api/tracker/runs?limit=14').catch(() => [])]);
+      lastRuns = old;
+      const ico = { scan: '🔎', scan_ou: '⚽', close: '🔒', ou_valanga: '💥' };
+      const line = r => `<div class="move"><span><b>${ico[r.kind] || '•'} ${esc(r.label)}</b><small>${fmtDate(r.at)}${r.ok ? '' : ' · <span class="neg">errore</span>'}${r.records ? ` · ${r.records} quote lette` : ''}${r.newSignals !== null ? ` · <b>${r.newSignals} ${r.newSignals === 1 ? 'segnale nuovo' : 'segnali nuovi'}</b>` : ''}${r.note && !r.ok ? ' · ' + esc(r.note) : ''}</small></span><span style="text-align:right"><small class="muted">${r.credits !== null ? 'crediti ' + r.credits : ''}</small></span></div>`;
+      const oldHtml = old.length ? `<details class="fold quiet"><summary><span>Archivio · giro vecchio (strategia A)</span><small>ogni giorno alle 17 trova 0 segnali: la strategia A non cerca più</small></summary>${old.map(r => `<details><summary>${fmtDate(r.at)}, ${r.success ? (r.signals || 0) + ' segnali' : '<span class="neg">errore</span>'}</summary><div class="log" style="margin-top:8px;">${r.success ? logHtml(r.lines.map(l => l.text)) : esc(r.error)}</div></details>`).join('')}</details>` : '';
+      el.innerHTML = (sc.length ? `<p class="muted" style="font-size:14px;">Le letture del CRM, dalla più recente: scansioni delle quote (9, 12, 15, 18, 21), chiusure di Pinnacle e Over/Under.</p>${sc.map(line).join('')}` : '<div class="empty">Nessuna lettura registrata.</div>') + oldHtml;
     } catch (e) { el.innerHTML = '<div class="empty">Non riesco a caricare i log: ' + esc(e.message) + '</div>'; }
   }
   function downloadLog() {

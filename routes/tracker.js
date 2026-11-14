@@ -10,6 +10,9 @@ router.get('/overview', async (req, res) => {
 router.get('/signals', async (req, res) => {
   try { res.json(await view.getSignals(pool, { status: req.query.status, limit: req.query.limit })); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+router.get('/scans', async (req, res) => {
+  try { res.json(await view.getScans(pool, req.query.limit)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/health', async (req, res) => {
   try { res.json(await view.getHealth(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });

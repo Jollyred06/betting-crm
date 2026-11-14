@@ -55,3 +55,19 @@ console.log('log ultimo giro: ok');
   console.log('segnali e riepilogo (finto database): ok');
   console.log('TUTTI I TEST trackerView OK');
 })().catch(e => { console.error(e); process.exit(1); });
+
+// 14 novembre 2026: il registro delle letture italiane (pagina Log)
+(async () => {
+  const V = require('../services/trackerView'), assert = require('assert');
+  const rows = [{ at: '2026-11-13T14:01:00Z', kind: 'scan', ok: true, records: 673, quota_remaining: 489, note: null, new_signals: 2 },
+    { at: '2026-11-13T14:01:00Z', kind: 'scan_ou', ok: true, records: 3142, quota_remaining: 488, note: null, new_signals: null },
+    { at: '2026-11-13T13:50:00Z', kind: 'close', ok: false, records: 0, quota_remaining: null, note: 'timeout', new_signals: null }];
+  let sql = '', args = null;
+  const out = await V.getScans({ query: async (q, a) => { sql = q; args = a; return { rows }; } }, 9999);
+  assert.strictEqual(args[0], 200);                                                  // tetto di righe
+  assert.ok(/kind IN \('scan', 'scan_ou', 'close', 'ou_valanga'\)/.test(sql));
+  assert.deepStrictEqual([out[0].label, out[0].newSignals, out[0].credits, out[0].ok], ['Scansione quote', 2, 489, true]);
+  assert.strictEqual(out[1].newSignals, null); assert.strictEqual(out[1].label, 'Over/Under');
+  assert.deepStrictEqual([out[2].ok, out[2].note, out[2].credits], [false, 'timeout', null]);
+  console.log('registro letture: ok');
+})();
