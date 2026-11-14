@@ -385,7 +385,7 @@
       <div id="more-info" style="display:none;">
         <h3>Impostazioni attuali</h3><div id="config" class="list"></div>
         <h3 style="margin-top:30px;">Come funziona</h3>
-        <p class="muted" style="font-size:15px;">Circa ogni 2 ore, dalle 9 alle 22, il CRM legge le quote dei siti italiani e le confronta con il prezzo giusto di Pinnacle (senza margine). Quando un sito paga di più del giusto nasce un segnale; se rispetta le regole della squadra diventa una ⭐ in Oggi, con il verdetto 🟢 / 🟡 / 🔴 e il livello: 💎 Top, ⭐ Buona o ⚪ Debole (non si gioca). Sotto trovi quante volte vince e il guadagno atteso.</p>
+        <p class="muted" style="font-size:15px;">Cinque volte al giorno (alle 9, 12, 15, 18 e 21) il CRM legge le quote dei siti italiani e le confronta con il prezzo giusto di Pinnacle (senza margine). Quando un sito paga di più del giusto nasce un segnale; se rispetta le regole della squadra diventa una ⭐ in Oggi, con il verdetto 🟢 / 🟡 / 🔴 e il livello: 💎 Top, ⭐ Buona o ⚪ Debole (non si gioca). Sotto trovi quante volte vince e il guadagno atteso.</p>
         <p class="muted" style="font-size:15px;">Poco prima del calcio d'inizio il CRM rilegge Pinnacle (la chiusura): se la quota presa batte la chiusura, il valore era vero. Poi chiude da solo il risultato e aggiorna la pagella della squadra.</p>
         <p style="font-weight:600;">Si gioca solo le ⭐ in Oggi, 2 € l'una, a quota almeno il 🎯. Lo stop del budget ferma tutto se si scende troppo.</p>
         <h3 style="margin-top:30px;">Mettere al sicuro la chiave</h3>
@@ -905,7 +905,7 @@
       $('today').innerHTML = list.length ? list.map(r => `<div class="trow"><div class="t"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
         <div class="w"><b><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a></b><small>${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')} su ${esc(r.played ? r.played.book : r.play.book)}${r.played ? ' · giocata ✍️' : ''}</small>${r.played ? '' : r.verdict ? `<small class="tverd ${r.verdict.play}">${r.verdict.play === 'yes' ? `🟢 Giocala · ${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.liquid ? 'oceano' : 'fascia', 16)} ${r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}${r.top ? ' · 💎 Top' : ' · ⭐ Buona'}` : r.verdict.play === 'wait' ? '🟡 ' + esc(r.verdict.text) : '🔴 ' + esc(r.verdict.text)}</small>` : ''}</div>
         <div class="q">${num(r.played ? r.played.odd : r.play.odd, 2)}</div></div>`).join('')
-        : '<div class="empty">Nessun segnale giocabile sui tuoi siti in arrivo per ora. Il CRM controlla circa ogni 2 ore, dalle 9 alle 22.</div>';
+        : '<div class="empty">Nessun segnale giocabile sui tuoi siti in arrivo per ora. Il CRM controlla alle 9, 12, 15, 18 e 21.</div>';
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
   }
   async function loadCredits() {
@@ -960,6 +960,9 @@
     const sdot0 = x => x;
     return `<details class="fold"><summary><span>🧠 Il cervello</span><small>dove si vince e dove si perde, per gruppi</small></summary>
       <p class="muted" style="font-size:14px;">Tutte le prime segnalazioni chiuse, divise per gruppo. Un gruppo si giudica solo da ${B.rules.minN} partite chiuse: sotto, è "pochi dati". "Sopra" solo se valore, vinte e saldo sono tutti positivi; il solo valore contro la chiusura inganna nei mercati sottili. Per ora si guarda soltanto: non cambia nessuna regola.</p>
+      ${B.proposal ? (() => { const q = B.proposal, o = q.oos;
+        return `<div class="callout ok"><b>💡 Proposta: ${q.action === 'togliere' ? 'togliere' : 'provare sulla carta'} «${esc(q.group)}» (${esc(q.dimension)})</b><br>${q.action === 'togliere' ? 'Dentro le Justice League' : 'Fuori dalle Justice League'}: ${q.won} vinte su ${q.settled}, attese ${num(q.expected, 1)}, saldo ${pct(q.roiPct, 0)}. Dal 5/11: ${o.won} su ${o.settled} (attese ${num(o.expected, 1)}), saldo ${pct(o.roiPct, 0)}.<br><small class="muted">Per approvarla scrivimi in chat: cambio una regola alla volta, al massimo una a settimana.${B.otherCandidates ? ` Ci sono altre ${B.otherCandidates} candidate in coda.` : ''}</small></div>`; })()
+        : `<p class="muted" style="margin:0 0 8px;font-size:13.5px;">💡 Nessuna proposta: serve un gruppo con almeno ${B.rules.propMinN} chiuse e, dal 5/11, almeno ${B.rules.propMinOos} che confermano.</p>`}
       <p class="muted tnum" style="margin:0 0 6px;">In tutto: ${B.total.settled} chiuse · ${B.total.won} vinte, attese ${num(B.total.expected, 1)} · saldo ${pct(B.total.roiPct, 0)}</p>
       ${B.dimensions.map(d => `<h4 style="margin:14px 0 2px;">${esc(d.title)}</h4>${d.note ? `<p class="muted" style="margin:0;font-size:13px;">${esc(d.note)}</p>` : ''}${d.groups.map(row).join('')}`).join('')}</details>`;
   }
@@ -1072,7 +1075,7 @@
           <h3>⭐ Da giocare <small class="muted">${b.stopped ? '' : room ? `· 2 € l'una · ancora ${room} oggi` : '· per oggi basta così'}</small></h3>
           ${b.stopped ? `<div class="callout warn"><b>Stop a ${money(b.stop)} raggiunto.</b> Niente giocate finché non controlliamo i numeri insieme: mandami il backup.</div>`
             : best.length ? best.map(oggiRow).join('')
-            : `<div class="oempty">${room ? 'Nessuna partita da giocare adesso. Compaiono da sole quando mancano meno di 3 ore e la quota è giusta: il CRM controlla circa ogni 2 ore, dalle 9 alle 22. Nessuna partita = nessuna giocata.' : 'Hai già fatto le giocate di oggi.'}</div>`}
+            : `<div class="oempty">${room ? 'Nessuna partita da giocare adesso. Compaiono da sole appena la quota è giusta: il CRM controlla alle 9, 12, 15, 18 e 21. Nessuna partita = nessuna giocata.' : 'Hai già fatto le giocate di oggi.'}</div>`}
         </section>
         ${mine.length ? `<section class="block"><h3>🎯 Le tue giocate <small class="muted">· oggi e prossime</small></h3><div class="card3">${mine.map(x => { const t = Date.parse(x.commence_time), st = x.result === 'won' ? `<span class="chip won">vinta ${esc(x.score || '')}</span>` : x.result === 'lost' ? `<span class="chip lost">persa ${esc(x.score || '')}</span>` : x.result === 'void' ? '<span class="chip">annullata</span>' : Date.now() < t ? `<span class="muted">alle ${dt(x.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>` : Date.now() < t + 115 * 60000 ? '<span class="chip live">● in corso</span>' : '<span class="muted">finita, risultato in arrivo</span>';
             return `<div class="oplay"><div><b>${esc(x.home)} – ${esc(x.away)}</b><small>${esc({ home: '1', draw: 'X', away: '2' }[x.selection] || '')} su ${esc(x.book)} a ${num(x.odd, 2)} · ${money(x.stake)} · <a class="tlink" href="${liveUrl(x.home, x.away)}" rel="noopener" onclick="rememberSpot()">🔎 su Google</a></small></div><div class="ores">${st}${x.pnlEur !== null ? `<b class="${cls(x.pnlEur)}">${signedMoney(x.pnlEur)}</b>` : ''}</div></div>`; }).join('')}</div></section>` : ''}
@@ -1160,7 +1163,7 @@
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="pick"><span>${it && r.play ? `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
             ${it && r.verdict ? `<div class="verdict ${r.verdict.play}"><b>${r.verdict.play === 'yes' ? `🟢 GIOCALA · ${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.liquid ? 'oceano' : 'fascia', 22)} ${r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}${r.top ? ' · 💎 Top' : ''}` : r.verdict.play === 'wait' ? '🟡 ASPETTA' : '🔴 NON GIOCARE'}</b><span>${esc(r.verdict.text)}</span></div>` : ''}
-            ${it && r.paper && r.paper.length && !(r.verdict && r.verdict.play === 'yes') ? `<small class="muted">🧪 Misurata sulla carta (${r.paper.map(k => k === 'bassa' ? 'fascia bassa' : k === 'medi' ? 'mercati medi' : esc(k)).join(', ')}): non si gioca</small>` : ''}
+            ${it && r.paper && r.paper.length && !(r.verdict && r.verdict.play === 'yes') ? `<small class="muted">🧪 Misurata sulla carta (${r.paper.map(k => k === 'bassa' ? 'fascia bassa' : k === 'medi' ? 'mercati medi' : k === 'alte' ? 'quote alte' : esc(k)).join(', ')}): non si gioca</small>` : ''}
             ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? `<div class="ohero">${voteChip(r)}</div>` + probLine(r) + drawLine(r) : ''}
             ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? bookLink(r) : ''}
             ${it && (r.played || r.skipped || (r.verdict && r.verdict.play === 'yes')) ? playActions(r) : ''}
@@ -1187,7 +1190,7 @@
     let body;
     if (b.stopped) body = `<div class="callout warn"><b>Fermati: il budget è sceso a ${money(b.balance)}, sotto lo stop di ${money(b.stop)}.</b> Niente giocate finché non controlliamo insieme i numeri (mandami il backup).</div>`;
     else if (b.playedToday >= b.maxPerDay) body = `<p class="muted hidnote">Hai già fatto ${b.playedToday} giocate oggi: per oggi basta così. Meno giocate scelte bene, meno errori.</p>`;
-    else if (!items.length) body = `<p class="muted hidnote">Nessuna ⭐ adesso: compaiono da sole, il CRM controlla circa ogni 2 ore dalle 9 alle 22.</p>`;
+    else if (!items.length) body = `<p class="muted hidnote">Nessuna ⭐ adesso: compaiono da sole, il CRM controlla alle 9, 12, 15, 18 e 21.</p>`;
     else body = items.map(r => ticket(r, '<span class="chip it">IT</span>')).join('');
     return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una</small></h4>${b.stopped ? line : ''}${body}<details class="tdet"><summary>regole e risultati della lista</summary><p class="muted">Selezione ${d.bestRule === 'consigliate' ? '✅ consigliate' : d.bestOnlySafe ? '🛡️ sicure' : '⚙️ F2+'}, quota fino a ${num(d.bestMaxOdd || 3.5, 2)}, niente coppe${d.bestNoAwayThin ? ', niente 2 nei campionati minori' : ''}, prima le 🟢 solide, massimo ${b.maxPerDay} al giorno.</p>${ckLine}</details></section>`;
   }
@@ -1397,7 +1400,7 @@
       if (sigScope === 'it' || sigScope === 'mine') {
         el.innerHTML = itPart ? '<div class="legend"><span><i class="dot on"></i>in corso</span><span><i class="dot end"></i>finita</span><span><i class="dot"></i>da iniziare</span></div>' + itPart
           : sigScope === 'mine' ? '<div class="empty">Nessun segnale giocabile sui tuoi siti in questa lista. Gli altri segnali italiani sono in “Tutti italiani”.</div>'
-          : '<div class="empty">Nessun segnale sui bookmaker italiani in questa lista. Il CRM controlla le partite circa ogni 2 ore, dalle 9 alle 22. Per vedere anche le strategie di sola misura tocca “Tutte”.</div>';
+          : '<div class="empty">Nessun segnale sui bookmaker italiani in questa lista. Il CRM controlla le partite alle 9, 12, 15, 18 e 21. Per vedere anche le strategie di sola misura tocca “Tutte”.</div>';
         paintDots(); return;
       }
       const itHtml = itPart
@@ -1476,7 +1479,7 @@
     download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>', send: '<path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/>', find: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>'
   };
   const ACTIONS = {
-    run:     { path: '/api/run-daily?detail=1',     method: 'POST', title: 'Analisi', icon: 'play', label: 'Giro di controllo', desc: 'Chiude i risultati dei vecchi segnali e aggiorna lo storico. Le ⭐ le cerca già da solo circa ogni 2 ore.', confirm: 'Faccio un giro di controllo adesso? Non consuma crediti delle quote.' },
+    run:     { path: '/api/run-daily?detail=1',     method: 'POST', title: 'Analisi', icon: 'play', label: 'Giro di controllo', desc: 'Chiude i risultati dei vecchi segnali e aggiorna lo storico. Le ⭐ le cerca già da solo alle 9, 12, 15, 18 e 21.', confirm: 'Faccio un giro di controllo adesso? Non consuma crediti delle quote.' },
     settle:  { path: '/api/settle-pending',         method: 'POST', title: 'Chiusura risultati', icon: 'check', label: 'Chiudi i risultati ora', desc: 'Registra vinta o persa per le partite finite.' },
     system:  { path: '/api/system-check',          method: 'POST', title: 'Controllo di sistema', icon: 'shield', label: 'Controllo di sistema', desc: 'Verifica database, chiavi, servizi esterni, Telegram e giro giornaliero. Poi dice cosa non va.' },
     backup:  { path: '/api/tracker/backup.json',    method: 'GET',  title: 'Copia di sicurezza', icon: 'download', download: true, filename: 'backup_betting_crm.json.gz', label: 'Scarica la copia di sicurezza', desc: 'Lo specchio di tutto: segnali, giocate con il saldo dopo ognuna, bankroll, richieste e riepilogo dei numeri. File compresso (.gz), da mandare in chat così com\'è.' },

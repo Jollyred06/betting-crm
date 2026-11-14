@@ -382,7 +382,7 @@ console.log('books.test.js: tutti i controlli passati');
 
 { // 🧪 Sulla carta (14 novembre 2026): fascia bassa 1,60-2,00 e mercati medi (margine 6-8%), mai nella lista da giocare
   const I = require('../services/italia');
-  const [bassa, medi] = I.PAPER.groups;
+  const G = k => I.PAPER.groups.find(g => g.key === k), bassa = G('bassa'), medi = G('medi'), alte = G('alte');
   const liq = { odd: 1.8, edge_pct: 2.5, league: 'Allsvenskan', pin_h: 1.85, pin_d: 3.7, pin_a: 4.6 };       // margine sotto il 6%
   assert.ok(I.pinMarginPct(liq) < 6);
   assert.strictEqual(I.isPaperGroup(liq, bassa), true); assert.strictEqual(I.isOceani(liq), false);
@@ -396,6 +396,10 @@ console.log('books.test.js: tutti i controlli passati');
   const mm = I.pinMarginPct(mid); assert.ok(mm >= 6 && mm < 8, 'margine ' + mm);
   assert.strictEqual(I.isPaperGroup(mid, medi), true); assert.strictEqual(I.isPaperGroup(mid, bassa), false);
   assert.strictEqual(I.isPaperGroup({ ...mid, odd: 3.6 }, medi), false);                                    // sopra 3,50
+  // 14 novembre: quote alte 4,01-5,00 (liquide), separate da Prova (fino a 4,00) e dalle Justice League
+  assert.strictEqual(I.isPaperGroup({ ...liq, odd: 4.5 }, alte), true);
+  assert.strictEqual(I.isPaperGroup({ ...liq, odd: 4.0 }, alte), false); assert.strictEqual(I.isPaperGroup({ ...liq, odd: 5.2 }, alte), false);
+  assert.strictEqual(I.isPaperGroup({ ...liq, odd: 4.5, league: 'FA Cup' }, alte), false);
   // prima lettura per partita
   const rows = [{ ...liq, id: 1, event_id: 'e', selection: 'home', created_at: '2026-11-14T10:00:00Z' }, { ...liq, id: 2, event_id: 'e', selection: 'home', created_at: '2026-11-14T12:00:00Z' }];
   const m = I.markPaperGroup(rows, bassa); assert.strictEqual(m.get(1).final, true); assert.strictEqual(m.get(2).final, false);

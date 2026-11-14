@@ -763,6 +763,8 @@ const PAPER = {
   groups: [
     { key: 'bassa', name: 'Fascia bassa · quote 1,60–2,00', rule: 'Come le Justice League (margine Pinnacle sotto il 6%, vantaggio dal 2%, niente coppe) ma con quota da 1,60 a 2,00: la fascia che le ⭐ oggi scartano',
       minMarginPct: null, maxMarginPct: 6, minEdge: 2, minOdd: 1.6, maxOdd: 2.0, maxOddOpen: true },
+    { key: 'alte', name: 'Quote alte · 4,00–5,00', rule: 'Come le Justice League (margine Pinnacle sotto il 6%, vantaggio dal 2%, niente coppe) ma con quota da 4,01 a 5,00: le Justice League si fermano a 3,50 e la 🧪 Prova a 4,00',
+      minMarginPct: null, maxMarginPct: 6, minEdge: 2, minOdd: 4.01, maxOdd: 5.0, maxOddOpen: false },
     { key: 'medi', name: 'Mercati medi · margine 6–8%', rule: 'Campionati un gradino sotto (margine Pinnacle dal 6 all\'8%), vantaggio dal 2%, quota da 1,60 a 3,50, niente coppe',
       minMarginPct: 6, maxMarginPct: 8, minEdge: 2, minOdd: 1.6, maxOdd: 3.5, maxOddOpen: false }
   ]

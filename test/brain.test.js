@@ -52,6 +52,17 @@ const B = require('../services/brain'), I = require('../services/italia');
   assert.strictEqual(br.dimensions.length, B.DIMENSIONS.length);
   console.log('fuori campione e void: ok');
 
+  // proposte: dentro le JL un gruppo debole che regge fuori campione -> togliere; fuori dalle JL un gruppo forte -> provare; una sola
+  const mk = (n, wonOld, wonNew, o) => Array.from({ length: n }, (_, i) => B.featuresOf(sig({ ...o, created_at: i < n / 2 ? '2026-10-20T09:00:00Z' : '2026-11-09T09:00:00Z', result: (i < n / 2 ? i < wonOld : (i - n / 2) < wonNew) ? 'won' : 'lost', clv_pct: 1 }), I));
+  const weakJl = mk(60, 6, 4, { odd: 2.5, pin_h: 2.6, pin_d: 3.4, pin_a: 3.0, edge_pct: 3 });   // margine 1,2% e quota 2,5: Justice League debole
+  assert.ok(weakJl.every(f => f.jl));
+  const ps = B.proposalsOf(weakJl); assert.ok(ps.length >= 1 && ps.every(p => p.action === 'togliere'));
+  const fewP = B.proposalsOf(mk(20, 2, 1, { odd: 2.5 })); assert.strictEqual(fewP.length, 0);   // troppo pochi
+  const br2 = B.buildBrain(weakJl.map(f => sig({ odd: 2.5, created_at: f.created < Date.parse('2026-11-05') ? '2026-10-20T09:00:00Z' : '2026-11-09T09:00:00Z', result: f.result })), I);
+  assert.ok(br2.proposal && br2.proposal.action === 'togliere'); assert.strictEqual(typeof br2.otherCandidates, 'number');
+  assert.strictEqual(B.buildBrain([], I).proposal, null);
+  console.log('proposte: ok');
+
   // getBrain legge dal database e non scrive
   const writes = []; const pool = { query: async (q) => { if (/^\s*(INSERT|UPDATE|DELETE)/i.test(q)) writes.push(q); return { rows: [old, neu] }; } };
   const g = await B.getBrain(pool); assert.strictEqual(g.total.settled, 2); assert.strictEqual(writes.length, 0);

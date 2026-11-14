@@ -34,7 +34,7 @@ function featuresOf(r, I) {
     id: r.id, selection: r.selection, odd: Number(r.odd), edge: Number(r.edge_pct), margin: I.pinMarginPct(r),
     leadH: Number.isFinite(ct) && Number.isFinite(cr) ? (ct - cr) / 3600000 : null,
     sites: cons ? cons.sites : null, above: cons ? cons.above : null,
-    cup: I.isCup(r.league), weekend: day === 0 || day === 6,
+    cup: I.isCup(r.league), weekend: day === 0 || day === 6, jl: !!I.isOceani(r),
     p: Number(r.fair_prob) || 0, result: r.result, clv: normal(r.clv_pct), created: cr
   };
 }
@@ -69,20 +69,45 @@ function verdictOf(s) {
   return 'norma';
 }
 
-/** Tutta la tabella. Parte pura: riceve i segnali I gia' ridotti alla prima apparizione. */
-function buildBrain(rows, I, { nowMs = Date.now() } = {}) {
-  const feats = rows.filter(r => r.result !== 'void').map(r => featuresOf(r, I));
-  const dims = DIMENSIONS.map(d => {
+const ORDER = ['sotto 5%', '5–6%', '6–8%', '8–10%', '10% e oltre', 'sotto 1,50', '1,50–2,00', '2,00–2,50', '2,50–3,50', '3,50–5,00', '5,00 e oltre', '2–4%', '4–8%', '8–12%', 'oltre 12%', 'sotto 3 ore', '3–12 ore', '12–48 ore', 'oltre 48 ore', 'solo 1 sito', '2–3 siti', '4 o più siti', 'campionato', 'coppa', '1 (casa)', 'X (pareggio)', '2 (trasferta)', 'lunedì–venerdì', 'sabato e domenica'];
+function groupsOf(feats) {
+  const order = new Map(ORDER.map((l, i) => [l, i]));
+  return DIMENSIONS.map(d => {
     const groups = new Map();
     for (const f of feats) { const lab = d.of(f); if (lab === null) continue; if (!groups.has(lab)) groups.set(lab, []); groups.get(lab).push(f); }
-    const order = new Map();   // l'ordine delle fasce come dichiarate
-    const labels = ['sotto 5%', '5–6%', '6–8%', '8–10%', '10% e oltre', 'sotto 1,50', '1,50–2,00', '2,00–2,50', '2,50–3,50', '3,50–5,00', '5,00 e oltre', '2–4%', '4–8%', '8–12%', 'oltre 12%', 'sotto 3 ore', '3–12 ore', '12–48 ore', 'oltre 48 ore', 'solo 1 sito', '2–3 siti', '4 o più siti', 'campionato', 'coppa', '1 (casa)', 'X (pareggio)', '2 (trasferta)', 'lunedì–venerdì', 'sabato e domenica'];
-    labels.forEach((l, i) => order.set(l, i));
     return { key: d.key, title: d.title, note: d.note || null,
       groups: [...groups.entries()].map(([name, list]) => ({ name, ...summarize(list) })).sort((a, b) => (order.get(a.name) ?? 99) - (order.get(b.name) ?? 99)) };
   });
-  const total = summarize(feats);
-  return { rules: { minN: MIN_N, zEdge: Z_EDGE, oosSince: OOS_SINCE }, total, dimensions: dims, updatedAt: new Date(nowMs).toISOString() };
+}
+
+/** Proposte (tappa 2, 14 novembre 2026). Una sola alla volta, la piu' forte, e solo se regge anche fuori campione:
+ *  - 'togliere': dentro le Justice League un gruppo 'debole' con almeno PROP_MIN_N chiuse e, dal 5/11, almeno PROP_MIN_OOS chiuse con vinte sotto le attese e saldo negativo
+ *  - 'provare': fuori dalle Justice League un gruppo 'forte' con le stesse condizioni al contrario
+ *  Niente cambia da solo: la proposta si approva in chat, e le regole si cambiano al massimo una volta a settimana. Parte pura. */
+const PROP_MIN_N = 40, PROP_MIN_OOS = 10;
+function proposalsOf(feats) {
+  const out = [];
+  const scan = (list, want, action) => {
+    for (const d of groupsOf(list)) for (const g of d.groups) {
+      const o = g.oos || {}, n = g.settled;
+      if (g.verdict !== want || n < PROP_MIN_N || (o.settled || 0) < PROP_MIN_OOS) continue;
+      const okOos = want === 'debole' ? (o.won < o.expected && o.roiPct < 0) : (o.won >= o.expected && o.roiPct > 0);
+      if (!okOos) continue;
+      out.push({ action, dimension: d.title, group: g.name, settled: n, won: g.won, expected: g.expected, roiPct: g.roiPct, avgClvPct: g.avgClvPct,
+        oos: { settled: o.settled, won: o.won, expected: o.expected, roiPct: o.roiPct }, score: Math.abs(g.z || 0) });
+    }
+  };
+  scan(feats.filter(f => f.jl), 'debole', 'togliere');
+  scan(feats.filter(f => !f.jl), 'forte', 'provare');
+  return out.sort((a, b) => b.score - a.score);
+}
+
+/** Tutta la tabella. Parte pura: riceve i segnali I gia' ridotti alla prima apparizione. */
+function buildBrain(rows, I, { nowMs = Date.now() } = {}) {
+  const feats = rows.filter(r => r.result !== 'void').map(r => featuresOf(r, I));
+  const props = proposalsOf(feats);
+  return { rules: { minN: MIN_N, zEdge: Z_EDGE, oosSince: OOS_SINCE, propMinN: PROP_MIN_N, propMinOos: PROP_MIN_OOS }, total: summarize(feats), dimensions: groupsOf(feats),
+    proposal: props[0] || null, otherCandidates: Math.max(0, props.length - 1), updatedAt: new Date(nowMs).toISOString() };
 }
 
 async function getBrain(pool, { nowMs = Date.now() } = {}) {
@@ -91,4 +116,4 @@ async function getBrain(pool, { nowMs = Date.now() } = {}) {
   return buildBrain(I.primaryRows(all), I, { nowMs });
 }
 
-module.exports = { MIN_N, DIMENSIONS, featuresOf, summarize, verdictOf, buildBrain, getBrain };
+module.exports = { PROP_MIN_N, PROP_MIN_OOS, proposalsOf, groupsOf, MIN_N, DIMENSIONS, featuresOf, summarize, verdictOf, buildBrain, getBrain };
