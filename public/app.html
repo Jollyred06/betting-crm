@@ -1484,6 +1484,8 @@
     system:  { path: '/api/system-check',          method: 'POST', title: 'Controllo di sistema', icon: 'shield', label: 'Controllo di sistema', desc: 'Verifica database, chiavi, servizi esterni, Telegram e giro giornaliero. Poi dice cosa non va.' },
     backup:  { path: '/api/tracker/backup.json',    method: 'GET',  title: 'Copia di sicurezza', icon: 'download', download: true, filename: 'backup_betting_crm.json.gz', label: 'Scarica la copia di sicurezza', desc: 'Lo specchio di tutto: segnali, giocate con il saldo dopo ognuna, bankroll, richieste e riepilogo dei numeri. File compresso (.gz), da mandare in chat così com\'è.' },
     autob:   { path: '/api/tracker/backups/latest',  method: 'GET',  title: 'Copia automatica', icon: 'download', download: true, filename: 'backup_betting_crm_auto.json.gz', label: 'Scarica l\'ultima copia automatica', desc: 'Il CRM ne salva una da solo ogni giorno dopo le 3 di notte e tiene le ultime 14.' },
+    tennis:  { path: '/api/tracker/sport-check?sport=tennis&market=moneyline', method: 'POST', title: 'Prova tennis', icon: 'play', label: 'Prova il tennis (1 richiesta)', desc: 'Legge le quote del tennis delle prossime 24 ore e dice quante partite e quanti vantaggi ci sono. Solo una prova, non crea segnali.', cost: 'costa 1 richiesta odss' },
+    basket:  { path: '/api/tracker/sport-check?sport=basket&market=moneyline', method: 'POST', title: 'Prova basket', icon: 'play', label: 'Prova il basket (1 richiesta)', desc: 'Come il tennis, per il basket (vincente della partita).', cost: 'costa 1 richiesta odss' },
     csv:     { path: '/api/tracker/export.csv',     method: 'GET',  title: 'Segnali in CSV', icon: 'download', download: true, label: 'Scarica i segnali (CSV)', desc: 'Per mandarli in chat all\'analisi di ogni tappa.' },
     weekly:  { path: '/api/weekly-report?detail=1', method: 'POST', title: 'Riepilogo settimanale', icon: 'file', label: 'Mostra e invia il riepilogo settimanale', desc: 'Lo invia anche come messaggio, se collegato.' },
     refresh: { path: '/api/admin/refresh-history',  method: 'POST', title: 'Aggiornamento storico', icon: 'refresh', label: 'Aggiorna lo storico partite', desc: 'Scarica i risultati recenti.' },
@@ -1510,6 +1512,12 @@
       : d.error ? `<div class="warn">Telegram risponde: ${esc(d.error)}</div>`
       : !d.chats.length ? '<div class="warn">Nessun messaggio trovato: apri il tuo bot su Telegram, scrivigli "ciao" e riprova.</div>'
       : d.chats.map(c => `<div class="signal">Il tuo chat id è <b>${esc(c.id)}</b> ${c.name ? '(' + esc(c.name) + ')' : ''} — copialo in TELEGRAM_CHAT_ID su Render.</div>`).join('');
+    if (kind === 'tennis' || kind === 'basket') {
+      if (!d.ok) return `<div class="warn">${esc(d.motivo || 'Non riuscito')}</div>`;
+      const sites = Object.entries(d.siti || {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${esc(k)} ${n}`).join(' · ') || '—';
+      return `<div class="info"><b>${d.partite} partite</b> nelle prossime 24 ore (${d.righe} righe). Con Pinnacle come riferimento: <b>${d.partiteConPinnacle}</b>${d.margineMedianoPinnacle !== null ? `, margine mediano ${num(d.margineMedianoPinnacle, 1)}%` : ''}.<br>Con un prezzo migliore di Pinnacle di almeno il 2%: <b>${d.conVantaggio}</b>.<br><span class="muted">Siti: ${sites}</span></div>`
+        + (d.esempi || []).map(e => `<div class="signal"><b>${esc(e.partita)}</b> <span class="muted">${esc(e.lega || '')}</span><br>${esc(e.esito)} · ${esc(e.sito)} a ${num(e.quota, 2)} · vantaggio +${num(e.edgePct, 1)}%</div>`).join('');
+    }
     if (kind === 'hist') return (Array.isArray(d) ? d : []).map(r => `<div class="info">${esc(r.lega)}: ${r.partite} partite, dal ${esc(r.dal)} al ${esc(r.al)}</div>`).join('') || '<div class="warn">Storico vuoto.</div>';
     return '';
   }
