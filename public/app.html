@@ -198,6 +198,12 @@
   .chipbtn { border:1.5px solid var(--line); background:var(--surface); border-radius:999px; padding:7px 12px; font-weight:600; font-size:13.5px; cursor:pointer; color:var(--ink); } .skipr { flex-wrap:wrap; gap:8px; }
   details.tdet { border:0; padding:0; margin-top:6px; } details.tdet > summary { min-height:0; padding:4px 0; font-size:13px; font-weight:600; color:var(--muted); list-style:none; } details.tdet > summary::before { content:'▸ '; } details.tdet[open] > summary::before { content:'▾ '; }
   details.fold.quiet { background:transparent; border-style:dashed; } details.fold.quiet > summary span { font-size:17px; color:var(--muted); }
+  .brows { margin-top:8px; border-top:1px solid var(--line); padding-top:8px; } .brow { display:grid; grid-template-columns:1fr 38px 62px 68px; gap:6px; font-size:14px; padding:5px 0; border-bottom:1px dashed var(--line); } .brow span:nth-child(n+2) { text-align:right; } .brow:last-child { border-bottom:0; }
+  .sect { margin:22px 2px 10px; font:800 13px/1 var(--display); letter-spacing:1.6px; text-transform:uppercase; color:var(--muted); display:flex; align-items:center; gap:10px; } .sect::after { content:''; flex:1; height:1px; background:var(--line); } .sect:first-child { margin-top:4px; }
+  .ktiles { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0 6px; } .ktile { border-radius:14px; padding:10px 10px 9px; background:var(--tint); border:1px solid var(--line); min-width:0; border-top:3px solid var(--muted); }
+  .ktile.ok { border-top-color:var(--ok); } .ktile.warn { border-top-color:var(--warn); } .ktile.bad { border-top-color:var(--bad); }
+  .ktile small { display:block; font-size:11.5px; color:var(--muted); letter-spacing:.2px; } .ktile b { display:block; font:800 24px/1.1 var(--display); color:var(--ink); margin:3px 0 2px; white-space:nowrap; } .ktile span { display:block; font-size:11.5px; color:var(--muted); line-height:1.25; }
+  details.bench { border-top:1px solid var(--line); margin-top:6px; } details.bench > summary { cursor:pointer; padding:12px 0 4px; font-size:14px; color:var(--muted); list-style:none; } details.bench > summary::-webkit-details-marker { display:none; } details.bench > summary::before { content:'▸ '; } details.bench[open] > summary::before { content:'▾ '; }
   .rule1 { border-color:var(--ok); } .rhead { font:700 21px/1.1 var(--display); color:var(--ink); }
   .rrow { display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--line); } .rrow b { display:block; font-weight:600; } .rrow span { display:block; font-weight:700; font-size:16px; } .rrow small { display:block; color:var(--muted); font-size:13px; }
   #playedBox .move b { white-space:nowrap; } #playedBox .resbtn { font-size:12.5px; opacity:.8; }
@@ -301,7 +307,7 @@
   <main id="pane-strategies" style="display:none;">
     <section class="block">
       <h3>Analisi</h3>
-      <p class="muted sub">In alto la regola che giochi e i suoi numeri. Sotto, i bookmaker. Tutto il resto è nell'archivio: si misura ma non si gioca.</p>
+      <p class="muted sub">Tre parti: cosa giochi adesso, cosa misuriamo, e l'archivio.</p>
       <div id="italia"></div>
     </section>
     <details class="fold quiet"><summary><span>Strategia A e scartate</span><small>il test di ottobre e le idee che non battevano il mercato</small></summary>
@@ -692,16 +698,17 @@
     const row = (lv, t, v, n) => `<div class="rrow">${sdot(lv)}<div><b>${t}</b><span>${v}</span>${n ? `<small>${n}</small>` : ''}</div></div>`;
     const tm = i.team || {}, onKeys = Object.keys(tm).filter(k => tm[k] && HERO[k] && k !== 'muro');
     const ruleTxt = tm.oceani ? `🦸 <b>Justice League</b>: solo campionati grandi (margine Pinnacle sotto il 6%), vantaggio dal 2%, quota da 2,00 a 3,50, niente coppe, appena compare${onKeys.length > 1 ? ' · in campo anche: ' + onKeys.filter(k => k !== 'oceani').map(k => esc(HERO[k].n)).join(', ') : ''} · 2 € · massimo ${i.budget ? i.budget.maxPerDay : 10} al giorno` : null;
-    return `<div class="strat rule1"><div class="rhead">${onKeys.map(k => heroImg(k, 30)).join('')} La regola che giochi</div>
+    const tile = (lv, lab, big, sub) => `<div class="ktile ${lv}"><small>${lab}</small><b>${big}</b><span>${sub}</span></div>`;
+    const tiles = `<div class="ktiles">${tile(bl, 'Budget', b ? money(b.balance) : '—', b ? signedMoney(b.pnl) : '')}${tile(cl, 'Vinte / attese', ck && ck.n ? `${ck.won} / ${num(ck.expected, 1)}` : '—', ck && ck.n ? `su ${ck.n} chiuse` : 'nessun risultato')}${tile(vl, 'Valore', f.measured >= 5 ? pct(f.avgClvPct, 1) : '—', f.measured >= 5 && f.clvCi95 ? `da ${pct(f.clvCi95[0])} a ${pct(f.clvCi95[1])}` : 'pochi dati')}</div>`;
+    return `<div class="sect">▶ Gioco ora</div><div class="strat rule1"><div class="rhead">${onKeys.map(k => heroImg(k, 30)).join('')} La regola che giochi</div>${tiles}
       ${ruleTxt ? `<p class="muted" style="margin:4px 0 10px;">${ruleTxt}</p>` : `<p class="muted" style="margin:2px 0 10px;">${i.bestRule === 'sicure' ? '🛡️ Sicure' : i.bestRule === 'tutte' ? '⚙️ F2+' : '✅ Consigliate'} · vantaggio dal 4% · entro 3 ore · quota fino a ${num(i.bestMaxOdd || 3.5, 2)} · niente coppe${i.bestNoAwayThin ? ' · niente 2 nei campionati minori' : ''} · <b>+ 💧 liquide</b> (campionati principali, vantaggio dal 2%, per prime) · 2 € · massimo ${i.budget ? i.budget.maxPerDay : 10} al giorno</p>`}
-      ${row(vl, 'Valore contro la chiusura', f.measured >= 5 ? pct(f.avgClvPct, 1) + (f.clvCi95 ? ` (da ${pct(f.clvCi95[0])} a ${pct(f.clvCi95[1])})` : '') : 'pochi dati', vl === 'ok' ? 'il valore c\'è' : vl === 'bad' ? 'sotto zero: non funziona' : vl === 'warn' ? 'incerto: servono più segnali' : `giudizio da 20 segnali (ora ${f.measured})`)}
-      ${row(cl, 'Vinte contro attese', ck && ck.n ? `${ck.won} su ${ck.n}, attese ${num(ck.expected, 1)}` : 'nessun risultato', cl === 'ok' ? 'in linea' : cl === 'warn' ? 'un po\' sotto: normale sfortuna' : cl === 'bad' ? 'troppo sotto: fermati e mandami il backup' : `giudizio da ${ck ? ck.minN : 30} risultati`)}
+      ${cl === 'bad' ? '<div class="callout warn"><b>Le vinte sono troppo sotto le attese: fermati e mandami il backup.</b></div>' : ''}
       ${i.topStats && tm.oceani ? (() => { const T = i.topStats, line = x => `${x.results && x.results.settled ? `${x.results.won} vinte su ${x.results.settled}, attese ${num(x.results.expected, 1)} · ` : ''}valore ${x.measured >= 5 ? pct(x.avgClvPct, 1) : 'pochi dati'}`;
         const tl = T.top.measured < 20 || !T.top.clvCi95 ? 'info' : T.top.clvCi95[0] > 0 ? 'ok' : 'warn';
         return row(tl, '💎 Top contro le altre', `Top: ${line(T.top)}`, `Altre: ${line(T.rest)} · Top = vantaggio dal ${num(T.rules.minEdge, 0)}% e margine Pinnacle sotto il ${num(T.rules.maxMarginPct, 0)}%. Per ora si gioca tutto a 2 €: a fine novembre si decide`); })() : ''}
       ${i.marketStats && tm.oceani ? (() => { const M = i.marketStats, line = x => `${x.results && x.results.settled ? `${x.results.won} vinte su ${x.results.settled}, attese ${num(x.results.expected, 1)}, ${signedMoney(x.results.pnlEur || 0)}` : 'nessun risultato'}`;
         return row('info', '📉 Mercato contro: non si gioca', `Justice League con Pinnacle spostato contro di ${num(M.rules.againstPts, 0)} punto o più: ${line(M.against)}`, `Le altre: ${line(M.other)} · Se dopo il segnale il mercato si gira contro, il verdetto diventa 🔴`); })() : ''}
-      ${row(bl, 'Il tuo budget', b ? `${money(b.balance)} (${signedMoney(b.pnl)})` : '—', b ? (b.stopWhy ? `🛑 Freno: ${esc(b.stopWhy)}` : `stop a ${money(b.stop)} · freni: ${b.stopRule ? b.stopRule.dayLosses : 3} perse in un giorno, ${b.stopRule ? b.stopRule.weekLossEur : 15} € persi in una settimana`) : '')}
+      <p class="muted" style="margin:10px 0 0;font-size:13px;">${b ? (b.stopWhy ? `🛑 Freno: ${esc(b.stopWhy)}` : `Budget: stop a ${money(b.stop)} · freni: ${b.stopRule ? b.stopRule.dayLosses : 3} perse in un giorno, ${b.stopRule ? b.stopRule.weekLossEur : 15} € persi in una settimana`) : ''}${vl === 'info' ? ' · il valore si giudica da 20 segnali con chiusura' : ''}</p>
     </div>`;
   }
   function booksCard(B) {
@@ -714,9 +721,10 @@
       .sort((a, b) => (rank[a.verdict] - rank[b.verdict]) || ((b.clv.n ? b.clv.mean : -99) - (a.clv.n ? a.clv.mean : -99))).slice(0, 2);
     const top = [...B.books.filter(b => b.mine), ...cand], rest = B.books.filter(b => !top.includes(b));
     return `<div class="strat"><div class="sh"><div class="letter" style="font-size:30px">📊</div><div><b>Bookmaker</b><span>Quale sito paga di più del prezzo giusto · giudizio da ${B.minN} segnali misurati</span></div></div>
-      <p class="muted" style="margin:0 0 6px;font-size:14px;">I tuoi siti e i 2 migliori dove non hai il conto (${B.missed14} occasioni perse in 14 giorni). A destra il valore contro la chiusura.</p>
+      <p class="muted" style="margin:0 0 6px;font-size:14px;">Tutti i siti: i tuoi per primi, poi i migliori dove non hai il conto (${B.missed14} occasioni perse in 14 giorni). A destra il valore contro la chiusura.</p>
       ${B.alerts.map(a => `<div class="callout ${a.level === 'bad' ? 'warn' : 'ok'}">${esc(a.text)}</div>`).join('')}
-      ${top.map(row).join('')}${rest.length ? `<details><summary>Mostra tutti gli altri ${rest.length} siti</summary>${rest.map(row).join('')}</details>` : ''}</div>`;
+      ${top.map(row).join('')}
+      <div class="brows"><small class="muted">Gli altri ${rest.length} siti, in breve (occasioni · valore · saldo carta)</small>${rest.map(b => `<div class="brow"><span>${dot[b.verdict]} ${esc(b.name)}</span><span class="muted">${b.signals}</span><span class="${b.clv.n >= 5 ? cls(b.clv.mean) : 'muted'}">${b.clv.n ? pct(b.clv.mean, 1) : '—'}</span><span class="muted">${b.settled ? signedMoney(b.pnlEur) : '—'}</span></div>`).join('')}</div></div>`;
   }
   // ⚽ GOL: formula del pareggio, 💥 Valanga e quote Over/Under sulla carta (dal 1° novembre)
   function goalsCard(G) {
@@ -854,7 +862,7 @@
   async function loadItalia() {
     try {
       const [i, b, L, BK, GL, TM, BR] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null)]);
-      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + brainCard(BR) + heroTeam() + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + `<div class="sect">▶ Misure</div>` + brainCard(BR) + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<div class="sect">▶ Archivio</div>` + heroTeam() + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
         + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
@@ -938,7 +946,8 @@
     const props = T.members.filter(m => m.proposal).length;
     return `<div class="strat"><div class="sh"><div class="letter" style="font-size:26px">📋</div><div><b>La pagella della squadra</b><span>Il CRM giudica ogni supereroe su tutti i risultati: 🟢 da ${T.rules.minN} segnali con valore sicuramente positivo e vinte nella norma. Propone, tu approvi${T.brakeUntil ? ` · prossimo cambio dal ${new Date(T.brakeUntil).toLocaleDateString('it-IT')}` : ''}</span></div></div>
       ${props ? `<div class="callout ok">💡 ${props === 1 ? 'C\'è una proposta' : 'Ci sono ' + props + ' proposte'} da approvare</div>` : '<p class="muted" style="margin:0 0 6px;font-size:14px;">Nessuna proposta: per ora la squadra resta così.</p>'}
-      ${T.members.map(row).join('')}</div>`;
+      ${T.members.filter(m => m.on || m.proposal).map(row).join('')}
+      ${T.members.filter(m => !m.on && !m.proposal).length ? `<details class="bench"><summary>In panchina (${T.members.filter(m => !m.on && !m.proposal).length}): si misurano, non giocano</summary>${T.members.filter(m => !m.on && !m.proposal).map(row).join('')}</details>` : ''}</div>`;
   }
   // 🧠 CERVELLO: dove si vince e dove si perde, per gruppi. Sola lettura: non cambia nessuna regola
   function brainCard(B) {
