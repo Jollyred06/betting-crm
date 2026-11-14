@@ -94,6 +94,9 @@ router.post('/sports-list', async (req, res) => {
   if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
   try { res.json(await require('../services/sports').sportsList(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+router.get('/auto-played', async (req, res) => {
+  try { res.json(await require('../services/autoplay').getAuto(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 // 🧠 Cervello: dove si vince e dove si perde, per gruppi (sola lettura)
 router.get('/brain', async (req, res) => {
   try { res.json(await require('../services/brain').getBrain(pool)); } catch (err) { res.status(500).json({ error: err.message }); }

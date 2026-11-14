@@ -861,8 +861,8 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L, BK, GL, TM, BR] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null)]);
-      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + `<div class="sect">▶ Misure</div>` + brainCard(BR) + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<div class="sect">▶ Archivio</div>` + heroTeam() + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+      const [i, b, L, BK, GL, TM, BR, AU] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null)]);
+      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + autoCard(AU) + `<div class="sect">▶ Misure</div>` + brainCard(BR) + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<div class="sect">▶ Archivio</div>` + heroTeam() + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
         + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
@@ -950,6 +950,14 @@
       ${T.members.filter(m => !m.on && !m.proposal).length ? `<details class="bench"><summary>In panchina (${T.members.filter(m => !m.on && !m.proposal).length}): si misurano, non giocano</summary>${T.members.filter(m => !m.on && !m.proposal).map(row).join('')}</details>` : ''}</div>`;
   }
   // 🧠 CERVELLO: dove si vince e dove si perde, per gruppi. Sola lettura: non cambia nessuna regola
+  function autoCard(A) {
+    if (!A || A.error) return '';
+    const since = A.since ? new Date(A.since).toLocaleDateString('it-IT', { day: 'numeric', month: 'numeric' }) : '—';
+    const rows = (A.items || []).slice(0, 8).map(x => `<div class="prow"><span class="sdot ${x.result === 'won' ? 'ok' : x.result === 'lost' ? 'bad' : 'info'}"></span><div><b>${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">${esc(({ home: '1', draw: 'X', away: '2' })[x.selection] || x.selection)} a ${num(x.odd, 2)} · ${esc(x.book || '')} · ${x.result ? (x.result === 'won' ? 'vinta ' + signedMoney(x.pnlEur) : 'persa ' + signedMoney(x.pnlEur)) : 'aperta'}</span></div></div>`).join('');
+    return `<details class="fold"><summary><span>🤖 Giocate simulate</span><small>le Justice League giocate da sole a ${num(A.stake, 0)} € dal ${since}</small></summary>
+      <div class="ktiles"><div class="ktile"><small class="muted">Giocate</small><b>${A.count}</b><small class="muted">${A.open} aperte</small></div><div class="ktile"><small class="muted">Vinte / attese</small><b>${A.settled ? A.won + ' / ' + num(A.expectedWon, 1) : '—'}</b><small class="muted">su ${A.settled} chiuse</small></div><div class="ktile"><small class="muted">Saldo</small><b>${A.settled ? signedMoney(A.pnlEur) : '—'}</b><small class="muted">${A.settled ? pct(A.roiPct, 0) : 'nessun risultato'}</small></div></div>
+      <p class="muted" style="font-size:13.5px;">Parte da sola a ogni scansione, solo sui segnali nuovi (niente storico). Separata dalle tue giocate vere.${A.measured >= 5 ? ` Valore medio contro la chiusura: ${pct(A.avgClvPct, 1)}.` : ''}</p>${rows || '<p class="muted">Ancora nessuna giocata: arriva con la prossima Justice League.</p>'}</details>`;
+  }
   function brainCard(B) {
     if (!B || !B.dimensions) return '';
     const V = { forte: ['ok', 'sopra'], debole: ['bad', 'sotto'], norma: ['warn', 'nella norma'], pochi: ['info', 'pochi dati'] };
