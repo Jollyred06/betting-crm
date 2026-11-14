@@ -754,6 +754,32 @@ function markProva(rows) {
   for (const r of rows) out.set(r.id, { final: first.get(sigKey(r)) === r });
   return out;
 }
+/** 🧪 SULLA CARTA (14 novembre 2026, chiesto da Christian: "misurale a parte tutte le partite che devi").
+ *  Le ⭐ escono quasi solo nel fine settimana: qui si misurano a parte gruppi di partite che oggi restano fuori,
+ *  per capire se si possono aggiungere senza perdere. Non si giocano e non entrano mai nella lista da giocare (pickBest).
+ *  Gruppi separati tra loro e dalle Justice League; prima lettura di ogni partita; si guarda "da oggi" (fuori campione) e "all'indietro". */
+const PAPER = {
+  since: '2026-11-14T10:00:00Z',
+  groups: [
+    { key: 'bassa', name: 'Fascia bassa · quote 1,60–2,00', rule: 'Come le Justice League (margine Pinnacle sotto il 6%, vantaggio dal 2%, niente coppe) ma con quota da 1,60 a 2,00: la fascia che le ⭐ oggi scartano',
+      minMarginPct: null, maxMarginPct: 6, minEdge: 2, minOdd: 1.6, maxOdd: 2.0, maxOddOpen: true },
+    { key: 'medi', name: 'Mercati medi · margine 6–8%', rule: 'Campionati un gradino sotto (margine Pinnacle dal 6 all\'8%), vantaggio dal 2%, quota da 1,60 a 3,50, niente coppe',
+      minMarginPct: 6, maxMarginPct: 8, minEdge: 2, minOdd: 1.6, maxOdd: 3.5, maxOddOpen: false }
+  ]
+};
+function isPaperGroup(r, g) {
+  const m = r.pin_margin !== undefined ? r.pin_margin : pinMarginPct(r);
+  if (m === null || m === undefined || isCup(r.league) || !(Number(r.edge_pct) >= g.minEdge)) return false;
+  if (!(Number(m) < g.maxMarginPct) || (g.minMarginPct !== null && !(Number(m) >= g.minMarginPct))) return false;
+  const inOdd = o => o >= g.minOdd && (g.maxOddOpen ? o < g.maxOdd : o <= g.maxOdd);
+  return inOdd(Number(r.odd)) && inOdd(r.play ? r.play.odd : Number(r.odd));
+}
+function markPaperGroup(rows, g) {
+  const out = new Map(), first = new Map();
+  for (const r of [...rows].sort((a, b) => T(a.created_at) - T(b.created_at))) if (isPaperGroup(r, g) && !first.has(sigKey(r))) first.set(sigKey(r), r);
+  for (const r of rows) out.set(r.id, { final: first.get(sigKey(r)) === r });
+  return out;
+}
 function markOceani(rows) {
   const out = new Map(), first = new Map();
   for (const r of [...rows].sort((a, b) => T(a.created_at) - T(b.created_at))) if (isOceani(r) && !first.has(sigKey(r))) first.set(sigKey(r), r);
@@ -1210,6 +1236,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       liquidEarly: !!(earlyMap.get(r.id) || {}).final,
       oceani: isOceani(r),
       prova: isProva(r),
+      paper: PAPER.groups.filter(g => isPaperGroup(r, g)).map(g => g.key),
       top: isTop(r),
       draw_prob: (() => { const o = { home: Number(r.pin_h), draw: Number(r.pin_d), away: Number(r.pin_a) }; return o.home > 1 && o.draw > 1 && o.away > 1 ? noVigPower(o).draw : null; })(),
       final5: !!(fin5.get(r.id) || {}).final,
@@ -1251,6 +1278,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       const jl = all.filter(r => (mo.get(r.id) || {}).final), mvOf = r => { if (!r.close_pin_h) return null; const p1 = selProb(r), p2 = selProb({ pin_h: r.close_pin_h, pin_d: r.close_pin_d, pin_a: r.close_pin_a }, r.selection); return p1 === null || p2 === null ? null : 100 * (p2 - p1); };
       const withMv = jl.map(r => ({ r, mv: mvOf(r) })).filter(x => x.mv !== null);
       out.marketStats = { rules: MARKET, against: part(withMv.filter(x => x.mv <= -MARKET.againstPts).map(x => x.r)), other: part(withMv.filter(x => x.mv > -MARKET.againstPts).map(x => x.r)) }; }
+    // 🧪 sulla carta (14 novembre): i gruppi fuori dalle ⭐, misurati a parte (da oggi e all'indietro)
+    { const t0 = T(PAPER.since), part = l => { const res = R.resultStats(l), d = l.filter(r => r.result === 'won' || r.result === 'lost'); return { ...oddsStats(l), results: { ...res, expected: d.reduce((a, r) => a + Number(r.fair_prob || 0), 0) } }; };
+      out.paperGroups = PAPER.groups.map(g => { const m = markPaperGroup(all, g), l = all.filter(r => (m.get(r.id) || {}).final);
+        return { key: g.key, name: g.name, rule: g.rule, since: PAPER.since, ...part(l.filter(r => T(r.created_at) >= t0)), retro: part(l) }; }); }
     // 💎 Top contro le altre Justice League: su tutte (regole applicate all'indietro, prima lettura) e da quando c'e' il segno
     { const mo = markOceani(all), jl = all.filter(r => (mo.get(r.id) || {}).final), t0 = T(TOP.since);
       const part = l => { const res = R.resultStats(l), d = l.filter(r => r.result === 'won' || r.result === 'lost'); return { ...oddsStats(l), results: { ...res, expected: d.reduce((a, r) => a + Number(r.fair_prob || 0), 0) } }; };
@@ -1271,4 +1302,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

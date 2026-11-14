@@ -378,6 +378,32 @@ console.log('books.test.js: tutti i controlli passati');
   console.log('🧪 Prova: ok');
 }
 
+{ // 🧪 Sulla carta (14 novembre 2026): fascia bassa 1,60-2,00 e mercati medi (margine 6-8%), mai nella lista da giocare
+  const I = require('../services/italia');
+  const [bassa, medi] = I.PAPER.groups;
+  const liq = { odd: 1.8, edge_pct: 2.5, league: 'Allsvenskan', pin_h: 1.85, pin_d: 3.7, pin_a: 4.6 };       // margine sotto il 6%
+  assert.ok(I.pinMarginPct(liq) < 6);
+  assert.strictEqual(I.isPaperGroup(liq, bassa), true); assert.strictEqual(I.isOceani(liq), false);
+  assert.strictEqual(I.isPaperGroup({ ...liq, odd: 2.0 }, bassa), false);                                   // 2,00 e' gia' Justice League
+  assert.strictEqual(I.isPaperGroup({ ...liq, odd: 1.55 }, bassa), false);                                  // sotto 1,60
+  assert.strictEqual(I.isPaperGroup({ ...liq, edge_pct: 1.5 }, bassa), false);                              // vantaggio sotto il 2%
+  assert.strictEqual(I.isPaperGroup({ ...liq, league: 'EFL Trophy' }, bassa), false);                       // coppa
+  assert.strictEqual(I.isPaperGroup({ ...liq, play: { book: '888sport', odd: 2.1 } }, bassa), false);       // quota sul sito fuori fascia
+  assert.strictEqual(I.isPaperGroup(liq, medi), false);                                                     // liquido: non e' "medio"
+  const mid = { odd: 2.5, edge_pct: 3, league: 'Liga 2', pin_h: 2.3, pin_d: 3.1, pin_a: 3.1 };
+  const mm = I.pinMarginPct(mid); assert.ok(mm >= 6 && mm < 8, 'margine ' + mm);
+  assert.strictEqual(I.isPaperGroup(mid, medi), true); assert.strictEqual(I.isPaperGroup(mid, bassa), false);
+  assert.strictEqual(I.isPaperGroup({ ...mid, odd: 3.6 }, medi), false);                                    // sopra 3,50
+  // prima lettura per partita
+  const rows = [{ ...liq, id: 1, event_id: 'e', selection: 'home', created_at: '2026-11-14T10:00:00Z' }, { ...liq, id: 2, event_id: 'e', selection: 'home', created_at: '2026-11-14T12:00:00Z' }];
+  const m = I.markPaperGroup(rows, bassa); assert.strictEqual(m.get(1).final, true); assert.strictEqual(m.get(2).final, false);
+  // mai nella lista da giocare
+  const now = Date.parse('2026-11-14T09:00:00Z');
+  const recent = [{ ...liq, id: 9, paper: ['bassa'], play: { book: '888sport', odd: 1.8 }, commence_time: '2026-11-14T15:00:00Z' }];
+  assert.deepStrictEqual(I.pickBest(recent, { nowMs: now, team: { oceani: true, prova: true, fascia: false } }), []);
+  console.log('🧪 Sulla carta: ok');
+}
+
 { // giorno di ricarica odss (12): una lettura di sondaggio, poi si torna al piano
   const I = require('../services/italia');
   const noon = d => Date.UTC(2026, 10, d, 8, 0);                    // 9:00 ora italiana
