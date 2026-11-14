@@ -1279,8 +1279,12 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       const withMv = jl.map(r => ({ r, mv: mvOf(r) })).filter(x => x.mv !== null);
       out.marketStats = { rules: MARKET, against: part(withMv.filter(x => x.mv <= -MARKET.againstPts).map(x => x.r)), other: part(withMv.filter(x => x.mv > -MARKET.againstPts).map(x => x.r)) }; }
     // 🧪 sulla carta (14 novembre): i gruppi fuori dalle ⭐, misurati a parte (da oggi e all'indietro)
+    // 14 novembre: qui si leggono TUTTI i segnali, non solo gli ultimi 600 (solo le colonne che servono, senza le quote complete)
     { const t0 = T(PAPER.since), part = l => { const res = R.resultStats(l), d = l.filter(r => r.result === 'won' || r.result === 'lost'); return { ...oddsStats(l), results: { ...res, expected: d.reduce((a, r) => a + Number(r.fair_prob || 0), 0) } }; };
-      out.paperGroups = PAPER.groups.map(g => { const m = markPaperGroup(all, g), l = all.filter(r => (m.get(r.id) || {}).final);
+      let every = all;
+      try { every = (await pool.query(`SELECT id, event_id, strategy, selection, created_at, commence_time, league, book, odd, fair_prob, edge_pct, pin_h, pin_d, pin_a, clv_pct, result
+        FROM italia_signals WHERE strategy = $1`, [strategy])).rows; if (!every.length) every = all; } catch (e) { every = all; }
+      out.paperGroups = PAPER.groups.map(g => { const m = markPaperGroup(every, g), l = every.filter(r => (m.get(r.id) || {}).final);
         return { key: g.key, name: g.name, rule: g.rule, since: PAPER.since, ...part(l.filter(r => T(r.created_at) >= t0)), retro: part(l) }; }); }
     // 💎 Top contro le altre Justice League: su tutte (regole applicate all'indietro, prima lettura) e da quando c'e' il segno
     { const mo = markOceani(all), jl = all.filter(r => (mo.get(r.id) || {}).final), t0 = T(TOP.since);
