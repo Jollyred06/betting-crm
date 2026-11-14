@@ -1123,7 +1123,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   // 3 novembre 2026 (velocita'): le letture indipendenti partono insieme invece che una dopo l'altra
   const [resultsStatus, allRes, used, lastRes] = await Promise.all([
     R.resultsStatus(pool, env).catch(() => null),
-    pool.query(`SELECT * FROM italia_signals WHERE strategy = $1 ORDER BY commence_time DESC, id DESC LIMIT 600`, [strategy]),
+    pool.query(`SELECT * FROM italia_signals WHERE strategy = $1 ORDER BY commence_time DESC, id DESC`, [strategy]),
     usedThisMonth(pool),
     pool.query(`SELECT at, ok, kind, records, quota_remaining, note FROM italia_requests ORDER BY id DESC LIMIT 1`)]);
   const all = allRes.rows;

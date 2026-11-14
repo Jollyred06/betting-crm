@@ -458,3 +458,14 @@ console.log('books.test.js: tutti i controlli passati');
   assert.strictEqual(G.ouEdges(totals, ['888sport_it'], Date.parse(ko) + 1).length, 0);   // partita gia' iniziata
   console.log('Over/Under: vantaggi salvati ok');
 }
+
+// 14 novembre 2026: le statistiche della pagina leggono TUTTI i segnali della strategia, non solo gli ultimi 600
+(async () => {
+  const seen = [];
+  const pool = { query: async (q) => { seen.push(String(q)); return { rows: [] }; } };
+  try { await require('../services/italia').getItalia(pool, {}, 'I'); } catch (e) { /* senza database vero: conta solo la richiesta */ }
+  const sel = seen.filter(q => /FROM italia_signals WHERE strategy = \$1 ORDER BY commence_time DESC/.test(q));
+  assert.ok(sel.length >= 1, 'la lettura dei segnali deve partire');
+  assert.ok(sel.every(q => !/LIMIT\s+600/.test(q)), 'nessun tetto di 600 segnali');
+  console.log('statistiche su tutti i segnali: ok');
+})();
