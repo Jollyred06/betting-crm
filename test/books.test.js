@@ -475,3 +475,14 @@ console.log('books.test.js: tutti i controlli passati');
   assert.ok(sel.every(q => !/LIMIT\s+600/.test(q)), 'nessun tetto di 600 segnali');
   console.log('statistiche su tutti i segnali: ok');
 })();
+
+// 14 novembre 2026: risposta piena al tetto -> avviso nel registro (le ultime quote potrebbero mancare)
+(async () => {
+  const I = require('../services/italia'); const logged = [];
+  const pool = { query: async (q, a) => { if (/INSERT INTO italia_requests/.test(q)) logged.push(a); return { rows: [] }; } };
+  const http = n => ({ get: async () => ({ data: { odds: Array.from({ length: n }, (_, i) => ({ event_id: 'e' + i })) }, headers: { 'x-quota-remaining': '400' } }) });
+  await I.fetchOdds(pool, { key: 'k' }, { market: 'ou' }, 'scan_ou', http(5000));
+  await I.fetchOdds(pool, { key: 'k' }, { market: 'ou' }, 'scan_ou', http(4999));
+  assert.ok(/limite di 5000/.test(logged[0][4]) && logged[1][4] === null, 'avviso solo se arriva al tetto');
+  console.log('avviso tetto quote: ok');
+})();

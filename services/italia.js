@@ -339,6 +339,9 @@ async function fetchOdds(pool, c, params, kind, http = axios) {
     const res = await http.get(`${BASE}/odds`, { params: { sport: 'calcio', market: '1x2', limit: 5000, ...params }, headers: { 'x-api-key': c.key }, timeout: 45000 });
     data = res.data || {};
     records = (data.odds || []).length;
+    // 14 novembre 2026: se la risposta arriva piena al tetto, probabilmente le ultime quote sono state tagliate (successo con l'Over/Under del sabato: 5000)
+    const cap = Number((params && params.limit) || 5000);
+    if (records >= cap) note = `limite di ${cap} quote raggiunto: alcune quote potrebbero mancare`;
     const h = res.headers || {};
     remaining = h['x-quota-remaining'] !== undefined ? Number(h['x-quota-remaining']) : null;
     ok = true;
