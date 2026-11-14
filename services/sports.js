@@ -55,4 +55,14 @@ async function sportCheck(pool, { sport, market }, env = process.env, { http, no
   return { ok: true, sport, market, mercati, campione: records[0] ? { chiavi: Object.keys(records[0]).slice(0, 15), inizio: records[0].commence_time || null } : null, ...summarizeSport(records) };
 }
 
-module.exports = { SPORTS, MARKETS, twoWay, summarizeSport, sportCheck };
+/** Elenco ufficiale di sport e mercati di odss (probabilmente gratis): mostra anche i crediti prima e dopo, cosi' si vede se costa. */
+async function sportsList(pool, env = process.env, { http = require('axios') } = {}) {
+  const I = require('./italia'), c = I.cfg(env);
+  if (!c.key) return { ok: false, motivo: 'ODSS_API_KEY non impostata' };
+  const before = await I.lastRemaining(pool).catch(() => null);
+  const res = await http.get('https://odss-api.com/api/v1/sports', { headers: { 'x-api-key': c.key }, timeout: 30000 });
+  const h = res.headers || {}, after = h['x-quota-remaining'] !== undefined ? Number(h['x-quota-remaining']) : null;
+  return { ok: true, crediti: { prima: before, dopo: after }, elenco: JSON.stringify(res.data).slice(0, 1500) };
+}
+
+module.exports = { sportsList, SPORTS, MARKETS, twoWay, summarizeSport, sportCheck };
