@@ -428,7 +428,7 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   // delle chiusure (ITALIA_CLOSE_MIN_EDGE): prima quelle tra 2% e 4% non venivano mai misurate e la pagella non poteva giudicarle.
   // 12 novembre 2026: le chiusure (1 credito odss ciascuna) solo per cio' che si gioca o si misura: Justice League, Prova e Superman (trasferte nei minori).
   // Prima si chiudevano anche i segnali mai giocati (3 su 4): credito sprecato. Le altre strategie (B, T) restano com'erano.
-  const rows = cand.filter(r => r.strategy === 'I' ? (isOceani(r) || isProva(r) || isAwayThin(r)) : Number(r.edge_pct || 0) >= c.closeMinEdge);
+  const rows = cand.filter(r => r.strategy === 'I' ? (isOceani(r) || isProva(r) || isAwayThin(r) || PAPER.groups.some(g => isPaperGroup(r, g))) : Number(r.edge_pct || 0) >= c.closeMinEdge);
   // 1° novembre 2026: anche i segnali T (tutti i siti italiani) prendono la chiusura, per giudicare i bookmaker sul valore.
   // Non fanno mai partire una richiesta da soli: si aggiungono a quella dei segnali I e B (una richiesta = stesso costo).
   if (!rows.some(r => r.strategy !== 'T')) return { chiusure: 0 };

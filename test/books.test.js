@@ -308,7 +308,9 @@ console.log('books.test.js: tutti i controlli passati');
     { id: 1, event_id: 'e1', selection: 'home', odd: 3.2, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Primera A', pin_h: 3.6, pin_d: 3.3, pin_a: 2.2 },     // ⭐ con vantaggio 2,5%
     { id: 2, event_id: 'e2', selection: 'home', odd: 1.9, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Ligue 2', pin_h: 2.0, pin_d: 3.0, pin_a: 3.6 },       // non ⭐, sotto soglia
     { id: 3, event_id: 'e3', selection: 'home', odd: 1.9, commence_time: ko, strategy: 'I', edge_pct: 6.0, league: 'Ligue 2', pin_h: 2.0, pin_d: 3.0, pin_a: 3.6 },       // 12 novembre: mai giocata, anche con vantaggio alto non si chiude piu'
-    { id: 4, event_id: 'e4', selection: 'away', odd: 2.3, commence_time: ko, strategy: 'I', edge_pct: 3.0, league: 'Ligue 2', pin_h: 3.0, pin_d: 3.2, pin_a: 2.1 }         // Superman (trasferta, mercato sottile): si misura ancora
+    { id: 4, event_id: 'e4', selection: 'away', odd: 2.3, commence_time: ko, strategy: 'I', edge_pct: 3.0, league: 'Ligue 2', pin_h: 3.0, pin_d: 3.2, pin_a: 2.1 },        // Superman (trasferta, mercato sottile): si misura ancora
+    { id: 5, event_id: 'e5', selection: 'home', odd: 1.8, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Serie A', pin_h: 1.75, pin_d: 3.8, pin_a: 5.0 },     // 14 novembre: fascia bassa sulla carta (margine 3%, quota 1,60-2,00): ora si chiude
+    { id: 6, event_id: 'e6', selection: 'home', odd: 2.4, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Ligue 2', pin_h: 2.2, pin_d: 3.0, pin_a: 3.5 }       // mercati medi sulla carta (margine 7%): ora si chiude
   ];
   const asked = [];
   const pool = { query: async (sql) => {
@@ -319,7 +321,7 @@ console.log('books.test.js: tutti i controlli passati');
   } };
   const http = { get: async (url, o) => { asked.push(o.params.event_id); return { data: { odds: [] }, headers: {} }; } };
   await I.captureClosing(pool, { closeWindowMin: 45, closeMinEdge: 4, closeTriggerMin: 15, monthlyCap: 9999, books: [], myBooks: [], key: 'x' }, { nowMs: now, http });
-  assert.deepStrictEqual(asked.join(',').split(',').sort(), ['e1', 'e4']);   // una sola richiesta per tutte le partite: solo la ⭐ e Superman, non e2 ne' e3
+  assert.deepStrictEqual(asked.join(',').split(',').sort(), ['e1', 'e4', 'e5', 'e6']);   // una sola richiesta: la ⭐, Superman e i due gruppi sulla carta, non e2 ne' e3
   console.log('Chiusure delle ⭐: ok');
 })().catch(e => { console.error(e); process.exit(1); });
 
