@@ -1,0 +1,148 @@
+/**
+ * 📚 STORICO E TARATURA (14 novembre 2026). Scarica da football-data.co.uk gli ultimi anni di partite con le quote di chiusura di
+ * Pinnacle (gratis, senza crediti) e misura quanto Pinnacle ha ragione per campionato e fascia di probabilita'.
+ * SOLA MISURA: non cambia segnali ne' regole. Serve a dare ai segnali un "secondo parere" (fase successiva) e a controllare le regole su anni di dati.
+ * Tabella separata (hist_pin), esclusa dal backup: si riscarica in due minuti.
+ */
+const { LEAGUES } = require('./leagues');
+const H = require('./history');
+
+const SEASONS_BACK = 6;                    // stagione in corso + 5 precedenti
+const BANDS = [0, 0.15, 0.25, 0.35, 0.5, 0.65, 1.0001];
+const BAND_LABELS = ['sotto 15%', '15–25%', '25–35%', '35–50%', '50–65%', '65% e oltre'];
+const K_LEAGUE = 300;                      // quanto pesa una lega: con 300 partite in quella fascia conta la meta' lega, la meta' il generale
+let ready = false, running = false;
+
+async function ensureCalib(pool) {
+  if (ready) return;
+  await pool.query(`CREATE TABLE IF NOT EXISTS hist_pin (league TEXT NOT NULL, match_date DATE NOT NULL, home TEXT NOT NULL, away TEXT NOT NULL,
+    hg INT NOT NULL, ag INT NOT NULL, ph NUMERIC(8,3) NOT NULL, pd NUMERIC(8,3) NOT NULL, pa NUMERIC(8,3) NOT NULL, PRIMARY KEY (league, match_date, home, away))`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS calib_state (key TEXT PRIMARY KEY, val TEXT)`);
+  ready = true;
+}
+
+const num = v => (v === '' || v === undefined || v === null || isNaN(Number(v)) ? null : Number(v));
+const pick3 = (r, keys) => { for (const k of keys) { const a = num(r[k[0]]), b = num(r[k[1]]), c = num(r[k[2]]); if (a > 1 && b > 1 && c > 1) return [a, b, c]; } return null; };
+
+/** Righe CSV -> partite con le quote Pinnacle (chiusura, altrimenti quelle prima della chiusura). Parte pura. */
+function rowsToPin(leagueCode, rows, newFmt = false, sinceStr = null) {
+  const out = [];
+  for (const r of rows) {
+    const date = H.parseDate(r.Date), home = newFmt ? r.Home : r.HomeTeam, away = newFmt ? r.Away : r.AwayTeam;
+    const hg = num(newFmt ? r.HG : r.FTHG), ag = num(newFmt ? r.AG : r.FTAG);
+    if (!date || !home || !away || hg === null || ag === null) continue;
+    if (sinceStr && date < sinceStr) continue;
+    const q = pick3(r, [['PSCH', 'PSCD', 'PSCA'], ['PSH', 'PSD', 'PSA'], ['PH', 'PD', 'PA']]);
+    if (!q) continue;
+    out.push({ league: leagueCode, date, home, away, hg, ag, ph: q[0], pd: q[1], pa: q[2] });
+  }
+  return out;
+}
+
+function urlsFor(code, nowMs, back = SEASONS_BACK) {
+  const l = LEAGUES[code]; if (!l || !l.csv) return [];
+  if (l.newFmt) return [{ url: `https://football-data.co.uk/new/${l.csv}.csv`, newFmt: true }];
+  const urls = [], d = new Date(nowMs);
+  for (let i = 0; i < back; i++) { const x = new Date(Date.UTC(d.getUTCFullYear() - i, d.getUTCMonth(), 15)); urls.push({ url: `https://www.football-data.co.uk/mmz4281/${H.seasonCode(x.toISOString().slice(0, 10))}/${l.csv}.csv`, newFmt: false }); }
+  return [...new Map(urls.map(u => [u.url, u])).values()];
+}
+
+async function upsertPin(pool, list) {
+  let n = 0;
+  for (let i = 0; i < list.length; i += 300) {
+    const batch = list.slice(i, i + 300), p = [];
+    const vals = batch.map((m, k) => { p.push(m.league, m.date, m.home, m.away, m.hg, m.ag, m.ph, m.pd, m.pa); const b = k * 9; return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9})`; });
+    await pool.query(`INSERT INTO hist_pin (league, match_date, home, away, hg, ag, ph, pd, pa) VALUES ${vals.join(',')}
+      ON CONFLICT (league, match_date, home, away) DO UPDATE SET hg = EXCLUDED.hg, ag = EXCLUDED.ag, ph = EXCLUDED.ph, pd = EXCLUDED.pd, pa = EXCLUDED.pa`, p);
+    n += batch.length;
+  }
+  return n;
+}
+
+/** Scarica e salva. current = solo la stagione in corso (aggiornamento giornaliero), altrimenti tutte. Non lancia errori: li conta. */
+async function refreshHistory(pool, { nowMs = Date.now(), current = false, http } = {}) {
+  await ensureCalib(pool);
+  const axios = http || require('axios');
+  const out = { files: 0, partite: 0, errori: 0, leghe: {} };
+  for (const code of Object.keys(LEAGUES)) {
+    for (const u of urlsFor(code, nowMs, current ? 1 : SEASONS_BACK)) {
+      try {
+        const { data } = await axios.get(u.url, { responseType: 'text', timeout: 30000, headers: { 'User-Agent': 'betting-crm/1.0' } });
+        const since = u.newFmt ? new Date(nowMs - 6 * 365 * 86400000).toISOString().slice(0, 10) : null;
+        const list = rowsToPin(code, H.parseCsv(String(data)), u.newFmt, since);
+        out.partite += await upsertPin(pool, list); out.files++; out.leghe[code] = (out.leghe[code] || 0) + list.length;
+      } catch (e) { out.errori++; }   // una stagione mancante non ferma le altre
+    }
+  }
+  await pool.query(`INSERT INTO calib_state (key, val) VALUES ('last', $1) ON CONFLICT (key) DO UPDATE SET val = EXCLUDED.val`, [new Date(nowMs).toISOString()]);
+  return out;
+}
+
+/** In sottofondo a ogni giro: la prima volta scarica tutto, poi la stagione in corso una volta al giorno (dopo le 6 italiane). */
+async function maybeRefresh(pool, { nowMs = Date.now() } = {}) {
+  if (running) return { storico: 'in corso' };
+  await ensureCalib(pool);
+  const last = (await pool.query(`SELECT val FROM calib_state WHERE key = 'last'`)).rows[0];
+  const empty = !last, hourIt = (new Date(nowMs).getUTCHours() + 1) % 24;
+  if (!empty && (nowMs - Date.parse(last.val) < 20 * 3600000 || hourIt < 6)) return { storico: 'aggiornato' };
+  startRefresh(pool, { nowMs, current: !empty });
+  return { storico: empty ? 'scarico completo avviato' : 'aggiornamento avviato' };
+}
+/** Avvia lo scarico in sottofondo (uno alla volta). */
+function startRefresh(pool, opts = {}) {
+  if (running) return false;
+  running = true;
+  refreshHistory(pool, opts).then(() => { cache = null; }).catch(() => {}).finally(() => { running = false; });
+  return true;
+}
+const isRunning = () => running;
+
+// ------------------------------------------------------------------------------------------- taratura
+const bandOf = p => { for (let i = 0; i < BANDS.length - 1; i++) if (p >= BANDS[i] && p < BANDS[i + 1]) return i; return null; };
+const OUTS = ['home', 'draw', 'away'];
+
+/** Dalle partite storiche: per ogni esito e fascia, attese (Pinnacle senza margine) contro uscite. Generale e per campionato. Parte pura. */
+function calibrate(rows) {
+  const cell = () => ({ n: 0, exp: 0, obs: 0 }), mk = () => OUTS.map(() => BAND_LABELS.map(cell));
+  const all = mk(), by = {};
+  for (const r of rows) {
+    const h = Number(r.ph), d = Number(r.pd), a = Number(r.pa), s = 1 / h + 1 / d + 1 / a, p = [1 / h / s, 1 / d / s, 1 / a / s];
+    const hg = Number(r.hg), ag = Number(r.ag), res = hg > ag ? 0 : hg === ag ? 1 : 2;
+    const lg = by[r.league] || (by[r.league] = mk());
+    for (let o = 0; o < 3; o++) { const b = bandOf(p[o]); if (b === null) continue; for (const t of [all, lg]) { const c = t[o][b]; c.n++; c.exp += p[o]; c.obs += res === o ? 1 : 0; } }
+  }
+  return { n: rows.length, all, by };
+}
+
+/** Probabilita' corretta con la storia: prima il generale (pesa quasi sempre tutto), poi la lega con peso n/(n+K). Restituisce anche la fiducia. */
+function adjust(cal, league, outcome, p) {
+  const o = OUTS.indexOf(outcome), b = bandOf(p); if (o < 0 || b === null || !cal) return { p, n: 0, shift: 0 };
+  const g = cal.all[o][b], gShift = g.n >= 100 ? (g.obs - g.exp) / g.n : 0;
+  const l = cal.by[league] ? cal.by[league][o][b] : null, lShift = l && l.n ? (l.obs - l.exp) / l.n : 0, w = l ? l.n / (l.n + K_LEAGUE) : 0;
+  const shift = (1 - w) * gShift + w * lShift;
+  return { p: Math.min(0.99, Math.max(0.01, p + shift)), n: l ? l.n : g.n, shift };
+}
+
+/** Per l'app: tabella generale e i campionati dove Pinnacle sbaglia in modo evidente (almeno 200 partite nella fascia e z oltre 2,5). Parte pura. */
+function report(cal) {
+  const row = (o, b, c) => { const p = c.n ? c.exp / c.n : null, q = c.n ? c.obs / c.n : null, sd = c.n ? Math.sqrt(p * (1 - p) / c.n) : null;
+    return { outcome: OUTS[o], band: BAND_LABELS[b], n: c.n, expected: p, observed: q, diff: c.n ? q - p : null, z: sd ? (q - p) / sd : null }; };
+  const general = []; for (let o = 0; o < 3; o++) for (let b = 0; b < BAND_LABELS.length; b++) if (cal.all[o][b].n) general.push(row(o, b, cal.all[o][b]));
+  const odd = [];
+  for (const [lg, t] of Object.entries(cal.by)) for (let o = 0; o < 3; o++) for (let b = 0; b < BAND_LABELS.length; b++) { const c = t[o][b]; if (c.n >= 200) { const r = row(o, b, c); if (Math.abs(r.z) >= 2.5) odd.push({ league: lg, ...r }); } }
+  odd.sort((a, b) => Math.abs(b.z) - Math.abs(a.z));
+  return { n: cal.n, leagues: Object.keys(cal.by).length, general, odd: odd.slice(0, 12) };
+}
+
+let cache = null;
+async function getCalibration(pool, { force = false, nowMs = Date.now() } = {}) {
+  await ensureCalib(pool);
+  if (!force && cache && nowMs - cache.at < 10 * 60000) return cache.val;
+  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin`)).rows;
+  const last = (await pool.query(`SELECT val FROM calib_state WHERE key = 'last'`)).rows[0];
+  const range = (await pool.query(`SELECT MIN(match_date) AS a, MAX(match_date) AS b FROM hist_pin`)).rows[0];
+  const val = { ...report(calibrate(rows)), running, last: last ? last.val : null, from: range.a, to: range.b };
+  cache = { at: nowMs, val }; return val;
+}
+
+module.exports = { BANDS, BAND_LABELS, K_LEAGUE, rowsToPin, urlsFor, refreshHistory, maybeRefresh, startRefresh, isRunning, calibrate, adjust, report, getCalibration, ensureCalib };

@@ -6,7 +6,7 @@
  *  - "riepilogo": i numeri gia' calcolati (selezioni, budget, bookmaker, allenamento, calibrazione), per leggerla in un attimo.
  * Si scarica compressa (.json.gz, circa un decimo del peso): la si apre con qualsiasi programma zip, o la si manda in chat cosi' com'e'.
  */
-const SKIP = new Set(['historical_matches', 'xg_matches', 'xg_seasons', 'match_stats', 'referee_stats', 'backups']);
+const SKIP = new Set(['hist_pin', 'calib_state', 'historical_matches', 'xg_matches', 'xg_seasons', 'match_stats', 'referee_stats', 'backups']);
 
 async function listTables(pool) {
   const { rows } = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' ORDER BY table_name`);

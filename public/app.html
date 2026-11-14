@@ -861,8 +861,8 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L, BK, GL, TM, BR, AU] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null)]);
-      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + autoCard(AU) + `<div class="sect">▶ Misure</div>` + brainCard(BR) + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<div class="sect">▶ Archivio</div>` + heroTeam() + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+      const [i, b, L, BK, GL, TM, BR, AU, CA] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null), getJson('/api/tracker/calibration').catch(() => null)]);
+      $('italia').innerHTML = ruleCard(i) + teamCard(TM) + autoCard(AU) + `<div class="sect">▶ Misure</div>` + brainCard(BR) + calibCard(CA) + booksCard(BK) + paperCard(i) + goalsCard(GL) + `<div class="sect">▶ Archivio</div>` + heroTeam() + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
         + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`;
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
@@ -957,6 +957,17 @@
     return `<details class="fold"><summary><span>🤖 Giocate simulate</span><small>le Justice League giocate da sole a ${num(A.stake, 0)} € dal ${since}</small></summary>
       <div class="ktiles"><div class="ktile"><small class="muted">Giocate</small><b>${A.count}</b><small class="muted">${A.open} aperte</small></div><div class="ktile"><small class="muted">Vinte / attese</small><b>${A.settled ? A.won + ' / ' + num(A.expectedWon, 1) : '—'}</b><small class="muted">su ${A.settled} chiuse</small></div><div class="ktile"><small class="muted">Saldo</small><b>${A.settled ? signedMoney(A.pnlEur) : '—'}</b><small class="muted">${A.settled ? pct(A.roiPct, 0) : 'nessun risultato'}</small></div></div>
       <p class="muted" style="font-size:13.5px;">Parte da sola a ogni scansione, solo sui segnali nuovi (niente storico). Separata dalle tue giocate vere.${A.measured >= 5 ? ` Valore medio contro la chiusura: ${pct(A.avgClvPct, 1)}.` : ''}</p>${rows || '<p class="muted">Ancora nessuna giocata: arriva con la prossima Justice League.</p>'}</details>`;
+  }
+  function calibCard(C) {
+    if (!C || C.error) return '';
+    const OUT = { home: '1 (casa)', draw: 'X (pareggio)', away: '2 (trasferta)' };
+    if (!C.n) return `<details class="fold"><summary><span>📚 Storico e taratura</span><small>${C.running ? 'scarico in corso…' : 'non ancora scaricato'}</small></summary><p class="muted" style="font-size:14px;">Lo storico delle partite con le quote di chiusura di Pinnacle si scarica da solo al prossimo giro (gratis, senza crediti). Puoi anche avviarlo da Altro → Azioni.</p></details>`;
+    const dd = d => d ? new Date(d).toLocaleDateString('it-IT', { month: 'numeric', year: '2-digit' }) : '—';
+    const rows = C.general.filter(x => x.n >= 100).map(x => `<div class="prow"><span class="sdot ${Math.abs(x.z) >= 2.5 ? 'warn' : 'ok'}"></span><div><b>${OUT[x.outcome]} · ${esc(x.band)}</b> <span class="muted tnum">${x.n} partite · Pinnacle dice ${num(100 * x.expected, 1)}%, uscito ${num(100 * x.observed, 1)}% (${pct(100 * x.diff, 1).replace('%', ' punti')})</span></div></div>`).join('');
+    const odd = (C.odd || []).map(x => `<div class="prow"><span class="sdot warn"></span><div><b>${esc(x.league)}</b> · ${OUT[x.outcome]}, ${esc(x.band)} <span class="muted tnum">${x.n} partite · dice ${num(100 * x.expected, 1)}%, uscito ${num(100 * x.observed, 1)}%</span></div></div>`).join('');
+    return `<details class="fold"><summary><span>📚 Storico e taratura</span><small>quanto Pinnacle ha ragione, su ${num(C.n, 0)} partite</small></summary>
+      <p class="muted" style="font-size:14px;">${num(C.n, 0)} partite di ${C.leagues} campionati (${dd(C.from)}–${dd(C.to)}), con le quote di chiusura di Pinnacle. Per ogni fascia: quanto previsto contro quanto uscito. Il giallo segna scostamenti che non sembrano fortuna.${C.running ? ' <b>Scarico in corso…</b>' : ''}</p>
+      ${rows}${odd ? `<h4 style="margin:14px 0 2px;">Campionati dove Pinnacle sbaglia di più</h4>${odd}` : '<p class="muted">Nessun campionato con scostamenti evidenti.</p>'}</details>`;
   }
   function brainCard(B) {
     if (!B || !B.dimensions) return '';
@@ -1492,8 +1503,7 @@
     system:  { path: '/api/system-check',          method: 'POST', title: 'Controllo di sistema', icon: 'shield', label: 'Controllo di sistema', desc: 'Verifica database, chiavi, servizi esterni, Telegram e giro giornaliero. Poi dice cosa non va.' },
     backup:  { path: '/api/tracker/backup.json',    method: 'GET',  title: 'Copia di sicurezza', icon: 'download', download: true, filename: 'backup_betting_crm.json.gz', label: 'Scarica la copia di sicurezza', desc: 'Lo specchio di tutto: segnali, giocate con il saldo dopo ognuna, bankroll, richieste e riepilogo dei numeri. File compresso (.gz), da mandare in chat così com\'è.' },
     autob:   { path: '/api/tracker/backups/latest',  method: 'GET',  title: 'Copia automatica', icon: 'download', download: true, filename: 'backup_betting_crm_auto.json.gz', label: 'Scarica l\'ultima copia automatica', desc: 'Il CRM ne salva una da solo ogni giorno dopo le 3 di notte e tiene le ultime 14.' },
-    tennis:  { path: '/api/tracker/sport-check?sport=tennis&market=1x2', method: 'POST', title: 'Prova tennis', icon: 'play', label: 'Prova il tennis (1 richiesta)', desc: 'Legge le quote del tennis (senza filtri, fino a 200 righe) e dice quante partite e quanti vantaggi ci sono. Solo una prova, non crea segnali.', cost: 'costa 1 richiesta odss' },
-    basket:  { path: '/api/tracker/sport-check?sport=basket&market=1x2', method: 'POST', title: 'Prova basket', icon: 'play', label: 'Prova il basket (1 richiesta)', desc: 'Come il tennis, per il basket .', cost: 'costa 1 richiesta odss' },
+    histpin: { path: '/api/tracker/history-pin', method: 'POST', title: 'Storico quote', icon: 'refresh', label: 'Scarica lo storico delle quote Pinnacle', desc: 'Scarica gli ultimi anni di partite con le quote di chiusura (gratis, senza crediti). Parte da solo anche ogni giorno.', cost: 'gratis, ci mette un paio di minuti' },
     csv:     { path: '/api/tracker/export.csv',     method: 'GET',  title: 'Segnali in CSV', icon: 'download', download: true, label: 'Scarica i segnali (CSV)', desc: 'Per mandarli in chat all\'analisi di ogni tappa.' },
     weekly:  { path: '/api/weekly-report?detail=1', method: 'POST', title: 'Riepilogo settimanale', icon: 'file', label: 'Mostra e invia il riepilogo settimanale', desc: 'Lo invia anche come messaggio, se collegato.' },
     refresh: { path: '/api/admin/refresh-history',  method: 'POST', title: 'Aggiornamento storico', icon: 'refresh', label: 'Aggiorna lo storico partite', desc: 'Scarica i risultati recenti.' },
@@ -1524,6 +1534,7 @@
       if (!d.ok) return `<div class="warn">${esc(d.motivo || 'Non riuscito')}</div>`;
       return `<div class="info">Crediti: prima ${d.crediti.prima ?? '?'} · dopo ${d.crediti.dopo ?? '?'}</div><pre style="white-space:pre-wrap;font-size:12px">${esc(d.elenco)}</pre>`;
     }
+    if (kind === 'histpin') return d.avviato ? `<div class="info">Scarico avviato in sottofondo: ci vogliono un paio di minuti. Poi guarda Analisi → 📚 Storico e taratura.</div>` : `<div class="info">${esc(d.motivo || 'Già in corso.')}</div>`;
     if (kind === 'tennis' || kind === 'basket') {
       if (!d.ok) return `<div class="warn">${esc(d.motivo || 'Non riuscito')}</div>`;
       const sites = Object.entries(d.siti || {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${esc(k)} ${n}`).join(' · ') || '—';
