@@ -486,3 +486,13 @@ console.log('books.test.js: tutti i controlli passati');
   assert.ok(/limite di 5000/.test(logged[0][4]) && logged[1][4] === null, 'avviso solo se arriva al tetto');
   console.log('avviso tetto quote: ok');
 })();
+
+// 14 novembre 2026: l'Over/Under chiede solo le righe di incontro (content=match), per non arrivare al tetto di quote
+(async () => {
+  const G = require('../services/goals'); let params = null;
+  const pool = { query: async () => ({ rows: [] }) };
+  const http = { get: async (url, o) => { params = o.params; return { data: { odds: [] }, headers: {} }; } };
+  await G.scanTotals(pool, { ouEnabled: true, ouMarket: 'ou', key: 'k', myBooks: ['snai'], books: ['netwin'], minLeadMin: 0, windowHours: 24 }, { nowMs: Date.now(), http, merged: [], trio: () => null });
+  assert.ok(params && params.content === 'match' && params.market === 'ou' && /pinnacle/.test(params.bookmakers), 'Over/Under: content=match');
+  console.log('Over/Under content=match: ok');
+})().catch(e => { console.error(e); process.exit(1); });

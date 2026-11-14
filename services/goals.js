@@ -269,6 +269,7 @@ async function scanTotals(pool, c, { nowMs = Date.now(), http, merged = [], trio
   const books = [...new Set([...c.myBooks, ...c.books])];
   const records = await I.fetchOdds(pool, c, {
     market: c.ouMarket, bookmakers: ['pinnacle', ...books].join(','),
+    content: 'match',   // 14 novembre 2026 (documentazione odss): solo righe di incontro, senza player props; la risposta arrivava al tetto di 5000 quote
     commence_from: new Date(nowMs + c.minLeadMin * 60000).toISOString(), commence_to: new Date(nowMs + c.windowHours * 3600000).toISOString()
   }, 'scan_ou', http);
   const pin1x2 = new Map();
