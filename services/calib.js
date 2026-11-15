@@ -145,4 +145,14 @@ async function getCalibration(pool, { force = false, nowMs = Date.now() } = {}) 
   cache = { at: nowMs, val }; return val;
 }
 
-module.exports = { BANDS, BAND_LABELS, K_LEAGUE, rowsToPin, urlsFor, refreshHistory, maybeRefresh, startRefresh, isRunning, calibrate, adjust, report, getCalibration, ensureCalib };
+/** Taratura grezza (per il pronostico IA), tenuta in memoria 30 minuti. */
+let rawCache = null;
+async function getCalRaw(pool, { nowMs = Date.now() } = {}) {
+  if (rawCache && nowMs - rawCache.at < 30 * 60000) return rawCache.val;
+  await ensureCalib(pool);
+  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin`)).rows;
+  const val = rows.length ? calibrate(rows) : null;
+  rawCache = { at: nowMs, val }; return val;
+}
+
+module.exports = { getCalRaw, BANDS, BAND_LABELS, K_LEAGUE, rowsToPin, urlsFor, refreshHistory, maybeRefresh, startRefresh, isRunning, calibrate, adjust, report, getCalibration, ensureCalib };
