@@ -37,3 +37,19 @@ console.log('pronostico: ok');
   assert.strictEqual(s2.ai.all.n, 1); assert.ok(s2.ai.weights && s2.ai.names.slancio);
   console.log('IA adattiva: ok');
 }
+// punto 2: pesi per tipo di partita
+{
+  assert.strictEqual(G.contextOf({ pin_h: 1.5, pin_d: 4.2, pin_a: 7 }), 'maggiori-favorita');
+  assert.strictEqual(G.contextOf({ pin_h: 2.5, pin_d: 3.1, pin_a: 2.8 }), 'minori-equilibrata');
+  assert.strictEqual(G.contextOf({ pin_h: null }), null);
+  const pq = (h, d, a) => { const g = G.guessOf(h, d, a); return { home: g.probs['1'], draw: g.probs.X, away: g.probs['2'] }; };
+  // nelle equilibrate lo slancio indovina, nelle favorite no
+  const evs = [];
+  for (let i = 0; i < 40; i++) evs.push({ id: 'q' + i, t: i, ctx: 'minori-equilibrata', f: pq(2.6, 3.3, 2.8), l: pq(2.9, 3.3, 2.5), out: 'away' });
+  for (let i = 0; i < 40; i++) evs.push({ id: 'w' + i, t: 100 + i, ctx: 'maggiori-favorita', f: pq(1.6, 4, 6), l: pq(1.7, 3.9, 5.2), out: 'home' });
+  const L = G.learn(evs, null, null);
+  assert.ok(L.byContext['minori-equilibrata'].weights.slancio > L.byContext['maggiori-favorita'].weights.slancio, 'lo slancio conta di piu nelle equilibrate');
+  const w = { weights: L.weights, byContext: L.byContext };
+  assert.strictEqual(G.aiGuess({ pin_h: 2.6, pin_d: 3.3, pin_a: 2.8 }, { pin_h: 2.9, pin_d: 3.3, pin_a: 2.5 }, null, null, w).pick, '2');
+  console.log('IA per tipo di partita: ok');
+}
