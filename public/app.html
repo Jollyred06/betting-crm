@@ -492,8 +492,20 @@
   const swrGet = url => { try { const v = JSON.parse(localStorage.getItem(SWR_KEY + url) || 'null'); return v && Date.now() - v.at < SWR_MAX_MS ? v : null; } catch (e) { return null; } };
   const swrPut = (url, d, raw) => { try { localStorage.setItem(SWR_KEY + url, JSON.stringify({ at: Date.now(), raw })); } catch (e) { /* telefono pieno o navigazione privata: pazienza */ } };
   let redrawTimer = null;
+  // 15/11/2026: il ridisegno (dati nuovi arrivati dal server, o ritorno nell'app) richiudeva i "dettagli" aperti.
+  // Prima di ridisegnare si segna quali erano aperti e, per qualche secondo, si riaprono appena la pagina si riempie.
+  const dkey = d => d.dataset.k || ((d.querySelector('summary') || {}).textContent || '').trim().slice(0, 80);
+  function keepOpen(root) {
+    if (!root || typeof MutationObserver !== 'function') return;
+    const keys = new Set([...root.querySelectorAll('details[open]')].map(dkey).filter(Boolean));
+    if (!keys.size) return;
+    const fix = () => root.querySelectorAll('details:not([open])').forEach(d => { if (keys.has(dkey(d))) d.open = true; });
+    const mo = new MutationObserver(fix); mo.observe(root, { childList: true, subtree: true });
+    setTimeout(() => mo.disconnect(), 5000);
+  }
   function redraw() {
     clearTimeout(redrawTimer);
+    keepOpen($('pane-' + curPage));
     redrawTimer = setTimeout(() => { if (curPage === 'home') loadHome(); else if (curPage === 'signals') loadSignals(); else if (curPage === 'strategies') loadStrategies(); else if (curPage === 'bankroll') loadBankroll(); }, 150);
   }
   async function fetchRaw(url) {
@@ -1231,7 +1243,7 @@
             ${it && (r.played || r.skipped || (r.verdict && r.verdict.play === 'yes')) ? playActions(r) : ''}
             ${it && !r.verdict && !r.play && !r.played && !r.skipped ? '<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>' : ''}
             ${r.result === 'won' || r.result === 'lost' ? `<div class="foot"><span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span></div>` : ''}${r.result === 'void' ? `<div class="foot"><span class="chip">annullata/rinviata: non conta</span></div>` : ''}
-            <details class="tdet"><summary>dettagli</summary>
+            <details class="tdet" data-k="t${r.id}"><summary>dettagli</summary>
               <div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
               ${it && r.play && !r.played && live ? `<div class="avail">🔍 Su ${esc(r.play.book)} cerca <b>${esc(r.home)}</b> · <a class="tlink" href="https://www.google.com/search?q=${encodeURIComponent(r.play.book + ' ' + r.home + ' ' + r.away)}" target="_blank" rel="noopener" onclick="rememberSpot()">cerca la partita</a></div>` : ''}
               ${it && r.min_odd ? `<div class="avail">Quote viste dal CRM${r.alt && Object.keys(r.alt).length ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''} · minimo ${num(r.min_odd, 2)}</div>` : ''}
@@ -1670,7 +1682,7 @@
   }
 
   // quando torni all'app dopo un po', i numeri si aggiornano da soli
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && lastLoad && Date.now() - lastLoad > 60000) { memo.clear(); loadHome(); }; });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && lastLoad && Date.now() - lastLoad > 60000) { keepOpen($('pane-' + curPage)); memo.clear(); loadHome(); }; });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => { /* senza, l'app funziona lo stesso */ });
   // apertura: se l'indirizzo dice una scheda (per esempio tornando indietro da Google), si riapre quella, nello stesso punto
   (function start() {
