@@ -1213,6 +1213,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const latestPin = r => { const g = pinNow.get(r.event_id); return g && T(g.updated_at) > T(r.created_at) + 60000 ? { ...g, id: 'gw:' + r.event_id, selection: r.selection } : r; };
   let calAi = null, wAi = null; try { calAi = await require('./calib').getCalRaw(pool); } catch (e) { /* storico non ancora scaricato */ }
   try { wAi = (await require('./guess').getGuessCached(pool)).ai.weights; } catch (e) { /* senza risultati: pesi uguali */ }
+  let eloAi = null; try { const E = await require('./elo').getEloCached(pool); eloAi = E ? E.of : null; } catch (e) { /* senza storico */ }
   const firstRowOf = new Map(); for (const r of [...all].sort((x, y) => T(x.created_at) - T(y.created_at))) if (!firstRowOf.has(sigKey(r))) firstRowOf.set(sigKey(r), r);
   const out = {
     ...base, checks, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
@@ -1256,7 +1257,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       oceani: isOceani(r),
       prova: isProva(r),
       coppe: isCoppe(r),
-      guess: (() => { const GS = require('./guess'), f = firstRowOf.get(sigKey(r)) || r, g = GS.guessOf(f.pin_h, f.pin_d, f.pin_a), a = GS.aiGuess(f, latestPin(r), calAi, require('./calib').adjust, wAi);
+      guess: (() => { const GS = require('./guess'), f = firstRowOf.get(sigKey(r)) || r, g = GS.guessOf(f.pin_h, f.pin_d, f.pin_a), a = GS.aiGuess(f, latestPin(r), calAi, require('./calib').adjust, wAi, eloAi ? eloAi(r.home, r.away) : null);
         return g ? { pick: g.pick, prob: g.prob, ai: a ? { pick: a.pick, prob: a.prob, movedPts: a.movedPts } : null } : null; })(),
       paper: PAPER.groups.filter(g => isPaperGroup(r, g)).map(g => g.key),
       top: isTop(r),

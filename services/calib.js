@@ -63,7 +63,7 @@ async function upsertPin(pool, list) {
 async function refreshHistory(pool, { nowMs = Date.now(), current = false, http } = {}) {
   await ensureCalib(pool);
   const axios = http || require('axios');
-  const out = { files: 0, partite: 0, errori: 0, leghe: {} };
+  const out = { files: 0, partite: 0, errori: 0, leghe: {} }, log = [];
   for (const code of Object.keys(LEAGUES)) {
     for (const u of urlsFor(code, nowMs, current ? 1 : SEASONS_BACK)) {
       try {
@@ -71,10 +71,12 @@ async function refreshHistory(pool, { nowMs = Date.now(), current = false, http 
         const since = u.newFmt ? new Date(nowMs - 6 * 365 * 86400000).toISOString().slice(0, 10) : null;
         const list = rowsToPin(code, H.parseCsv(String(data)), u.newFmt, since);
         out.partite += await upsertPin(pool, list); out.files++; out.leghe[code] = (out.leghe[code] || 0) + list.length;
-      } catch (e) { out.errori++; }   // una stagione mancante non ferma le altre
+        log.push({ url: u.url.replace(/^https?:\/\/[^/]+/, ''), n: list.length, last: list.reduce((a, m) => (m.date > a ? m.date : a), '') || null });
+      } catch (e) { out.errori++; log.push({ url: u.url.replace(/^https?:\/\/[^/]+/, ''), error: (e.response && e.response.status) || e.code || e.message }); }   // una stagione mancante non ferma le altre
     }
   }
   await pool.query(`INSERT INTO calib_state (key, val) VALUES ('last', $1) ON CONFLICT (key) DO UPDATE SET val = EXCLUDED.val`, [new Date(nowMs).toISOString()]);
+  await pool.query(`INSERT INTO calib_state (key, val) VALUES ('files', $1) ON CONFLICT (key) DO UPDATE SET val = EXCLUDED.val`, [JSON.stringify(log.slice(0, 200))]);
   return out;
 }
 
@@ -141,7 +143,8 @@ async function getCalibration(pool, { force = false, nowMs = Date.now() } = {}) 
   const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin`)).rows;
   const last = (await pool.query(`SELECT val FROM calib_state WHERE key = 'last'`)).rows[0];
   const range = (await pool.query(`SELECT MIN(match_date) AS a, MAX(match_date) AS b FROM hist_pin`)).rows[0];
-  const val = { ...report(calibrate(rows)), running, last: last ? last.val : null, from: range.a, to: range.b };
+  let files = null; try { const f = (await pool.query(`SELECT val FROM calib_state WHERE key = 'files'`)).rows[0]; files = f ? JSON.parse(f.val) : null; } catch (e) { files = null; }
+  const val = { ...report(calibrate(rows)), running, last: last ? last.val : null, from: range.a, to: range.b, files };
   cache = { at: nowMs, val }; return val;
 }
 
