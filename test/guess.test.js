@@ -19,15 +19,21 @@ assert.strictEqual(s.live.n, 1); assert.strictEqual(s.live.hit, 0);
 assert.strictEqual(s.byPick['1'].hit, 1); assert.strictEqual(s.byPick['2'].n, 1);
 assert.strictEqual(s.recent[0].home, 'C');
 console.log('pronostico: ok');
-// IA: segue la direzione del mercato
+// IA adattiva: impara dai risultati e sposta i pesi verso chi sbaglia meno
 {
   const first = { pin_h: 2.6, pin_d: 3.3, pin_a: 2.8 }, last = { pin_h: 2.9, pin_d: 3.3, pin_a: 2.5 };
-  const a = G.aiGuess(first, last, null, null);
-  assert.strictEqual(G.guessOf(2.6, 3.3, 2.8).pick, '1'); assert.strictEqual(a.pick, '2', 'il mercato va sulla trasferta: IA dice 2');
-  assert.ok(a.movedPts > 0);
+  assert.ok(G.aiGuess(first, last, null, null), 'pronostico anche senza pesi');
   assert.strictEqual(G.aiGuess({ pin_h: null }, null, null, null), null);
+  // 40 partite in cui il mercato si muove verso la trasferta e vince la trasferta: lo "slancio" deve guadagnare fiducia
+  const pr = (h, d, a) => { const g = G.guessOf(h, d, a); return { home: g.probs['1'], draw: g.probs.X, away: g.probs['2'] }; };
+  const evs = Array.from({ length: 40 }, (_, i) => ({ id: 'e' + i, t: i, f: pr(2.6, 3.3, 2.8), l: pr(2.9, 3.3, 2.5), out: 'away' }));
+  const m = G.learn(evs, null, null);
+  assert.ok(m.weights.slancio > m.weights.primo, 'piu fiducia alla direzione del mercato');
+  assert.strictEqual(m.preds.get('e0').sel !== undefined, true); assert.strictEqual(m.learnedOn, 40);
+  assert.ok(Math.abs(Object.values(m.weights).reduce((a, b) => a + b, 0) - 1) < 1e-9);
+  assert.strictEqual(G.aiGuess(first, last, null, null, m.weights).pick, '2', 'con i pesi imparati dice 2');
   const s2 = G.guessStats([{ event_id: 'z', created_at: '2026-11-16T10:00:00Z', commence_time: '2026-11-16T18:00:00Z', home: 'X', away: 'Y', ...first },
     { event_id: 'z', created_at: '2026-11-16T15:00:00Z', commence_time: '2026-11-16T18:00:00Z', home: 'X', away: 'Y', ...last, result: 'won', result_score: '0-1' }]);
-  assert.strictEqual(s2.ai.all.hit, 1); assert.strictEqual(s2.all.hit, 0); assert.strictEqual(s2.ai.differ, 1); assert.strictEqual(s2.ai.differAi, 1);
-  console.log('pronostico IA: ok');
+  assert.strictEqual(s2.ai.all.n, 1); assert.ok(s2.ai.weights && s2.ai.names.slancio);
+  console.log('IA adattiva: ok');
 }

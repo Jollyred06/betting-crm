@@ -1211,7 +1211,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   let qsMap = new Map(); if (strategy === 'I') { const ids = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))]; if (ids.length) qsMap = markQuick(all.filter(r => ids.includes(r.event_id)), await pinHistory(pool, ids)); }
   const quickKeys = new Set(all.filter(r => qsMap.get(r.id)).map(sigKey));
   const latestPin = r => { const g = pinNow.get(r.event_id); return g && T(g.updated_at) > T(r.created_at) + 60000 ? { ...g, id: 'gw:' + r.event_id, selection: r.selection } : r; };
-  let calAi = null; try { calAi = await require('./calib').getCalRaw(pool); } catch (e) { /* storico non ancora scaricato */ }
+  let calAi = null, wAi = null; try { calAi = await require('./calib').getCalRaw(pool); } catch (e) { /* storico non ancora scaricato */ }
+  try { wAi = (await require('./guess').getGuessCached(pool)).ai.weights; } catch (e) { /* senza risultati: pesi uguali */ }
   const firstRowOf = new Map(); for (const r of [...all].sort((x, y) => T(x.created_at) - T(y.created_at))) if (!firstRowOf.has(sigKey(r))) firstRowOf.set(sigKey(r), r);
   const out = {
     ...base, checks, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,
@@ -1255,7 +1256,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       oceani: isOceani(r),
       prova: isProva(r),
       coppe: isCoppe(r),
-      guess: (() => { const GS = require('./guess'), f = firstRowOf.get(sigKey(r)) || r, g = GS.guessOf(f.pin_h, f.pin_d, f.pin_a), a = GS.aiGuess(f, latestPin(r), calAi, require('./calib').adjust);
+      guess: (() => { const GS = require('./guess'), f = firstRowOf.get(sigKey(r)) || r, g = GS.guessOf(f.pin_h, f.pin_d, f.pin_a), a = GS.aiGuess(f, latestPin(r), calAi, require('./calib').adjust, wAi);
         return g ? { pick: g.pick, prob: g.prob, ai: a ? { pick: a.pick, prob: a.prob, movedPts: a.movedPts } : null } : null; })(),
       paper: PAPER.groups.filter(g => isPaperGroup(r, g)).map(g => g.key),
       top: isTop(r),
