@@ -1,5 +1,5 @@
 /**
- * GIOCATE SIMULATE AUTOMATICHE (14 novembre 2026): ogni segnale Justice League nuovo (prima uscita, partita non ancora iniziata)
+ * GIOCATE SIMULATE AUTOMATICHE (14 novembre 2026; dal 15/11 anche le 🏆 Coppe): ogni segnale Justice League nuovo (prima uscita, partita non ancora iniziata)
  * viene "giocato" da solo sulla carta, alla quota del segnale e con la puntata fissa (AUTO_STAKE, default 2 euro).
  * Parte dal primo giro dopo l'attivazione (niente storico: cosi' il saldo e' tutto fuori campione e senza ritocchi).
  * E' una tabella SEPARATA dalle giocate vere (played_bets): non sporca la misura "il tuo valore", che usa le quote davvero prese da te.
@@ -17,10 +17,10 @@ async function ensureAuto(pool) {
 const stakeOf = env => { const s = Number(String((env || {}).AUTO_STAKE || '').replace(',', '.')); return s > 0 && s <= 100 ? s : DEFAULT_STAKE; };
 
 /** Parte pura: tra i segnali I sceglie quelli da giocare. */
-function pickNew(rows, { sinceMs, nowMs, taken, isOceani, primaryRows }) {
+function pickNew(rows, { sinceMs, nowMs, taken, isOceani, isCoppe = null, primaryRows }) {
   const keys = new Set(taken.keys), ids = new Set(taken.ids);
   return primaryRows(rows.filter(r => Date.parse(r.created_at) >= sinceMs))
-    .filter(r => isOceani(r) && Date.parse(r.commence_time) > nowMs && !ids.has(Number(r.id)) && !keys.has(r.event_id + '|' + r.selection));
+    .filter(r => (isOceani(r) || (isCoppe && isCoppe(r))) && Date.parse(r.commence_time) > nowMs && !ids.has(Number(r.id)) && !keys.has(r.event_id + '|' + r.selection));
 }
 
 async function runAutoplay(pool, { env = process.env, nowMs = Date.now() } = {}) {
@@ -32,7 +32,7 @@ async function runAutoplay(pool, { env = process.env, nowMs = Date.now() } = {})
   const rows = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' AND created_at >= $1 ORDER BY created_at`, [new Date(sinceMs).toISOString()])).rows;
   const ex = (await pool.query(`SELECT signal_id, event_id, selection FROM auto_bets`)).rows;
   const taken = { ids: ex.map(r => Number(r.signal_id)), keys: ex.map(r => r.event_id + '|' + r.selection) };
-  const fresh = pickNew(rows, { sinceMs, nowMs, taken, isOceani: I.isOceani, primaryRows: I.primaryRows });
+  const fresh = pickNew(rows, { sinceMs, nowMs, taken, isOceani: I.isOceani, isCoppe: I.isCoppe, primaryRows: I.primaryRows });
   const stake = stakeOf(env); let n = 0;
   for (const r of fresh) {
     const k = await pool.query(`INSERT INTO auto_bets (signal_id, event_id, selection, book, odd, stake) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, [r.id, r.event_id, r.selection, r.book, r.odd, stake]);

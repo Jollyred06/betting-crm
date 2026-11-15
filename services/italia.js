@@ -431,7 +431,7 @@ async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   // delle chiusure (ITALIA_CLOSE_MIN_EDGE): prima quelle tra 2% e 4% non venivano mai misurate e la pagella non poteva giudicarle.
   // 12 novembre 2026: le chiusure (1 credito odss ciascuna) solo per cio' che si gioca o si misura: Justice League, Prova e Superman (trasferte nei minori).
   // Prima si chiudevano anche i segnali mai giocati (3 su 4): credito sprecato. Le altre strategie (B, T) restano com'erano.
-  const rows = cand.filter(r => r.strategy === 'I' ? (isOceani(r) || isProva(r) || isAwayThin(r) || PAPER.groups.some(g => isPaperGroup(r, g))) : Number(r.edge_pct || 0) >= c.closeMinEdge);
+  const rows = cand.filter(r => r.strategy === 'I' ? (isOceani(r) || isProva(r) || isCoppe(r) || isAwayThin(r) || PAPER.groups.some(g => isPaperGroup(r, g))) : Number(r.edge_pct || 0) >= c.closeMinEdge);
   // 1° novembre 2026: anche i segnali T (tutti i siti italiani) prendono la chiusura, per giudicare i bookmaker sul valore.
   // Non fanno mai partire una richiesta da soli: si aggiungono a quella dei segnali I e B (una richiesta = stesso costo).
   if (!rows.some(r => r.strategy !== 'T')) return { chiusure: 0 };
@@ -759,6 +759,15 @@ function markProva(rows) {
   for (const r of rows) out.set(r.id, { final: first.get(sigKey(r)) === r });
   return out;
 }
+/** 🏆 COPPE (15 novembre 2026, 16:41, scelta da Christian): le partite di coppa con quota da 2,00 a 3,50 e vantaggio dal 2%,
+ *  in qualsiasi mercato. Erano escluse dal 30 ottobre (15 partite con valore negativo); con piu' dati si e' ribaltato:
+ *  29 partite, 17 vinte su 11,1 attese (+62%); dal 5/11 (fuori campione) 12 partite, 8 vinte su 4,5 attese. Valore +5,4% su 20.
+ *  Poche partite: e' la scelta migliore che c'e', non una certezza. Escono soprattutto in settimana. Pagella propria (squadra: 'coppe'). */
+const COPPE = { since: '2026-11-15T15:41:00Z', minEdge: 2, minOdd: 2.0, maxOdd: 3.5 };
+function isCoppe(r) {
+  const odd = r.play ? r.play.odd : Number(r.odd);
+  return isCup(r.league) && Number(r.edge_pct) >= COPPE.minEdge && Number(r.odd) >= COPPE.minOdd && Number(r.odd) <= COPPE.maxOdd && odd >= COPPE.minOdd && odd <= COPPE.maxOdd;
+}
 /** 🧪 SULLA CARTA (14 novembre 2026, chiesto da Christian: "misurale a parte tutte le partite che devi").
  *  Le ⭐ escono quasi solo nel fine settimana: qui si misurano a parte gruppi di partite che oggi restano fuori,
  *  per capire se si possono aggiungere senza perdere. Non si giocano e non entrano mai nella lista da giocare (pickBest).
@@ -950,8 +959,9 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   const okLiq = r => tm.oceano && r.liquid && baseOk(r);
   const okExtra = r => baseOk(r) && ((tm.quicksilver && r.quick) || (tm.coro && r.final4 && r.consensus && r.consensus.above >= 4) || (tm.saracinesca && r.final8) || (tm.liquidi8 && r.final9) || (tm.strange && r.drawStar) || (tm.flash && r.liquidEarly) || (tm.oceani && r.oceani) || (tm.wolverine && r.final && !(r.pin_margin !== null && r.pin_margin < 6)));
   const okProva = r => tm.prova && r.prova && !(Number(r.odd) > PROVA.maxOdd);
+  const okCoppe = r => tm.coppe && r.coppe;
   const liq = r => (okLiq(r) ? 1 : 0);
-  return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r) || okProva(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs && !(r.market && r.market.dir === 'contro'))
+  return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r) || okProva(r) || okCoppe(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs && !(r.market && r.market.dir === 'contro'))
     .sort((a, b) => ((tm.oceani && b.oceani ? 1 : 0) - (tm.oceani && a.oceani ? 1 : 0)) || ((b.score ? b.score.vote : -1) - (a.score ? a.score.vote : -1)) || (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);   // 4 novembre: prima il 🧮 voto piu' alto
 }
 
@@ -1243,6 +1253,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       liquidEarly: !!(earlyMap.get(r.id) || {}).final,
       oceani: isOceani(r),
       prova: isProva(r),
+      coppe: isCoppe(r),
       paper: PAPER.groups.filter(g => isPaperGroup(r, g)).map(g => g.key),
       top: isTop(r),
       draw_prob: (() => { const o = { home: Number(r.pin_h), draw: Number(r.pin_d), away: Number(r.pin_a) }; return o.home > 1 && o.draw > 1 && o.away > 1 ? noVigPower(o).draw : null; })(),
@@ -1313,4 +1324,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
