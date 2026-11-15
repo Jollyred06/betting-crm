@@ -206,6 +206,7 @@
   details.bench { border-top:1px solid var(--line); margin-top:6px; } details.bench > summary { cursor:pointer; padding:12px 0 4px; font-size:14px; color:var(--muted); list-style:none; } details.bench > summary::-webkit-details-marker { display:none; } details.bench > summary::before { content:'▸ '; } details.bench[open] > summary::before { content:'▾ '; }
   .rule1 { border-color:var(--ok); } .rhead { font:700 21px/1.1 var(--display); color:var(--ink); }
   .rrow { display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--line); } .rrow b { display:block; font-weight:600; } .rrow span { display:block; font-weight:700; font-size:16px; } .rrow small { display:block; color:var(--muted); font-size:13px; }
+  .guess { display:block; margin:4px 0 2px; font-size:13px; color:var(--muted); } .guess b { color:var(--ink); }
   .agrp { margin:18px 0 2px; padding:0 4px; font-size:13px; color:var(--muted); font-weight:700; } .agrp:first-child { margin-top:4px; }
   #playedBox .play .pm b { white-space:normal; overflow-wrap:anywhere; } #playedBox .play { padding:8px 0; } #playedBox .play .pr { flex:none; margin-left:4px; }
   .play { align-items:flex-start; gap:10px; } .play .sdot { margin-top:6px; flex:none; } .play .pm { flex:1; min-width:0; } .play .pm b { white-space:normal; font-size:15px; line-height:1.3; } .play .pr { white-space:nowrap; font:800 16px/1.3 var(--display); }
@@ -871,12 +872,12 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L, BK, GL, TM, BR, AU, CA, OP] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null), getJson('/api/tracker/calibration').catch(() => null), getJson('/api/tracker/opinion').catch(() => null)]);
+      const [i, b, L, BK, GL, TM, BR, AU, CA, OP, GU] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null), getJson('/api/tracker/calibration').catch(() => null), getJson('/api/tracker/opinion').catch(() => null), getJson('/api/tracker/guess').catch(() => null)]);
       const pane = (k, html) => `<div data-anv="${k}"${anView === k ? '' : ' hidden'}>${html}</div>`;
       const seg = `<div class="seg" role="tablist">${[['a', 'Riepilogo'], ['m', 'Misure'], ['r', 'Archivio']].map(([k, t]) => `<button class="tab${anView === k ? ' on' : ''}" data-an="${k}" onclick="anTab(this)">${t}</button>`).join('')}</div>`;
       $('italia').innerHTML = seg
         + pane('a', ruleCard(i) + teamCard(TM) + autoCard(AU))
-        + pane('m', brainCard(BR) + storicoCard(CA) + parereCard(OP) + booksCard(BK) + paperCard(i) + goalsCard(GL))
+        + pane('m', guessCard(GU) + brainCard(BR) + storicoCard(CA) + parereCard(OP) + booksCard(BK) + paperCard(i) + goalsCard(GL))
         + pane('r', heroTeam() + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
           + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`);
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
@@ -972,6 +973,16 @@
     return `<details class="fold"><summary><span>🤖 Giocate simulate</span><small>le Justice League e le Coppe giocate da sole a ${num(A.stake, 0)} € dal ${since}</small></summary>
       <div class="ktiles"><div class="ktile"><small class="muted">Giocate</small><b>${A.count}</b><small class="muted">${A.open} aperte</small></div><div class="ktile"><small class="muted">Vinte / attese</small><b>${A.settled ? A.won + ' / ' + num(A.expectedWon, 1) : '—'}</b><small class="muted">su ${A.settled} chiuse</small></div><div class="ktile"><small class="muted">Saldo</small><b>${A.settled ? signedMoney(A.pnlEur) : '—'}</b><small class="muted">${A.settled ? pct(A.roiPct, 0) : 'nessun risultato'}</small></div></div>
       <p class="muted" style="font-size:13.5px;">Parte da sola a ogni scansione, solo sui segnali nuovi (niente storico). Separata dalle tue giocate vere.${A.measured >= 5 ? ` Valore medio contro la chiusura: ${pct(A.avgClvPct, 1)}.` : ''}</p>${rows || '<p class="muted">Ancora nessuna giocata: arriva con la prossima Justice League.</p>'}</details>`;
+  }
+  function guessCard(G) {
+    if (!G || !G.all || !G.all.n) return '';
+    const line = (t, lab) => t && t.n ? `<div class="prow"><span class="sdot ${t.hit >= t.expected ? 'ok' : 'warn'}"></span><div><b>${lab}</b> <span class="muted tnum">indovinati ${t.hit} su ${t.n} (${num(t.pct, 0)}%) · attesi ${num(t.expPct, 0)}%</span></div></div>` : `<div class="prow"><span class="sdot info"></span><div><b>${lab}</b> <span class="muted">ancora nessuna partita chiusa</span></div></div>`;
+    const rec = (G.recent || []).slice(0, 6).map(x => `<div class="prow"><span class="sdot ${x.hit ? 'ok' : 'bad'}"></span><div><b>${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">pronostico ${x.pick} (${num(100 * x.prob, 0)}%) · finita ${esc(x.score)}</span></div></div>`).join('');
+    return `<details class="fold" open><summary><span>🔮 Pronostico del CRM</span><small>quante ne indovina, 1 X 2</small></summary>
+      <p class="muted" style="font-size:14px;">Su ogni partita il CRM scrive l'esito più probabile, con la prima lettura (niente senno di poi). Non è un consiglio di gioco: per guadagnare conta la quota, non solo indovinare.</p>
+      ${line(G.live, 'Dal vivo (da oggi)')}${line(G.all, 'Su tutte le partite chiuse')}
+      ${line(G.byPick['1'], 'Quando dice 1')}${line(G.byPick.X, 'Quando dice X')}${line(G.byPick['2'], 'Quando dice 2')}
+      ${rec ? `<h4 style="margin:12px 0 2px;">Ultime</h4>${rec}` : ''}</details>`;
   }
   function parereCard(P) {
     if (!P || !P.ready) return '';
@@ -1208,6 +1219,7 @@
           <div class="tmain">
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="pick"><span>${it && r.play ? `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
+            ${r.guess ? `<small class="guess">🔮 Pronostico del CRM: <b>${r.guess.pick}</b> (${num(100 * r.guess.prob, 0)}%)${r.result_score ? (({ '1': 'home', X: 'draw', '2': 'away' })[r.guess.pick] === (() => { const m = String(r.result_score).match(/(\d+)\s*-\s*(\d+)/); return m ? (+m[1] > +m[2] ? 'home' : +m[1] === +m[2] ? 'draw' : 'away') : null; })() ? ' · ✅ indovinato' : ' · ❌ sbagliato') : ''}</small>` : ''}
             ${it && r.verdict ? `<div class="verdict ${r.verdict.play}"><b>${r.verdict.play === 'yes' ? `🟢 GIOCALA · ${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.liquid ? 'oceano' : 'fascia', 22)} ${r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}${r.top ? ' · 💎 Top' : ''}` : r.verdict.play === 'wait' ? '🟡 ASPETTA' : '🔴 NON GIOCARE'}</b><span>${esc(r.verdict.text)}</span></div>` : ''}
             ${it && r.paper && r.paper.length && !(r.verdict && r.verdict.play === 'yes') ? `<small class="muted">🧪 Misurata sulla carta (${r.paper.map(k => k === 'bassa' ? 'fascia bassa' : k === 'medi' ? 'mercati medi' : k === 'alte' ? 'quote alte' : esc(k)).join(', ')}): non si gioca</small>` : ''}
             ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? `<div class="ohero">${voteChip(r)}</div>` + probLine(r) + drawLine(r) : ''}

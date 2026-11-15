@@ -1254,6 +1254,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       oceani: isOceani(r),
       prova: isProva(r),
       coppe: isCoppe(r),
+      guess: (() => { const g = require('./guess').guessOf(r.pin_h, r.pin_d, r.pin_a); return g ? { pick: g.pick, prob: g.prob } : null; })(),
       paper: PAPER.groups.filter(g => isPaperGroup(r, g)).map(g => g.key),
       top: isTop(r),
       draw_prob: (() => { const o = { home: Number(r.pin_h), draw: Number(r.pin_d), away: Number(r.pin_a) }; return o.home > 1 && o.draw > 1 && o.away > 1 ? noVigPower(o).draw : null; })(),

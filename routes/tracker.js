@@ -110,6 +110,9 @@ router.post('/history-pin', async (req, res) => {
 router.get('/opinion', async (req, res) => {
   try { res.json(await require('../services/opinion').getOpinions(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+router.get('/guess', async (req, res) => {
+  try { res.json(await require('../services/guess').getGuess(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 // 🧠 Cervello: dove si vince e dove si perde, per gruppi (sola lettura)
 router.get('/brain', async (req, res) => {
   try { res.json(await require('../services/brain').getBrain(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
