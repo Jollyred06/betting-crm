@@ -7,7 +7,9 @@
 const { LEAGUES } = require('./leagues');
 const H = require('./history');
 
-const SEASONS_BACK = 6;                    // stagione in corso + 5 precedenti
+const SEASONS_BACK = 15;                   // 16/11/2026: dalla stagione 2012/13 (prima: 6 stagioni)
+const SINCE_NEW = '2012-07-01';            // file "new" (un file per campionato con tutte le stagioni): dal 2012
+const DATA_VERSION = '2';                  // cambia quando serve riscaricare tutto
 const BANDS = [0, 0.15, 0.25, 0.35, 0.5, 0.65, 1.0001];
 const BAND_LABELS = ['sotto 15%', '15–25%', '25–35%', '35–50%', '50–65%', '65% e oltre'];
 const K_LEAGUE = 300;                      // quanto pesa una lega: con 300 partite in quella fascia conta la meta' lega, la meta' il generale
@@ -16,7 +18,9 @@ let ready = false, running = false;
 async function ensureCalib(pool) {
   if (ready) return;
   await pool.query(`CREATE TABLE IF NOT EXISTS hist_pin (league TEXT NOT NULL, match_date DATE NOT NULL, home TEXT NOT NULL, away TEXT NOT NULL,
-    hg INT NOT NULL, ag INT NOT NULL, ph NUMERIC(8,3) NOT NULL, pd NUMERIC(8,3) NOT NULL, pa NUMERIC(8,3) NOT NULL, PRIMARY KEY (league, match_date, home, away))`);
+    hg INT NOT NULL, ag INT NOT NULL, ph NUMERIC(8,3), pd NUMERIC(8,3), pa NUMERIC(8,3), PRIMARY KEY (league, match_date, home, away))`);
+  // 16/11/2026: le partite senza quote Pinnacle si tengono lo stesso (servono i risultati per la forza delle squadre)
+  for (const col of ['ph', 'pd', 'pa']) await pool.query(`ALTER TABLE hist_pin ALTER COLUMN ${col} DROP NOT NULL`);
   await pool.query(`CREATE TABLE IF NOT EXISTS calib_state (key TEXT PRIMARY KEY, val TEXT)`);
   ready = true;
 }
@@ -32,13 +36,12 @@ function rowsToPin(leagueCode, rows, newFmt = false, sinceStr = null) {
     const hg = num(newFmt ? r.HG : r.FTHG), ag = num(newFmt ? r.AG : r.FTAG);
     if (!date || !home || !away || hg === null || ag === null) continue;
     if (sinceStr && date < sinceStr) continue;
+    // chiusura di Pinnacle, altrimenti Pinnacle prima della chiusura; senza Pinnacle la partita resta (solo risultato)
     const q = pick3(r, [['PSCH', 'PSCD', 'PSCA'], ['PSH', 'PSD', 'PSA'], ['PH', 'PD', 'PA']]);
-    if (!q) continue;
-    out.push({ league: leagueCode, date, home, away, hg, ag, ph: q[0], pd: q[1], pa: q[2] });
+    out.push({ league: leagueCode, date, home, away, hg, ag, ph: q ? q[0] : null, pd: q ? q[1] : null, pa: q ? q[2] : null });
   }
   return out;
 }
-
 function urlsFor(code, nowMs, back = SEASONS_BACK) {
   const l = LEAGUES[code]; if (!l || !l.csv) return [];
   if (l.newFmt) return [{ url: `https://football-data.co.uk/new/${l.csv}.csv`, newFmt: true }];
@@ -53,7 +56,7 @@ async function upsertPin(pool, list) {
     const batch = list.slice(i, i + 300), p = [];
     const vals = batch.map((m, k) => { p.push(m.league, m.date, m.home, m.away, m.hg, m.ag, m.ph, m.pd, m.pa); const b = k * 9; return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9})`; });
     await pool.query(`INSERT INTO hist_pin (league, match_date, home, away, hg, ag, ph, pd, pa) VALUES ${vals.join(',')}
-      ON CONFLICT (league, match_date, home, away) DO UPDATE SET hg = EXCLUDED.hg, ag = EXCLUDED.ag, ph = EXCLUDED.ph, pd = EXCLUDED.pd, pa = EXCLUDED.pa`, p);
+      ON CONFLICT (league, match_date, home, away) DO UPDATE SET hg = EXCLUDED.hg, ag = EXCLUDED.ag, ph = COALESCE(EXCLUDED.ph, hist_pin.ph), pd = COALESCE(EXCLUDED.pd, hist_pin.pd), pa = COALESCE(EXCLUDED.pa, hist_pin.pa)`, p);
     n += batch.length;
   }
   return n;
@@ -68,14 +71,16 @@ async function refreshHistory(pool, { nowMs = Date.now(), current = false, http 
     for (const u of urlsFor(code, nowMs, current ? 1 : SEASONS_BACK)) {
       try {
         const { data } = await axios.get(u.url, { responseType: 'text', timeout: 30000, headers: { 'User-Agent': 'betting-crm/1.0' } });
-        const since = u.newFmt ? new Date(nowMs - 6 * 365 * 86400000).toISOString().slice(0, 10) : null;
+        const since = u.newFmt ? SINCE_NEW : null;
         const list = rowsToPin(code, H.parseCsv(String(data)), u.newFmt, since);
         out.partite += await upsertPin(pool, list); out.files++; out.leghe[code] = (out.leghe[code] || 0) + list.length;
-        log.push({ url: u.url.replace(/^https?:\/\/[^/]+/, ''), n: list.length, last: list.reduce((a, m) => (m.date > a ? m.date : a), '') || null });
+        const withPin = list.filter(m => m.ph !== null), lastOf = l => l.reduce((a, m) => (m.date > a ? m.date : a), '') || null;
+        log.push({ url: u.url.replace(/^https?:\/\/[^/]+/, ''), n: list.length, pin: withPin.length, last: lastOf(list), lastPin: lastOf(withPin) });
       } catch (e) { out.errori++; log.push({ url: u.url.replace(/^https?:\/\/[^/]+/, ''), error: (e.response && e.response.status) || e.code || e.message }); }   // una stagione mancante non ferma le altre
     }
   }
   await pool.query(`INSERT INTO calib_state (key, val) VALUES ('last', $1) ON CONFLICT (key) DO UPDATE SET val = EXCLUDED.val`, [new Date(nowMs).toISOString()]);
+  if (!current) await pool.query(`INSERT INTO calib_state (key, val) VALUES ('version', $1) ON CONFLICT (key) DO UPDATE SET val = EXCLUDED.val`, [DATA_VERSION]);
   await pool.query(`INSERT INTO calib_state (key, val) VALUES ('files', $1) ON CONFLICT (key) DO UPDATE SET val = EXCLUDED.val`, [JSON.stringify(log.slice(0, 200))]);
   return out;
 }
@@ -85,7 +90,8 @@ async function maybeRefresh(pool, { nowMs = Date.now() } = {}) {
   if (running) return { storico: 'in corso' };
   await ensureCalib(pool);
   const last = (await pool.query(`SELECT val FROM calib_state WHERE key = 'last'`)).rows[0];
-  const empty = !last, hourIt = (new Date(nowMs).getUTCHours() + 1) % 24;
+  const ver = (await pool.query(`SELECT val FROM calib_state WHERE key = 'version'`)).rows[0];
+  const empty = !last || !ver || ver.val !== DATA_VERSION, hourIt = (new Date(nowMs).getUTCHours() + 1) % 24;
   if (!empty && (nowMs - Date.parse(last.val) < 20 * 3600000 || hourIt < 6)) return { storico: 'aggiornato' };
   startRefresh(pool, { nowMs, current: !empty });
   return { storico: empty ? 'scarico completo avviato' : 'aggiornamento avviato' };
@@ -108,6 +114,7 @@ function calibrate(rows) {
   const cell = () => ({ n: 0, exp: 0, obs: 0 }), mk = () => OUTS.map(() => BAND_LABELS.map(cell));
   const all = mk(), by = {};
   for (const r of rows) {
+    if (!(Number(r.ph) > 1 && Number(r.pd) > 1 && Number(r.pa) > 1)) continue;   // partite senza quote Pinnacle: solo per la forza delle squadre
     const h = Number(r.ph), d = Number(r.pd), a = Number(r.pa), s = 1 / h + 1 / d + 1 / a, p = [1 / h / s, 1 / d / s, 1 / a / s];
     const hg = Number(r.hg), ag = Number(r.ag), res = hg > ag ? 0 : hg === ag ? 1 : 2;
     const lg = by[r.league] || (by[r.league] = mk());
@@ -140,11 +147,12 @@ let cache = null;
 async function getCalibration(pool, { force = false, nowMs = Date.now() } = {}) {
   await ensureCalib(pool);
   if (!force && cache && nowMs - cache.at < 10 * 60000) return cache.val;
-  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin`)).rows;
+  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin WHERE ph IS NOT NULL`)).rows;
+  const all = (await pool.query(`SELECT COUNT(*)::int AS n, MAX(match_date) AS b FROM hist_pin`)).rows[0];
   const last = (await pool.query(`SELECT val FROM calib_state WHERE key = 'last'`)).rows[0];
-  const range = (await pool.query(`SELECT MIN(match_date) AS a, MAX(match_date) AS b FROM hist_pin`)).rows[0];
+  const range = (await pool.query(`SELECT MIN(match_date) AS a, MAX(match_date) AS b FROM hist_pin WHERE ph IS NOT NULL`)).rows[0];
   let files = null; try { const f = (await pool.query(`SELECT val FROM calib_state WHERE key = 'files'`)).rows[0]; files = f ? JSON.parse(f.val) : null; } catch (e) { files = null; }
-  const val = { ...report(calibrate(rows)), running, last: last ? last.val : null, from: range.a, to: range.b, files };
+  const val = { ...report(calibrate(rows)), running, last: last ? last.val : null, from: range.a, to: range.b, files, allMatches: all.n, resultsTo: all.b };
   cache = { at: nowMs, val }; return val;
 }
 
@@ -153,7 +161,7 @@ let rawCache = null;
 async function getCalRaw(pool, { nowMs = Date.now() } = {}) {
   if (rawCache && nowMs - rawCache.at < 30 * 60000) return rawCache.val;
   await ensureCalib(pool);
-  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin`)).rows;
+  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin WHERE ph IS NOT NULL`)).rows;
   const val = rows.length ? calibrate(rows) : null;
   rawCache = { at: nowMs, val }; return val;
 }

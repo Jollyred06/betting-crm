@@ -47,7 +47,7 @@ async function getOpinions(pool, { nowMs = Date.now(), force = false } = {}) {
   if (!force && cache && nowMs - cache.at < 10 * 60000) return cache.val;
   const I = require('./italia'), B = require('./brain');
   await C.ensureCalib(pool);
-  const hist = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin`)).rows;
+  const hist = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin WHERE ph IS NOT NULL`)).rows;
   if (!hist.length) return { ready: false };
   const teams = (await pool.query(`SELECT league, home AS team FROM hist_pin GROUP BY league, home`)).rows;
   const cal = C.calibrate(hist), idx = teamIndex(teams), lc = new Map();

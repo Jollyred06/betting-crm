@@ -10,7 +10,8 @@ const C = require('../services/calib');
 (async () => {
   const csv = 'Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,PSCH,PSCD,PSCA,PSH,PSD,PSA\nE0,15/08/2025,A,B,1,1,2.0,3.5,4.0,2.1,3.4,3.9\nE0,16/08/2025,C,D,2,0,,,,1.8,3.8,4.6\nE0,17/08/2025,E,F,0,0,,,,,,\nE0,18/08/2025,G,H,,,2,3,4,2,3,4\n';
   const H = require('../services/history'), rows = C.rowsToPin('E0', H.parseCsv(csv));
-  assert.strictEqual(rows.length, 2, 'senza quote Pinnacle o senza risultato la riga si salta');
+  assert.strictEqual(rows.length, 3, 'senza risultato la riga si salta; senza Pinnacle resta (solo risultato)');
+  assert.strictEqual(rows[2].ph, null, 'partita senza Pinnacle: quote vuote');
   assert.deepStrictEqual([rows[0].ph, rows[0].pd, rows[0].pa], [2, 3.5, 4], 'chiusura quando c\'e\'');
   assert.deepStrictEqual([rows[1].ph, rows[1].pd, rows[1].pa], [1.8, 3.8, 4.6], 'altrimenti le quote prima della chiusura');
   // file "new": colonne Home/Away/HG/AG
@@ -42,3 +43,11 @@ const C = require('../services/calib');
   assert.deepStrictEqual(C.urlsFor('PL', Date.parse('2026-11-14T12:00:00Z'), 2).map(u => u.url.match(/mmz4281\/(\d+)/)[1]), ['2627', '2526']);
   console.log('storico e taratura: ok');
 })().catch(e => { console.error(e); process.exit(1); });
+// 16/11/2026: le partite senza Pinnacle non entrano nella taratura
+{
+  const C2 = require('../services/calib');
+  const cal = C2.calibrate([{ league: 'X', hg: 1, ag: 0, ph: null, pd: null, pa: null }, { league: 'X', hg: 1, ag: 0, ph: 2, pd: 3.4, pa: 3.8 }]);
+  assert.strictEqual(cal.all[0].reduce((a, c) => a + c.n, 0), 1, 'solo la partita con le quote');
+  assert.strictEqual(C2.urlsFor('PL', Date.parse('2026-11-16T12:00:00Z')).length, 15, 'dalla stagione 2012/13');
+  console.log('storico senza Pinnacle e dal 2012: ok');
+}
