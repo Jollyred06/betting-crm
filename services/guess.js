@@ -114,8 +114,9 @@ async function getGuessCached(pool, { nowMs = Date.now() } = {}) {
 }
 async function getGuess(pool) {
   const rows = (await pool.query(`SELECT event_id, created_at, commence_time, home, away, pin_h, pin_d, pin_a, result, result_score FROM italia_signals WHERE strategy = 'I'`)).rows;
-  const C = require('./calib'); let cal = null; try { cal = await C.getCalRaw(pool); } catch (e) { /* senza storico: solo movimento */ }
-  let eloOf = null; try { const E = await require('./elo').getEloCached(pool); eloOf = E ? E.of : null; } catch (e) { /* senza storico */ }
+  // 16/11/2026: non aspetta i calcoli pesanti; se non sono ancora pronti si va avanti senza (e si preparano in sottofondo)
+  const C = require('./calib'); let cal = null; try { cal = await C.getCalRaw(pool, { wait: false }); } catch (e) { /* senza storico: solo movimento */ }
+  let eloOf = null; try { const E = require('./elo').peekElo(pool); eloOf = E ? E.of : null; } catch (e) { /* senza storico */ }
   return guessStats(rows, { cal, adjust: C.adjust, eloOf });
 }
 

@@ -30,3 +30,11 @@ const evs = Array.from({ length: 60 }, (_, i) => ({ id: 'e' + i, t: i, f: pq(2.6
 const L = G.learn(evs, null, null);
 assert.ok(L.weights.forza > 0.9, 'la forza delle squadre prende quasi tutta la fiducia'); assert.strictEqual(L.withElo, 60);
 console.log('forza delle squadre (Elo): ok');
+// 16/11/2026: il modello si salva in JSON e si ricarica uguale (per i risvegli di Render)
+{
+  const sv = { ratings: [...m2.ratings], games: [...m2.games], table: [...m2.table], prior: m2.prior, matches: m2.matches, teams: teams.map(t => ({ league: 'XX', team: t + ' United' })) };
+  const back = E.fromSaved(JSON.parse(JSON.stringify(sv)));
+  const p2 = back.of('Forte United', 'Debole United');
+  assert.ok(p2 && Math.abs(p2.home - pr.home) < 1e-9, 'stesso risultato dopo il salvataggio');
+  console.log('modello salvato e ricaricato: ok');
+}

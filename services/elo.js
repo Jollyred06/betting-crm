@@ -49,18 +49,33 @@ function eloProbs(model, idx, home, away, { leagueOf, sameTeam, cache }) {
   return { ...probsFromDiff(model, diff), league: lg, diff };
 }
 
-let cache = null;
-/** Modello e funzione di ricerca, in memoria 30 minuti. */
-async function getEloCached(pool, { nowMs = Date.now() } = {}) {
-  if (cache && nowMs - cache.at < 30 * 60000) return cache.val;
-  const rows = (await pool.query(`SELECT league, match_date, home, away, hg, ag FROM hist_pin`)).rows;
-  if (!rows.length) { cache = { at: nowMs, val: null }; return null; }
-  const O = require('./opinion'), I = require('./italia');
-  const model = buildElo(rows), teams = new Map();
-  for (const r of rows) { teams.set(r.league + '|' + r.home, { league: r.league, team: r.home }); teams.set(r.league + '|' + r.away, { league: r.league, team: r.away }); }
-  const idx = O.teamIndex([...teams.values()]), lc = new Map();
-  const val = { model, of: (home, away) => eloProbs(model, idx, home, away, { leagueOf: O.leagueOf, sameTeam: I.sameTeam, cache: lc }) };
-  cache = { at: nowMs, val }; return val;
+/** Modello pronto per l'uso (Map per ricerche veloci) da un riassunto salvabile in JSON. */
+function fromSaved(sv) {
+  if (!sv) return null;
+  const model = { ratings: new Map(sv.ratings), games: new Map(sv.games), table: new Map(sv.table), prior: sv.prior, matches: sv.matches };
+  const O = require('./opinion'), I = require('./italia'), idx = O.teamIndex(sv.teams), lc = new Map();
+  return { model, idx, of: (home, away) => eloProbs(model, idx, home, away, { leagueOf: O.leagueOf, sameTeam: I.sameTeam, cache: lc }) };
 }
+/** Dalle 120.000 partite al riassunto (solo dopo l'aggiornamento dello storico), salvato in calib_state. */
+async function rebuild(pool) {
+  const rows = (await pool.query(`SELECT league, match_date, home, away, hg, ag FROM hist_pin`)).rows;
+  if (!rows.length) return null;
+  const m = buildElo(rows), teams = new Map();
+  for (const r of rows) { teams.set(r.league + '|' + r.home, { league: r.league, team: r.home }); teams.set(r.league + '|' + r.away, { league: r.league, team: r.away }); }
+  const sv = { ratings: [...m.ratings], games: [...m.games], table: [...m.table], prior: m.prior, matches: m.matches, teams: [...teams.values()] };
+  await require('./calib').saveState(pool, 'model_elo', sv);
+  model24.invalidate();
+  return sv;
+}
+/** Modello in memoria per 24 ore; a ogni risveglio del server si legge il riassunto salvato (veloce), non le 120.000 partite. */
+const model24 = require('./warm').memo(async pool => {
+  const C = require('./calib');
+  let sv = null; try { sv = await C.loadState(pool, 'model_elo'); } catch (e) { sv = null; }
+  if (!sv) sv = await rebuild(pool);
+  return fromSaved(sv);
+}, 24 * 3600000);
+async function getEloCached(pool) { return model24.get(pool); }
+function peekElo(pool) { return model24.peek(pool); }
+function invalidate() { model24.invalidate(); }
 
-module.exports = { START, K, HFA, buildElo, probsFromDiff, teamIn, eloProbs, getEloCached };
+module.exports = { START, K, HFA, buildElo, probsFromDiff, teamIn, eloProbs, getEloCached, peekElo, invalidate, rebuild, fromSaved };

@@ -1310,9 +1310,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   let qsMap = new Map(); if (strategy === 'I') { const ids = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))]; if (ids.length) qsMap = markQuick(all.filter(r => ids.includes(r.event_id)), await pinHistory(pool, ids)); }
   const quickKeys = new Set(all.filter(r => qsMap.get(r.id)).map(sigKey));
   const latestPin = r => { const g = pinNow.get(r.event_id); return g && T(g.updated_at) > T(r.created_at) + 60000 ? { ...g, id: 'gw:' + r.event_id, selection: r.selection } : r; };
-  let calAi = null, wAi = null; try { calAi = await require('./calib').getCalRaw(pool); } catch (e) { /* storico non ancora scaricato */ }
+  // 16/11/2026: la pagina dei segnali non aspetta mai i calcoli pesanti (prima: fino a 40 secondi dopo un riavvio)
+  let calAi = null, wAi = null; try { calAi = await require('./calib').getCalRaw(pool, { wait: false }); } catch (e) { /* storico non ancora scaricato */ }
   try { const ga = (await require('./guess').getGuessCached(pool)).ai; wAi = { weights: ga.weights, byContext: ga.byContext }; } catch (e) { /* senza risultati: pesi uguali */ }
-  let eloAi = null; try { const E = await require('./elo').getEloCached(pool); eloAi = E ? E.of : null; } catch (e) { /* senza storico */ }
+  let eloAi = null; try { const E = require('./elo').peekElo(pool); eloAi = E ? E.of : null; } catch (e) { /* senza storico */ }
   const firstRowOf = new Map(); for (const r of [...all].sort((x, y) => T(x.created_at) - T(y.created_at))) if (!firstRowOf.has(sigKey(r))) firstRowOf.set(sigKey(r), r);
   const out = {
     ...base, checks, total: stats(rows), netwin: stats(nwRows), byBook, results: R.resultStats(rows), resultsStatus,

@@ -100,7 +100,7 @@ async function maybeRefresh(pool, { nowMs = Date.now() } = {}) {
 function startRefresh(pool, opts = {}) {
   if (running) return false;
   running = true;
-  refreshHistory(pool, opts).then(() => { cache = null; }).catch(() => {}).finally(() => { running = false; });
+  refreshHistory(pool, opts).then(() => rebuildModels(pool)).catch(() => {}).finally(() => { running = false; });
   return true;
 }
 const isRunning = () => running;
@@ -143,27 +143,42 @@ function report(cal) {
   return { n: cal.n, leagues: Object.keys(cal.by).length, general, odd: odd.slice(0, 12) };
 }
 
+const DAY = 24 * 3600000;
+// 16/11/2026: Render gratuito si riaddormenta spesso e la memoria si azzera. I modelli gia' calcolati si salvano in calib_state
+// (poche centinaia di KB) e si ricalcolano dalle 120.000 partite solo dopo l'aggiornamento dello storico (una volta al giorno).
+async function loadState(pool, key) { const r = (await pool.query(`SELECT val FROM calib_state WHERE key = $1`, [key])).rows[0]; return r ? JSON.parse(r.val) : null; }
+async function saveState(pool, key, obj) { await pool.query(`INSERT INTO calib_state (key, val) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET val = EXCLUDED.val`, [key, JSON.stringify(obj)]); }
+async function buildCal(pool) {
+  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin WHERE ph IS NOT NULL`)).rows;
+  const cal = rows.length ? calibrate(rows) : null;
+  if (cal) await saveState(pool, 'model_cal', cal);
+  return cal;
+}
+const rawModel = require('./warm').memo(async pool => {
+  await ensureCalib(pool);
+  return (await loadState(pool, 'model_cal')) || buildCal(pool);
+}, DAY);
 let cache = null;
 async function getCalibration(pool, { force = false, nowMs = Date.now() } = {}) {
   await ensureCalib(pool);
   if (!force && cache && nowMs - cache.at < 10 * 60000) return cache.val;
-  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin WHERE ph IS NOT NULL`)).rows;
+  const cal = await rawModel.get(pool);
   const all = (await pool.query(`SELECT COUNT(*)::int AS n, MAX(match_date) AS b FROM hist_pin`)).rows[0];
   const last = (await pool.query(`SELECT val FROM calib_state WHERE key = 'last'`)).rows[0];
   const range = (await pool.query(`SELECT MIN(match_date) AS a, MAX(match_date) AS b FROM hist_pin WHERE ph IS NOT NULL`)).rows[0];
   let files = null; try { const f = (await pool.query(`SELECT val FROM calib_state WHERE key = 'files'`)).rows[0]; files = f ? JSON.parse(f.val) : null; } catch (e) { files = null; }
-  const val = { ...report(calibrate(rows)), running, last: last ? last.val : null, from: range.a, to: range.b, files, allMatches: all.n, resultsTo: all.b };
+  const val = { ...(cal ? report(cal) : { n: 0, leagues: 0, general: [], odd: [] }), running, last: last ? last.val : null, from: range.a, to: range.b, files, allMatches: all.n, resultsTo: all.b };
   cache = { at: nowMs, val }; return val;
 }
 
-/** Taratura grezza (per il pronostico IA), tenuta in memoria 30 minuti. */
-let rawCache = null;
-async function getCalRaw(pool, { nowMs = Date.now() } = {}) {
-  if (rawCache && nowMs - rawCache.at < 30 * 60000) return rawCache.val;
-  await ensureCalib(pool);
-  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin WHERE ph IS NOT NULL`)).rows;
-  const val = rows.length ? calibrate(rows) : null;
-  rawCache = { at: nowMs, val }; return val;
+/** Taratura grezza (per pronostico IA e secondo parere). wait=false: non aspetta, null se non ancora pronta. */
+async function getCalRaw(pool, { wait = true } = {}) { return wait ? rawModel.get(pool) : rawModel.peek(pool); }
+/** Dopo un aggiornamento dello storico: tutti i calcoli pesanti si rifanno. */
+async function rebuildModels(pool) {
+  rawModel.invalidate(); cache = null;
+  try { require('./opinion').invalidate(); } catch (e) { /* facoltativo */ }
+  await buildCal(pool);
+  try { await require('./elo').rebuild(pool); } catch (e) { /* facoltativo */ }
 }
 
-module.exports = { getCalRaw, BANDS, BAND_LABELS, K_LEAGUE, rowsToPin, urlsFor, refreshHistory, maybeRefresh, startRefresh, isRunning, calibrate, adjust, report, getCalibration, ensureCalib };
+module.exports = { rebuildModels, loadState, saveState, getCalRaw, BANDS, BAND_LABELS, K_LEAGUE, rowsToPin, urlsFor, refreshHistory, maybeRefresh, startRefresh, isRunning, calibrate, adjust, report, getCalibration, ensureCalib };

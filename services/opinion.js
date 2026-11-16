@@ -43,22 +43,24 @@ function summarizeByVerdict(feats, summarize) {
 }
 
 let cache = null;
+// elenco delle squadre dello storico: una lettura al giorno
+const teams24 = require('./warm').memo(async pool => teamIndex((await pool.query(`SELECT league, home AS team FROM hist_pin GROUP BY league, home`)).rows), 24 * 3600000);
+function invalidate() { teams24.invalidate(); cache = null; }
 async function getOpinions(pool, { nowMs = Date.now(), force = false } = {}) {
   if (!force && cache && nowMs - cache.at < 10 * 60000) return cache.val;
   const I = require('./italia'), B = require('./brain');
   await C.ensureCalib(pool);
-  const hist = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin WHERE ph IS NOT NULL`)).rows;
-  if (!hist.length) return { ready: false };
-  const teams = (await pool.query(`SELECT league, home AS team FROM hist_pin GROUP BY league, home`)).rows;
-  const cal = C.calibrate(hist), idx = teamIndex(teams), lc = new Map();
+  const cal = await C.getCalRaw(pool);
+  if (!cal) return { ready: false };
+  const idx = await teams24.get(pool), lc = new Map();
   const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY created_at`)).rows;
   const rows = I.primaryRows(all).filter(r => r.result !== 'void');
   const feats = rows.map(r => { const f = B.featuresOf(r, I); const lg = leagueOf(idx, r.home, r.away, I.sameTeam, lc); f.op = opinionOf(cal, lg, r); f.homeName = r.home; f.awayName = r.away; f.start = r.commence_time; f.sel = r.selection; f.book = r.book; return f; });
   const jl = feats.filter(f => f.jl);
   const open = jl.filter(f => !f.result && f.start && Date.parse(f.start) > nowMs).map(f => ({ home: f.homeName, away: f.awayName, selection: f.sel, book: f.book, odd: f.odd, edge: f.edge, op: f.op && { league: f.op.league, n: f.op.n, shiftPts: f.op.shiftPts, edgeAdj: f.op.edgeAdj, verdict: f.op.verdict } }));
-  const val = { ready: true, histMatches: hist.length, mapped: feats.filter(f => f.op && f.op.league).length, total: feats.length,
+  const val = { ready: true, histMatches: cal.n, mapped: feats.filter(f => f.op && f.op.league).length, total: feats.length,
     all: summarizeByVerdict(feats, B.summarize), jl: summarizeByVerdict(jl, B.summarize), open, updatedAt: new Date(nowMs).toISOString() };
   cache = { at: nowMs, val }; return val;
 }
 
-module.exports = { MIN_EDGE, teamIndex, leagueOf, opinionOf, summarizeByVerdict, getOpinions };
+module.exports = { invalidate, MIN_EDGE, teamIndex, leagueOf, opinionOf, summarizeByVerdict, getOpinions };
