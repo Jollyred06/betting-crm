@@ -60,6 +60,11 @@ function cfg(env = process.env) {
     // 12 novembre 2026: scansioni solo a queste ore (ora italiana). 53 Justice League su 62 sono comparse alle 9, 12, 15, 18 e 21: le altre ore trovavano quasi niente.
     // Vuoto (ITALIA_SCAN_HOURS=) = come prima, una scansione ogni ITALIA_SCAN_EVERY_MIN.
     scanHours: String(env.ITALIA_SCAN_HOURS === undefined ? '9,12,15,18,21' : env.ITALIA_SCAN_HOURS).split(',').map(x => x.trim()).filter(x => x !== '').map(Number).filter(x => Number.isFinite(x) && x >= 0 && x < 24),
+    // 16 novembre 2026 (crediti liberati dall'Over/Under spento): scansioni ogni 2 ore dalle 9 alle 21, tutti i giorni.
+    // Paracadute: se con questi orari alla ricarica resterebbero meno richieste della riserva (minimo 30), si torna da soli a ITALIA_SCAN_HOURS.
+    // ITALIA_SCAN_PLUS=false su Render per spegnerle.
+    scanHoursPlus: String(env.ITALIA_SCAN_HOURS_PLUS === undefined ? '9,11,13,15,17,19,21' : env.ITALIA_SCAN_HOURS_PLUS).split(',').map(x => x.trim()).filter(x => x !== '').map(Number).filter(x => Number.isFinite(x) && x >= 0 && x < 24),
+    scanPlus: String(env.ITALIA_SCAN_PLUS || '').trim().toLowerCase() !== 'false',
     monthlyCap: n('ITALIA_MONTHLY_CAP', 400),
     closeReserve: n('ITALIA_CLOSE_RESERVE', 60),
     // giorno del mese in cui odss ricarica le richieste (1° novembre 2026: 12)
@@ -359,19 +364,31 @@ async function planOf(pool, c, rem, nowMs = Date.now()) {
   const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE kind = 'close' AND at >= NOW() - INTERVAL '7 days')::int AS closes,
     COUNT(*) FILTER (WHERE at >= date_trunc('day', NOW()))::int AS today FROM italia_requests`);
   const pace = odssPace(rem, rows[0].today, c.resetDay, nowMs);
-  return { ...planScans({ remaining: rem, daysLeft: pace.daysLeft, closesPerDay: rows[0].closes / 7, fromHour: c.fromHour, toHour: c.toHour, maxReserve: c.closeReserve, hours: c.scanHours, perScanExtra: c.ouEnabled ? 1 : 0 }), daysLeft: pace.daysLeft, resetAt: pace.resetAt };
+  const mk = hours => ({ ...planScans({ remaining: rem, daysLeft: pace.daysLeft, closesPerDay: rows[0].closes / 7, fromHour: c.fromHour, toHour: c.toHour, maxReserve: c.closeReserve, hours, perScanExtra: c.ouEnabled ? 1 : 0 }), daysLeft: pace.daysLeft, resetAt: pace.resetAt });
+  return choosePlan(mk, c);
+}
+/** Orari piu' fitti se il conto regge, altrimenti quelli di base (paracadute). Parte pura. */
+const PLUS_MIN_LEFT = 30;
+function choosePlan(mk, c) {
+  const base = mk(c.scanHours);
+  if (!c.scanPlus || !c.scanHours.length || !c.scanHoursPlus.length) return { ...base, plus: false };
+  const plus = mk(c.scanHoursPlus);
+  if (plus.leftAtReset >= Math.max(PLUS_MIN_LEFT, plus.reserve)) return { ...plus, plus: true };
+  return { ...base, plus: false, fallback: `con ${c.scanHoursPlus.length} scansioni al giorno alla ricarica resterebbero ${plus.leftAtReset} richieste (riserva ${Math.max(PLUS_MIN_LEFT, plus.reserve)}): restano ${c.scanHours.length}` };
 }
 
 async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   const h = romeHour(nowMs);
   if (h < c.fromHour || h >= c.toHour) return { scan: 'fuori orario' };
-  if (c.scanHours.length && !c.scanHours.includes(h)) return { scan: 'non e\' un orario di scansione' };
-  const { rows } = await pool.query(`SELECT MAX(at) FILTER (WHERE ok) AS last_ok, MAX(at) FILTER (WHERE NOT ok) AS last_ko FROM italia_requests WHERE kind = 'scan'`);
-  const lastOk = rows[0].last_ok ? T(rows[0].last_ok) : 0, lastKo = rows[0].last_ko ? T(rows[0].last_ko) : 0;
   const rem = await lastRemaining(pool);
   const plan = rem !== null ? await planOf(pool, c, rem, nowMs) : null;
+  const hours = plan && plan.hours ? plan.hours : c.scanHours;
+  if (hours.length && !hours.includes(h)) return { scan: 'non e\' un orario di scansione' };
+  const { rows } = await pool.query(`SELECT MAX(at) FILTER (WHERE ok) AS last_ok, MAX(at) FILTER (WHERE NOT ok) AS last_ko FROM italia_requests WHERE kind = 'scan'`);
+  const lastOk = rows[0].last_ok ? T(rows[0].last_ok) : 0, lastKo = rows[0].last_ko ? T(rows[0].last_ko) : 0;
   let every = plan ? Math.min(plan.everyMin, Math.max(c.scanEveryMin, 240)) : c.scanEveryMin;
-  if (c.scanHours.length) every = Math.min(every, 170);   // gli orari fissi distano 3 ore: basta evitare un doppio giro nella stessa ora
+  // orari fissi: basta evitare un doppio giro nella stessa ora (16/11: con gli orari ogni 2 ore il limite e' la distanza minima tra due orari, meno 10 minuti)
+  if (hours.length) { const hs = [...hours].sort((a, b) => a - b), gap = hs.length > 1 ? Math.min(...hs.slice(1).map((x, i) => x - hs[i])) : 3; every = Math.min(every, gap * 60 - 10); }
   if (nowMs - lastOk < every * 60000 - 5 * 60000) return { scan: 'non ancora' };   // 5 minuti di tolleranza: il giro passa ogni 10
   if (lastKo > lastOk && nowMs - lastKo < 30 * 60000) return { scan: 'in pausa dopo un errore' };    // chiave sbagliata o servizio giu': non insistere ogni 10 minuti
   if (await usedThisMonth(pool) >= c.monthlyCap - c.closeReserve) return { scan: 'tetto mensile' };
@@ -1370,6 +1387,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     const budget = budgetOf(playedSum, budgetCfg(env));
     const sc = svagoCfg(env), sb = svagoBudget((playedSum && playedSum.items) || [], sc);
     out.svagoBudget = sb;
+    try { const remS = await lastRemaining(pool); const pl = remS !== null ? await planOf(pool, c, remS) : null; out.scanHours = pl && pl.hours ? pl.hours : c.scanHours; } catch (e) { out.scanHours = c.scanHours; }
     out.budget = budget;
     const bc = budgetCfg(env);
     out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule; out.myBooks = c.myBooks.map(k => BOOK_NAMES[k] || k);
@@ -1425,4 +1443,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { SVAGO, svagoCfg, isSvago, svagoBudget, budgetOf, closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { choosePlan, PLUS_MIN_LEFT, SVAGO, svagoCfg, isSvago, svagoBudget, budgetOf, closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
