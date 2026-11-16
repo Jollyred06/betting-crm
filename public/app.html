@@ -890,8 +890,8 @@
       const seg = `<div class="seg" role="tablist">${[['a', 'Riepilogo'], ['m', 'Misure'], ['r', 'Archivio']].map(([k, t]) => `<button class="tab${anView === k ? ' on' : ''}" data-an="${k}" onclick="anTab(this)">${t}</button>`).join('')}</div>`;
       $('italia').innerHTML = seg
         + pane('a', ruleCard(i) + teamCard(TM) + autoCard(AU))
-        + pane('m', guessCard(GU) + brainCard(BR) + storicoCard(CA) + parereCard(OP) + booksCard(BK) + paperCard(i) + goalsCard(GL))
-        + pane('r', heroTeam() + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
+        + pane('m', guessCard(GU) + brainCard(BR) + storicoCard(CA) + parereCard(OP) + booksCard(BK) + paperCard(i))
+        + pane('r', heroTeam() + `<p class="muted" style="font-size:14px;margin:4px 0 2px;">⚽ Over/Under spento il 16 novembre: i siti italiani lo pagano in media il 9% meno del giusto (13 partite con valore su 665, saldo −11,6%). I dati restano qui sotto.</p>` + goalsCard(GL) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
           + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`);
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
   }
