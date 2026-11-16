@@ -1,7 +1,7 @@
 name: chiusura-pinnacle
 on:
   schedule:
-    - cron: '*/30 * * * *'
+    - cron: '*/10 * * * *'   # 16/11/2026: ogni 10 minuti tiene sveglio Render gratuito (si addormenta dopo 15): niente attese di 40 s, scansioni e chiusure puntuali
   workflow_dispatch:
 jobs:
   chiusura:
