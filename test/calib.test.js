@@ -31,7 +31,7 @@ const C = require('../services/calib');
   // scarico: tutte le leghe con file, errori contati senza fermarsi
   const state = { inserted: 0, last: null }, pool = { query: async (sql, p) => {
     if (/CREATE/.test(sql)) return { rows: [] };
-    if (/INSERT INTO hist_pin/.test(sql)) { state.inserted += p.length / 9; return { rowCount: 1 }; }
+    if (/INSERT INTO hist_pin/.test(sql)) { state.inserted += p.length / 15; return { rowCount: 1 }; }
     if (/calib_state/.test(sql) && /INSERT/.test(sql)) { state.last = p[0]; return { rowCount: 1 }; }
     if (/FROM calib_state/.test(sql)) return { rows: state.last ? [{ val: state.last }] : [] };
     return { rows: [] }; } };

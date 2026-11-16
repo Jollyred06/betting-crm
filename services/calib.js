@@ -9,7 +9,7 @@ const H = require('./history');
 
 const SEASONS_BACK = 15;                   // 16/11/2026: dalla stagione 2012/13 (prima: 6 stagioni)
 const SINCE_NEW = '2012-07-01';            // file "new" (un file per campionato con tutte le stagioni): dal 2012
-const DATA_VERSION = '2';                  // cambia quando serve riscaricare tutto
+const DATA_VERSION = '3';                  // 3 (17/11/2026): anche quota massima e media tra i bookmaker, per la prova del metodo                  // cambia quando serve riscaricare tutto
 const BANDS = [0, 0.15, 0.25, 0.35, 0.5, 0.65, 1.0001];
 const BAND_LABELS = ['sotto 15%', '15–25%', '25–35%', '35–50%', '50–65%', '65% e oltre'];
 const K_LEAGUE = 300;                      // quanto pesa una lega: con 300 partite in quella fascia conta la meta' lega, la meta' il generale
@@ -21,6 +21,8 @@ async function ensureCalib(pool) {
     hg INT NOT NULL, ag INT NOT NULL, ph NUMERIC(8,3), pd NUMERIC(8,3), pa NUMERIC(8,3), PRIMARY KEY (league, match_date, home, away))`);
   // 16/11/2026: le partite senza quote Pinnacle si tengono lo stesso (servono i risultati per la forza delle squadre)
   for (const col of ['ph', 'pd', 'pa']) await pool.query(`ALTER TABLE hist_pin ALTER COLUMN ${col} DROP NOT NULL`);
+  // 17/11/2026: quota piu' alta e quota media tra tutti i bookmaker (chiusura, altrimenti prima della chiusura)
+  for (const col of ['mh', 'md', 'ma', 'ah', 'ad', 'aa']) await pool.query(`ALTER TABLE hist_pin ADD COLUMN IF NOT EXISTS ${col} NUMERIC(8,3)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS calib_state (key TEXT PRIMARY KEY, val TEXT)`);
   ready = true;
 }
@@ -38,7 +40,10 @@ function rowsToPin(leagueCode, rows, newFmt = false, sinceStr = null) {
     if (sinceStr && date < sinceStr) continue;
     // chiusura di Pinnacle, altrimenti Pinnacle prima della chiusura; senza Pinnacle la partita resta (solo risultato)
     const q = pick3(r, [['PSCH', 'PSCD', 'PSCA'], ['PSH', 'PSD', 'PSA'], ['PH', 'PD', 'PA']]);
-    out.push({ league: leagueCode, date, home, away, hg, ag, ph: q ? q[0] : null, pd: q ? q[1] : null, pa: q ? q[2] : null });
+    const mx = pick3(r, [['MaxCH', 'MaxCD', 'MaxCA'], ['MaxH', 'MaxD', 'MaxA'], ['BbMxH', 'BbMxD', 'BbMxA']]);
+    const av = pick3(r, [['AvgCH', 'AvgCD', 'AvgCA'], ['AvgH', 'AvgD', 'AvgA'], ['BbAvH', 'BbAvD', 'BbAvA']]);
+    out.push({ league: leagueCode, date, home, away, hg, ag, ph: q ? q[0] : null, pd: q ? q[1] : null, pa: q ? q[2] : null,
+      mh: mx ? mx[0] : null, md: mx ? mx[1] : null, ma: mx ? mx[2] : null, ah: av ? av[0] : null, ad: av ? av[1] : null, aa: av ? av[2] : null });
   }
   return out;
 }
@@ -51,12 +56,15 @@ function urlsFor(code, nowMs, back = SEASONS_BACK) {
 }
 
 async function upsertPin(pool, list) {
+  const COLS = ['league', 'match_date', 'home', 'away', 'hg', 'ag', 'ph', 'pd', 'pa', 'mh', 'md', 'ma', 'ah', 'ad', 'aa'], K = COLS.length;
   let n = 0;
-  for (let i = 0; i < list.length; i += 300) {
-    const batch = list.slice(i, i + 300), p = [];
-    const vals = batch.map((m, k) => { p.push(m.league, m.date, m.home, m.away, m.hg, m.ag, m.ph, m.pd, m.pa); const b = k * 9; return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},$${b + 8},$${b + 9})`; });
-    await pool.query(`INSERT INTO hist_pin (league, match_date, home, away, hg, ag, ph, pd, pa) VALUES ${vals.join(',')}
-      ON CONFLICT (league, match_date, home, away) DO UPDATE SET hg = EXCLUDED.hg, ag = EXCLUDED.ag, ph = COALESCE(EXCLUDED.ph, hist_pin.ph), pd = COALESCE(EXCLUDED.pd, hist_pin.pd), pa = COALESCE(EXCLUDED.pa, hist_pin.pa)`, p);
+  for (let i = 0; i < list.length; i += 200) {
+    const batch = list.slice(i, i + 200), p = [];
+    const vals = batch.map((m, k) => { p.push(m.league, m.date, m.home, m.away, m.hg, m.ag, m.ph, m.pd, m.pa, m.mh ?? null, m.md ?? null, m.ma ?? null, m.ah ?? null, m.ad ?? null, m.aa ?? null);
+      const b = k * K; return '(' + COLS.map((_, j) => '$' + (b + j + 1)).join(',') + ')'; });
+    const keep = c => `${c} = COALESCE(EXCLUDED.${c}, hist_pin.${c})`;
+    await pool.query(`INSERT INTO hist_pin (${COLS.join(', ')}) VALUES ${vals.join(',')}
+      ON CONFLICT (league, match_date, home, away) DO UPDATE SET hg = EXCLUDED.hg, ag = EXCLUDED.ag, ${['ph', 'pd', 'pa', 'mh', 'md', 'ma', 'ah', 'ad', 'aa'].map(keep).join(', ')}`, p);
     n += batch.length;
   }
   return n;
@@ -179,6 +187,7 @@ async function rebuildModels(pool) {
   try { require('./opinion').invalidate(); } catch (e) { /* facoltativo */ }
   await buildCal(pool);
   try { await require('./elo').rebuild(pool); } catch (e) { /* facoltativo */ }
+  try { await require('./backtest').getBacktest(pool, { force: true }); } catch (e) { /* facoltativo */ }
 }
 
 module.exports = { rebuildModels, loadState, saveState, getCalRaw, BANDS, BAND_LABELS, K_LEAGUE, rowsToPin, urlsFor, refreshHistory, maybeRefresh, startRefresh, isRunning, calibrate, adjust, report, getCalibration, ensureCalib };

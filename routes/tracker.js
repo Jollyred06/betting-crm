@@ -117,6 +117,10 @@ router.get('/guess', async (req, res) => {
 router.get('/close-plan', async (req, res) => {
   try { res.json(await require('../services/italia').closePlanToday(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// 🧪 prova del metodo sullo storico (sola lettura, calcolata una volta e salvata)
+router.get('/backtest', async (req, res) => {
+  try { res.json(await require('../services/backtest').getBacktest(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 // 🧠 Cervello: dove si vince e dove si perde, per gruppi (sola lettura)
 router.get('/brain', async (req, res) => {
   try { res.json(await require('../services/brain').getBrain(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
