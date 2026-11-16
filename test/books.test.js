@@ -253,9 +253,14 @@ console.log('books.test.js: tutti i controlli passati');
     const c = { key: 'x', ouEnabled: false, myBooks: ['snai'], books: ['snai'], resetDay: 12, fromHour: 9, toHour: 22, closeReserve: 60 };
     const http = { get: async (url, o) => ({ headers: { 'x-quota-remaining': '149' }, data: { odds: [
       { event_id: 'v1', market: o.params.market, line: 3.5, league: 'Tercera', home_team: 'A', away_team: 'B', commence_time: ev.commence_time, bookmakers: [{ key: 'pinnacle', outcomes: { OVER: 1.9, UNDER: 1.9 } }, { key: 'snai', outcomes: { OVER: 2.0, UNDER: 1.8 } }] }] } }) };
+    // 16/11/2026: spenta di default (Over/Under archiviato), nessuna richiesta
+    delete process.env.VALANGA_ENABLED;
+    assert.strictEqual((await G.valangaOdds(pool, c, { nowMs: now, http })).thor, 'spenta (Over/Under archiviato)'); assert.strictEqual(calls.length, 0);
+    process.env.VALANGA_ENABLED = 'true';
     const r = await G.valangaOdds(pool, c, { nowMs: now, http });
     assert.strictEqual(r.thor, 'letta'); assert.strictEqual(r.mercato, 'ou'); assert.strictEqual(r.conQuote, 1); assert.ok(r.nuoviGol >= 1);
     const r2 = await G.valangaOdds(pool, c, { nowMs: now, http }); assert.strictEqual(r2.thor, 'nessuna Valanga in arrivo');
+    delete process.env.VALANGA_ENABLED;
     console.log('Thor in anticipo: ok');
   })().catch(e => { console.error(e); process.exit(1); });
 }

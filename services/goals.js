@@ -228,6 +228,9 @@ const OU_MARKETS = ['ou', 'over_under', 'totals', 'goals'];   // 'ou' e' quello 
 const THOR_PER_DAY = 2;   // 6 novembre 2026: da 3 a 2, il credito in piu' va alle chiusure delle ⭐
 async function valangaOdds(pool, c, { nowMs = Date.now(), http } = {}) {
   if (c.ouEnabled) return { thor: 'ci pensa la lettura completa' };
+  // 16 novembre 2026: Over/Under spento e archiviato. Questa lettura di riserva (solo le partite Valanga) costava ancora
+  // fino a THOR_PER_DAY richieste al giorno senza comparire nel piano crediti: ora parte solo con VALANGA_ENABLED=true.
+  if (String(process.env.VALANGA_ENABLED || '').trim().toLowerCase() !== 'true') return { thor: 'spenta (Over/Under archiviato)' };
   await ensureGoals(pool);
   await pool.query(`ALTER TABLE goal_watch ADD COLUMN IF NOT EXISTS ou_tried_at TIMESTAMPTZ`);
   const ev = (await pool.query(`SELECT * FROM goal_watch WHERE valanga AND ou_tried_at IS NULL AND event_id NOT LIKE 'oa:%'
