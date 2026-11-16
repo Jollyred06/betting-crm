@@ -113,6 +113,10 @@ router.get('/opinion', async (req, res) => {
 router.get('/guess', async (req, res) => {
   try { res.json(await require('../services/guess').getGuessCached(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// ordine delle chiusure per i segnali delle prossime 24 ore (sola lettura)
+router.get('/close-plan', async (req, res) => {
+  try { res.json(await require('../services/italia').closePlanToday(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 // 🧠 Cervello: dove si vince e dove si perde, per gruppi (sola lettura)
 router.get('/brain', async (req, res) => {
   try { res.json(await require('../services/brain').getBrain(pool)); } catch (err) { res.status(500).json({ error: err.message }); }

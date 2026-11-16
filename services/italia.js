@@ -421,44 +421,99 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   return { scan: 'fatta', righe: records.length, partite, candidati: found.length, nuovi: fresh.length, nuoviB, candidatiT: foundT.length, ...golOut };
 }
 
+/**
+ * PRIORITA' DELLE CHIUSURE (16 novembre 2026). Una richiesta odss legge in un colpo solo tutte le partite che le passiamo,
+ * quindi il numero di chiusure non e' limitato a 5 al giorno: si perdevano i segnali che non facevano parte di nessun gruppo
+ * (dal 12/11 non si chiudevano per risparmiare crediti). Ora:
+ *  1. membri in campo nella pagella (Justice League, Prova, Coppe), dal calcio d'inizio piu' vicino
+ *  2. partite che hai giocato davvero (played_bets)
+ *  3. gruppi misurati sulla carta (Superman, fascia bassa, quote alte, mercati medi)
+ *  4. tutti gli altri segnali: salgono GRATIS sulla stessa richiesta, non ne fanno mai partire una da soli
+ * Solo 1-3 fanno partire una richiesta. Se le partite sono tante si dividono in piu' richieste (al massimo 40 partite l'una),
+ * ma le richieste in piu' partono solo se contengono almeno un segnale 1-3. Nessuna regola di gioco cambia.
+ */
+const CLOSE_MAX_EVENTS = 40;
+const ACTIVE_MEMBERS = { oceani: r => isOceani(r), prova: r => isProva(r), coppe: r => isCoppe(r) };
+function closeTier(r, { team = null, playedIds = new Set() } = {}) {
+  if (r.strategy !== 'I') return Number(r.edge_pct || 0) >= 0 ? 3 : 4;
+  for (const [k, f] of Object.entries(ACTIVE_MEMBERS)) if ((!team || team[k] !== false) && f(r)) return 1;
+  if (playedIds.has(Number(r.id))) return 2;
+  if (isAwayThin(r) || PAPER.groups.some(g => isPaperGroup(r, g)) || isOceani(r) || isProva(r) || isCoppe(r)) return 3;
+  return 4;
+}
+const TIER_NAMES = { 1: 'membri in campo', 2: 'giocate', 3: 'gruppi sulla carta', 4: 'altri (gratis sulla stessa richiesta)' };
+/** Ordina e raggruppa in richieste. Parte pura (testata). */
+function closeBatches(rows, opts = {}) {
+  const t = rows.map(r => ({ r, tier: closeTier(r, opts) })).sort((a, b) => (a.tier - b.tier) || (T(a.r.commence_time) - T(b.r.commence_time)));
+  const order = [], seen = new Map();
+  for (const x of t) { if (!seen.has(x.r.event_id)) { seen.set(x.r.event_id, x.tier); order.push(x.r.event_id); } else seen.set(x.r.event_id, Math.min(seen.get(x.r.event_id), x.tier)); }
+  const batches = [];
+  for (let i = 0; i < order.length; i += CLOSE_MAX_EVENTS) { const ev = order.slice(i, i + CLOSE_MAX_EVENTS); batches.push({ events: ev, paid: ev.some(e => seen.get(e) <= 3) }); }
+  return { ranked: t, batches: batches.filter(b => b.paid) };
+}
+
 async function captureClosing(pool, c, { nowMs = Date.now(), http } = {}) {
   const { rows: cand } = await pool.query(
-    `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min, COALESCE(strategy, 'I') AS strategy, edge_pct, league, pin_h, pin_d, pin_a FROM italia_signals
+    `SELECT id, event_id, selection, odd, netwin_odd, commence_time, close_lag_min, COALESCE(strategy, 'I') AS strategy, edge_pct, league, pin_h, pin_d, pin_a, home, away FROM italia_signals
      WHERE commence_time > to_timestamp($1::double precision / 1000) AND commence_time <= to_timestamp($1::double precision / 1000) + make_interval(mins => $2::int)
        AND close_captured_at IS NULL AND close_tried_at IS NULL`,
     [nowMs, c.closeWindowMin]);
-  // 6 novembre 2026: le ⭐ della Justice League (vantaggio dal 2%) prendono SEMPRE la chiusura, anche sotto la soglia di vantaggio
-  // delle chiusure (ITALIA_CLOSE_MIN_EDGE): prima quelle tra 2% e 4% non venivano mai misurate e la pagella non poteva giudicarle.
-  // 12 novembre 2026: le chiusure (1 credito odss ciascuna) solo per cio' che si gioca o si misura: Justice League, Prova e Superman (trasferte nei minori).
-  // Prima si chiudevano anche i segnali mai giocati (3 su 4): credito sprecato. Le altre strategie (B, T) restano com'erano.
-  const rows = cand.filter(r => r.strategy === 'I' ? (isOceani(r) || isProva(r) || isCoppe(r) || isAwayThin(r) || PAPER.groups.some(g => isPaperGroup(r, g))) : Number(r.edge_pct || 0) >= c.closeMinEdge);
-  // 1° novembre 2026: anche i segnali T (tutti i siti italiani) prendono la chiusura, per giudicare i bookmaker sul valore.
-  // Non fanno mai partire una richiesta da soli: si aggiungono a quella dei segnali I e B (una richiesta = stesso costo).
-  if (!rows.some(r => r.strategy !== 'T')) return { chiusure: 0 };
-  // si aspetta che almeno una partita sia vicina: cosi' una sola richiesta copre il gruppo e la chiusura e' piu' fedele
-  if (!rows.some(r => r.strategy !== 'T' && T(r.commence_time) - nowMs <= c.closeTriggerMin * 60000)) return { chiusure: 0, nota: 'non ancora' };
+  if (!cand.length) return { chiusure: 0 };
+  let team = null; try { team = (await require('./team').stateOf(pool)).on; } catch (e) { /* pagella facoltativa */ }
+  let playedIds = new Set(); try { playedIds = new Set((await pool.query(`SELECT signal_id FROM played_bets WHERE signal_id = ANY($1::int[])`, [cand.map(r => Number(r.id))])).rows.map(r => Number(r.signal_id))); } catch (e) { /* tabella non ancora creata */ }
+  const opts = { team, playedIds };
+  // i segnali T e quelli di fascia 4 non fanno mai partire una richiesta da soli
+  const triggers = cand.filter(r => r.strategy !== 'T' && closeTier(r, opts) <= 3);
+  if (!triggers.length) return { chiusure: 0 };
+  // si aspetta che almeno una partita importante sia vicina: cosi' una sola richiesta copre il gruppo e la chiusura e' piu' fedele
+  if (!triggers.some(r => T(r.commence_time) - nowMs <= c.closeTriggerMin * 60000)) return { chiusure: 0, nota: 'non ancora' };
   if (await usedThisMonth(pool) >= c.monthlyCap) return { chiusure: 0, nota: 'tetto mensile' };
   const rem = await lastRemaining(pool);
   if (rem !== null && rem <= 3) return { chiusure: 0, nota: 'quota odss finita' };
-  const ids = [...new Set(rows.map(r => r.event_id))];
-  // stessa richiesta: Pinnacle per la chiusura + i siti italiani, per sapere se la quota era ancora prendibile al calcio d'inizio
-  const records = await fetchOdds(pool, c, { event_id: ids.join(','), bookmakers: [...new Set(['pinnacle', ...c.books, ...c.myBooks, ...(c.tEnabled ? c.tBooks : [])])].join(',') }, 'close', http);
-  // 25 ottobre 2026: un solo tentativo per segnale. Prima, se Pinnacle mancava, la stessa partita si richiedeva a ogni giro
-  // (ogni 10 minuti) fino al calcio d'inizio: 44 richieste su 154 non avevano catturato niente.
-  await pool.query(`UPDATE italia_signals SET close_tried_at = NOW() WHERE id = ANY($1::int[])`, [rows.map(r => Number(r.id))]);
-  let n = 0;
-  for (const s of rows) {
-    const pin = closingPin(records, s.event_id);
-    if (!pin) continue;
-    const fair = noVigPower(pin)[s.selection];
-    const lag = Math.max(0, Math.round((T(s.commence_time) - nowMs) / 60000));
-    await pool.query(
-      `UPDATE italia_signals SET close_pin_h=$2, close_pin_d=$3, close_pin_a=$4, closing_fair_prob=$5, clv_pct=$6, netwin_clv_pct=$7, close_lag_min=$8, close_captured_at=NOW(), close_quotes=$9 WHERE id=$1`,
-      [s.id, pin.home, pin.draw, pin.away, fair, (Number(s.odd) * fair - 1) * 100, s.netwin_odd ? (Number(s.netwin_odd) * fair - 1) * 100 : null, lag, (() => { const q = closingQuotes(records, s.event_id); return q ? JSON.stringify(q) : null; })()]);
-    n++;
+  const { batches } = closeBatches(cand, opts);
+  let n = 0, richieste = 0;
+  for (const bt of batches) {
+    const rows = cand.filter(r => bt.events.includes(r.event_id));
+    // stessa richiesta: Pinnacle per la chiusura + i siti italiani, per sapere se la quota era ancora prendibile al calcio d'inizio
+    const records = await fetchOdds(pool, c, { event_id: bt.events.join(','), bookmakers: [...new Set(['pinnacle', ...c.books, ...c.myBooks, ...(c.tEnabled ? c.tBooks : [])])].join(',') }, 'close', http);
+    richieste++;
+    // 25 ottobre 2026: un solo tentativo per segnale (prima la stessa partita si richiedeva a ogni giro fino al calcio d'inizio)
+    await pool.query(`UPDATE italia_signals SET close_tried_at = NOW() WHERE id = ANY($1::int[])`, [rows.map(r => Number(r.id))]);
+    let k = 0;
+    for (const s of rows) {
+      const pin = closingPin(records, s.event_id);
+      if (!pin) continue;
+      const fair = noVigPower(pin)[s.selection];
+      const lag = Math.max(0, Math.round((T(s.commence_time) - nowMs) / 60000));
+      await pool.query(
+        `UPDATE italia_signals SET close_pin_h=$2, close_pin_d=$3, close_pin_a=$4, closing_fair_prob=$5, clv_pct=$6, netwin_clv_pct=$7, close_lag_min=$8, close_captured_at=NOW(), close_quotes=$9 WHERE id=$1`,
+        [s.id, pin.home, pin.draw, pin.away, fair, (Number(s.odd) * fair - 1) * 100, s.netwin_odd ? (Number(s.netwin_odd) * fair - 1) * 100 : null, lag, (() => { const q = closingQuotes(records, s.event_id); return q ? JSON.stringify(q) : null; })()]);
+      k++;
+    }
+    n += k;
+    const tiers = {}; for (const r of rows) { const t = closeTier(r, opts); tiers[t] = (tiers[t] || 0) + 1; }
+    await noteRequest(pool, 'close', { partite: bt.events.length, segnali: rows.length, chiusure: k, perPriorita: tiers, conQuoteItaliane: rows.filter(s => closingQuotes(records, s.event_id)).length });
   }
-  await noteRequest(pool, 'close', { partite: ids.length, segnali: rows.length, chiusure: n, conQuoteItaliane: rows.filter(s => closingQuotes(records, s.event_id)).length });
-  return { chiusure: n };
+  return { chiusure: n, richiesteChiusura: richieste };
+}
+
+/** Per il pannello crediti: chiusure misurate negli ultimi 7 giorni (partite gia' iniziate), tutte e dei membri in campo. */
+async function closingStats(pool, { nowMs = Date.now() } = {}) {
+  const rows = (await pool.query(`SELECT id, event_id, selection, odd, edge_pct, league, pin_h, pin_d, pin_a, commence_time, created_at, phase, COALESCE(strategy, 'I') AS strategy, (close_captured_at IS NOT NULL) AS done
+    FROM italia_signals WHERE strategy = 'I' AND commence_time <= to_timestamp($1::double precision / 1000) AND commence_time > to_timestamp($1::double precision / 1000) - INTERVAL '7 days'`, [nowMs])).rows;
+  let team = null; try { team = (await require('./team').stateOf(pool)).on; } catch (e) { /* pagella facoltativa */ }
+  const prim = primaryRows(rows), act = prim.filter(r => closeTier(r, { team }) === 1);
+  return { total: prim.length, measured: prim.filter(r => r.done).length, activeTotal: act.length, activeMeasured: act.filter(r => r.done).length };
+}
+
+/** Per la verifica: i segnali di oggi non ancora iniziati, nell'ordine in cui verrebbero chiusi. Sola lettura. */
+async function closePlanToday(pool, { nowMs = Date.now() } = {}) {
+  const rows = (await pool.query(`SELECT id, event_id, selection, odd, edge_pct, league, home, away, pin_h, pin_d, pin_a, commence_time, COALESCE(strategy, 'I') AS strategy, close_captured_at, close_tried_at
+    FROM italia_signals WHERE strategy = 'I' AND commence_time > to_timestamp($1::double precision / 1000) AND commence_time <= to_timestamp($1::double precision / 1000) + INTERVAL '24 hours'`, [nowMs])).rows;
+  let team = null; try { team = (await require('./team').stateOf(pool)).on; } catch (e) { /* pagella facoltativa */ }
+  let playedIds = new Set(); try { playedIds = new Set((await pool.query(`SELECT signal_id FROM played_bets`)).rows.map(r => Number(r.signal_id))); } catch (e) { /* facoltativo */ }
+  const { ranked } = closeBatches(rows, { team, playedIds });
+  return ranked.map(x => ({ priorita: x.tier, gruppo: TIER_NAMES[x.tier], inizio: x.r.commence_time, partita: `${x.r.home} – ${x.r.away}`, lega: x.r.league, esito: x.r.selection, chiusura: x.r.close_captured_at ? 'misurata' : x.r.close_tried_at ? 'tentata' : 'da fare' }));
 }
 
 /** Un passo: prima le chiusure (hanno la precedenza sul tetto), poi l'eventuale scansione. Non lancia mai. */
@@ -1329,4 +1384,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

@@ -321,7 +321,14 @@ console.log('books.test.js: tutti i controlli passati');
   } };
   const http = { get: async (url, o) => { asked.push(o.params.event_id); return { data: { odds: [] }, headers: {} }; } };
   await I.captureClosing(pool, { closeWindowMin: 45, closeMinEdge: 4, closeTriggerMin: 15, monthlyCap: 9999, books: [], myBooks: [], key: 'x' }, { nowMs: now, http });
-  assert.deepStrictEqual(asked.join(',').split(',').sort(), ['e1', 'e4', 'e5', 'e6']);   // una sola richiesta: la ⭐, Superman e i due gruppi sulla carta, non e2 ne' e3
+  // 16 novembre 2026: una sola richiesta come prima, ma ora e2 ed e3 (nessun gruppo) salgono gratis sulla stessa richiesta
+  assert.strictEqual(asked.length, 1);
+  assert.deepStrictEqual(asked[0].split(','), ['e1', 'e4', 'e5', 'e6', 'e2', 'e3']);   // prima i membri e i gruppi, poi gli altri
+  // da soli, e2 ed e3 non fanno partire nessuna richiesta
+  const asked2 = [], http2 = { get: async (url, o) => { asked2.push(o.params.event_id); return { data: { odds: [] }, headers: {} }; } };
+  const pool2 = { query: async (sql) => (/FROM italia_signals\s+WHERE commence_time/.test(sql) ? { rows: cand.filter(r => r.id === 2 || r.id === 3) } : pool.query(sql)) };
+  await I.captureClosing(pool2, { closeWindowMin: 45, closeMinEdge: 4, closeTriggerMin: 15, monthlyCap: 9999, books: [], myBooks: [], key: 'x' }, { nowMs: now, http: http2 });
+  assert.strictEqual(asked2.length, 0);
   console.log('Chiusure delle ⭐: ok');
 })().catch(e => { console.error(e); process.exit(1); });
 

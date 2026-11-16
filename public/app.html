@@ -938,7 +938,7 @@
     } catch (e) { $('today').innerHTML = '<div class="empty">Non riesco a caricare i segnali di oggi: ' + esc(e.message) + '</div>'; }
   }
   async function loadCredits() {
-    try { const d = await getJson('/api/tracker/credits'); $('credits').innerHTML = d.items.map(i => `<div>${marker(i.level === 'bad' ? 'bad' : i.level === 'warn' ? 'warn' : i.level === 'ok' ? 'ok' : 'info')}<div><b>${esc(i.name)}</b><span class="muted">${esc(i.text)}</span></div></div>`).join(''); }
+    try { const d = await getJson('/api/tracker/credits'); $('credits').innerHTML = d.items.map(i => `<div>${marker(i.level === 'bad' ? 'bad' : i.level === 'warn' ? 'warn' : i.level === 'ok' ? 'ok' : 'info')}<div><b>${esc(i.name)}</b><span class="muted">${esc(i.text)}</span>${i.closes ? `<span class="muted">Chiusure misurate ultimi 7 giorni: ${i.closes.measured} su ${i.closes.total} (membri attivi: ${i.closes.activeMeasured} su ${i.closes.activeTotal})</span>` : ''}</div></div>`).join(''); }
     catch (e) { $('credits').innerHTML = '<div class="empty">Crediti non disponibili: ' + esc(e.message) + '</div>'; }
   }
   // ------------------------------------------------------------------ OGGI: tutto quello che serve, in una schermata
