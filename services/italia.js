@@ -1109,6 +1109,33 @@ function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now
   return { play: 'no', text: 'C\'è già una giocata migliore su questa partita o oggi la lista è piena' };
 }
 
+/**
+ * 🎈 SVAGO (16 novembre 2026, scelto da Christian: "vorrei giocare spesso e perdere poco"). Segnali fuori da Justice League,
+ * Prova e Coppe, sul risultato piu' probabile secondo Pinnacle, quota fino a 3,50. NON sono giocate di valore:
+ * nei dati (297 segnali) vincono il 46% e perdono circa il 7% della puntata. Servono a giocare tutti i giorni con una perdita
+ * piccola e decisa prima: al massimo SVAGO_PER_DAY al giorno e una perdita massima al mese (SVAGO_MONTH_EUR, 20 euro).
+ * Le giocate Svago non consumano i posti delle ⭐ ne' il freno "3 perse oggi" delle ⭐; i soldi contano nel budget come tutti.
+ */
+const SVAGO = { since: '2026-11-16T20:00:00Z', maxOdd: 3.5 };
+const svagoCfg = (env = process.env) => ({ perDay: Number(env.SVAGO_PER_DAY) > 0 ? Number(env.SVAGO_PER_DAY) : 5, monthLossEur: Number(env.SVAGO_MONTH_EUR) > 0 ? Number(env.SVAGO_MONTH_EUR) : 20, on: env.SVAGO_ENABLED !== 'false' });
+function isSvago(r) {
+  if ((r.strategy || 'I') !== 'I' || isOceani(r) || isProva(r) || isCoppe(r)) return false;
+  const h = Number(r.pin_h), d = Number(r.pin_d), a = Number(r.pin_a); if (!(h > 1 && d > 1 && a > 1)) return false;
+  const fav = h <= d && h <= a ? 'home' : a <= d ? 'away' : 'draw';
+  const odd = r.play ? r.play.odd : Number(r.odd);
+  return r.selection === fav && odd <= SVAGO.maxOdd;
+}
+/** Budget Svago del mese (ora italiana). Parte pura. */
+function svagoBudget(items, c, nowMs = Date.now()) {
+  const month = ROME_DAY.format(new Date(nowMs)).slice(0, 7), today = ROME_DAY.format(new Date(nowMs));
+  const mine = (items || []).filter(x => x.svago);
+  const inMonth = mine.filter(x => ROME_DAY.format(new Date(x.at)).slice(0, 7) === month);
+  const pnlMonth = inMonth.reduce((a, x) => a + (x.pnlEur || 0), 0), playedToday = mine.filter(x => ROME_DAY.format(new Date(x.at)) === today).length;
+  const stopped = !c.on || pnlMonth <= -c.monthLossEur || playedToday >= c.perDay;
+  return { on: c.on, perDay: c.perDay, monthLossEur: c.monthLossEur, playedToday, pnlMonth, count: mine.length, pnlAll: mine.reduce((a, x) => a + (x.pnlEur || 0), 0),
+    stopped, stopWhy: !c.on ? 'spento' : pnlMonth <= -c.monthLossEur ? `perdita del mese arrivata a ${pnlMonth.toFixed(2)} €: Svago fermo fino al mese prossimo` : playedToday >= c.perDay ? `già ${playedToday} giocate Svago oggi` : null };
+}
+
 /** Budget dalle giocate vere: partenza + saldo delle chiuse; "in gioco" = puntate ancora senza risultato. */
 const STOPS = { dayLosses: 3, weekLossEur: 15 };
 function budgetOf(played, c, nowMs = Date.now()) {
@@ -1116,10 +1143,10 @@ function budgetOf(played, c, nowMs = Date.now()) {
   const pnl = items.reduce((a, x) => a + (x.pnlEur || 0), 0);
   const open = items.filter(x => x.pnlEur === null && x.result !== 'void').reduce((a, x) => a + (x.stake || 0), 0);
   const today = ROME_DAY.format(new Date(nowMs));
-  const playedToday = items.filter(x => ROME_DAY.format(new Date(x.at)) === today).length;
+  const playedToday = items.filter(x => !x.svago && ROME_DAY.format(new Date(x.at)) === today).length;
   const balance = c.start + pnl;
   // 5 novembre 2026: freni sulle perdite. Giorno: 3 perse oggi = basta per oggi. Settimana (da lunedi', ora italiana): -15 euro = pausa fino a lunedi'
-  const lostToday = items.filter(x => ROME_DAY.format(new Date(x.at)) === today && x.result === 'lost').length;
+  const lostToday = items.filter(x => !x.svago && ROME_DAY.format(new Date(x.at)) === today && x.result === 'lost').length;
   const wd = (new Date(new Date(nowMs).toLocaleString('en-US', { timeZone: 'Europe/Rome' })).getDay() + 6) % 7;   // 0 = lunedi'
   const weekStart = nowMs - wd * 86400000, wkDays = new Set(Array.from({ length: wd + 1 }, (_, i) => ROME_DAY.format(new Date(weekStart + i * 86400000))));
   const weekPnl = items.filter(x => wkDays.has(ROME_DAY.format(new Date(x.at)))).reduce((a, x) => a + (x.pnlEur || 0), 0);
@@ -1312,6 +1339,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       oceani: isOceani(r),
       prova: isProva(r),
       coppe: isCoppe(r),
+      svago: isSvago(r),
       guess: (() => { const GS = require('./guess'), f = firstRowOf.get(sigKey(r)) || r, g = GS.guessOf(f.pin_h, f.pin_d, f.pin_a), a = GS.aiGuess(f, latestPin(r), calAi, require('./calib').adjust, wAi, eloAi ? eloAi(r.home, r.away) : null);
         return g ? { pick: g.pick, prob: g.prob, ai: a ? { pick: a.pick, prob: a.prob, movedPts: a.movedPts } : null } : null; })(),
       paper: PAPER.groups.filter(g => isPaperGroup(r, g)).map(g => g.key),
@@ -1333,7 +1361,15 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   };
   if (strategy === 'I') {
     let playedSum = null; try { playedSum = await require('./played').getPlayed(pool); } catch (e) { /* tabella non ancora creata */ }
+    // 16/11/2026: le giocate fatte dalla lista Svago (dal suo avvio) si riconoscono dal segnale e hanno un budget a parte
+    try {
+      const its = (playedSum && playedSum.items) || [], ids = its.map(x => Number(x.signalId)).filter(Boolean);
+      const sg = ids.length ? new Map((await pool.query(`SELECT id, strategy, selection, odd, edge_pct, league, pin_h, pin_d, pin_a FROM italia_signals WHERE id = ANY($1::int[])`, [ids])).rows.map(r => [Number(r.id), r])) : new Map();
+      for (const x of its) { const r = sg.get(Number(x.signalId)); x.svago = !!(r && T(x.at) >= T(SVAGO.since) && isSvago({ ...r, play: { odd: Number(x.odd) } })); }
+    } catch (e) { /* senza classificazione: tutto come prima */ }
     const budget = budgetOf(playedSum, budgetCfg(env));
+    const sc = svagoCfg(env), sb = svagoBudget((playedSum && playedSum.items) || [], sc);
+    out.svagoBudget = sb;
     out.budget = budget;
     const bc = budgetCfg(env);
     out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule; out.myBooks = c.myBooks.map(k => BOOK_NAMES[k] || k);
@@ -1345,6 +1381,11 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     // 1° novembre 2026: su ogni scheda un verdetto chiaro, GIOCALA o NON GIOCARE con il motivo (solo partite non ancora iniziate)
     const bestSet = new Set(out.best), nowV = Date.now();
     for (const r of out.recent) r.verdict = verdictOf(r, { best: bestSet, budget, bc, nowMs: nowV, toHour: c.toHour });
+    // 🎈 Svago: le prossime partite (al massimo 5 in lista), solo se giocabili sui tuoi siti e non gia' nelle ⭐
+    const svagoOk = r => r.svago && !bestSet.has(r.id) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowV && !(r.market && r.market.dir === 'contro') && !budget.stopped;
+    out.svagoList = sb.stopped ? [] : out.recent.filter(svagoOk).sort((a, b) => T(a.commence_time) - T(b.commence_time)).slice(0, 5).map(r => r.id);
+    const svSet = new Set(out.svagoList);
+    for (const r of out.recent) if (svSet.has(r.id)) r.verdict = { play: 'svago', text: `🎈 Svago: è il risultato più probabile, ma non è una giocata di valore (in media si perde circa il 7%). Giocala solo per divertimento, ${r.play.book} a ${Number(r.play.odd).toFixed(2).replace('.', ',')}` };
     // vinte contro attese della lista da giocare (stesse regole: selezione, niente coppe, quota fino al massimo)
     const ruleRows0 = bc.rule === 'consigliate' ? fin6Rows : bc.rule === 'sicure' ? fin5Rows : fin4Rows;
     let ruleRows = [...ruleRows0, ...liqRows.filter(r => !ruleRows0.includes(r))];   // con le 💧 liquide dal 2 novembre
@@ -1384,4 +1425,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { SVAGO, svagoCfg, isSvago, svagoBudget, budgetOf, closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
