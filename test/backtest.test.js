@@ -1,6 +1,6 @@
 // Prova del metodo sullo storico: conti giusti, regola, gruppi. Senza rete e senza database.
 const assert = require('assert'), B = require('../services/backtest');
-assert.strictEqual(B.seasonOf('2025-08-15'), '2025/26'); assert.strictEqual(B.seasonOf('2026-03-01'), '2025/26');
+assert.strictEqual(B.seasonOf('2025-08-15'), '2025/26'); assert.strictEqual(B.seasonOf(new Date('2019-09-01T00:00:00Z')), '2019/20', 'anche con le date del database'); assert.strictEqual(B.seasonOf('2026-03-01'), '2025/26');
 // 100 partite uguali: Pinnacle 2,60/3,20/3,00, quota massima sul pareggio 3,40 (vantaggio ~+2,8%); il pareggio esce 30 volte
 const rows = Array.from({ length: 100 }, (_, i) => ({ match_date: '2024-10-01', league: 'XX', hg: i < 30 ? 1 : 2, ag: i < 30 ? 1 : 0, ph: 2.6, pd: 3.2, pa: 3.0, mh: 2.62, md: 3.4, ma: 3.02, ah: 2.5, ad: 3.1, aa: 2.9 }));
 const r = B.backtest(rows);

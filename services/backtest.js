@@ -11,7 +11,7 @@ const ODD_BANDS = [[1, 1.6], [1.6, 2], [2, 2.5], [2.5, 3], [3, 3.5], [3.5, 5], [
 const EDGE_BANDS = [[-100, 0], [0, 2], [2, 4], [4, 8], [8, 1000]];
 const lab = ([a, b]) => (b >= 1000 ? `${String(a).replace('.', ',')} e oltre` : `${String(a).replace('.', ',')}–${String(b).replace('.', ',')}`);
 
-const seasonOf = d => { const s = String(d).slice(0, 10), y = +s.slice(0, 4), m = +s.slice(5, 7), st = m >= 7 ? y : y - 1; return `${st}/${String((st + 1) % 100).padStart(2, '0')}`; };
+const seasonOf = d => { const s = (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10), y = +s.slice(0, 4), m = +s.slice(5, 7), st = m >= 7 ? y : y - 1; return `${st}/${String((st + 1) % 100).padStart(2, '0')}`; };
 const acc = () => ({ n: 0, won: 0, exp: 0, pnl: 0 });
 const add = (t, win, p, odd) => { t.n++; t.won += win; t.exp += p; t.pnl += win ? odd - 1 : -1; };
 const fin = t => ({ n: t.n, won: t.won, expected: Math.round(t.exp * 10) / 10, roiPct: t.n ? Math.round(1000 * t.pnl / t.n) / 10 : null, z: t.n ? Math.round(100 * (t.won - t.exp) / Math.sqrt(Math.max(1e-9, t.exp * (1 - t.exp / t.n)))) / 100 : null });
@@ -50,12 +50,13 @@ function backtest(rows, { minEdge = 2, minOdd = 2, maxOdd = 3.5, maxMargin = 6 }
 }
 
 /** Calcolata una volta e salvata (calib_state 'backtest'); si rifa' dopo l'aggiornamento dello storico. */
+const BT_VERSION = 2;   // cambia quando cambia il calcolo: il risultato salvato si rifa' da solo
 async function getBacktest(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
-  if (!force) { const sv = await C.loadState(pool, 'backtest').catch(() => null); if (sv) return sv; }
+  if (!force) { const sv = await C.loadState(pool, 'backtest').catch(() => null); if (sv && sv.version === BT_VERSION && !C.isRunning()) return sv; }
   const rows = (await pool.query(`SELECT match_date, league, hg, ag, ph, pd, pa, mh, md, ma, ah, ad, aa FROM hist_pin WHERE ph IS NOT NULL AND mh IS NOT NULL`)).rows;
-  const val = { ...backtest(rows), updatedAt: new Date().toISOString() };
-  if (val.matches) await C.saveState(pool, 'backtest', val);
+  const val = { ...backtest(rows), version: BT_VERSION, updatedAt: new Date().toISOString() };
+  if (val.matches && !C.isRunning()) await C.saveState(pool, 'backtest', val);   // a scarico in corso non si salva un risultato parziale
   return val;
 }
 
