@@ -121,6 +121,11 @@ router.get('/close-plan', async (req, res) => {
 router.get('/backtest', async (req, res) => {
   try { res.json(await require('../services/backtest').getBacktest(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// 🧪 prova di altri mercati: UNA richiesta odss, solo a mano e con la chiave
+router.post('/market-check', async (req, res) => {
+  if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { res.json(await require('../services/markets').marketCheck(pool, String(req.query.market || ''))); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 // 🧠 Cervello: dove si vince e dove si perde, per gruppi (sola lettura)
 router.get('/brain', async (req, res) => {
   try { res.json(await require('../services/brain').getBrain(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
