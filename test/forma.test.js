@@ -16,3 +16,8 @@ const rows2 = []; for (let i = 0; i < 3000; i++) { const u = rnd(); rows2.push({
 const r2 = formaTest(rows2);
 assert.ok(r2.verdict !== 'aiuta', 'sul caso non deve dire che aiuta');
 console.log('forma sullo storico: ok');
+// rimbalzo: A vince sempre, poi perde sempre (chi "va in forma" poi ricade): andare contro deve aiutare
+const rows3 = []; for (let i = 0; i < 2000; i++) { const aW = Math.floor(i / 6) % 2 === 0, opp = 'T' + (i % 9); rows3.push({ match_date: new Date(d0.getTime() + i * 86400000).toISOString(), league: 'X', home: 'A', away: opp, hg: aW ? 1 : 0, ag: aW ? 0 : 1, ph: 2, pd: 4, pa: 4 }); }
+const r3 = formaTest(rows3);
+assert.ok(r3.bestRimbalzo && r3.bestForma && r3.configs.some(c => c.kind === 'rimbalzo'), 'ci sono le due famiglie');
+console.log('rimbalzo: ok');

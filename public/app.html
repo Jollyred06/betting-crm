@@ -1036,11 +1036,12 @@
   // 18/11/2026: la forma delle squadre aiuta a prevedere meglio di Pinnacle? Misura sullo storico, poi decidiamo se farla esperto
   function formaCard(F) {
     if (!F || F.error || !F.best) return '';
-    const b = F.best, V = { aiuta: ['ok', 'aiuta: diventa un nuovo esperto per l\'IA'], quasi: ['warn', 'aiuta pochissimo, non abbastanza'], no: ['bad', 'non aiuta: Pinnacle ne tiene già conto'], pochi: ['info', 'pochi dati'] }, [lv, lab] = V[F.verdict] || V.pochi;
+    const b = F.best, V = { aiuta: ['ok', `aiuta (${b.kind === 'rimbalzo' ? 'al contrario: rimbalzo' : 'forma'}): diventa un nuovo esperto per l'IA`], quasi: ['warn', 'aiuta pochissimo, non abbastanza'], no: ['bad', 'non aiuta: Pinnacle ne tiene già conto'], pochi: ['info', 'pochi dati'] }, [lv, lab] = V[F.verdict] || V.pochi;
     const g = (x, t) => x.n ? `<div class="prow"><span class="sdot ${Math.abs(x.z) >= 2.5 ? 'warn' : 'ok'}"></span><div><b>${t}</b> <span class="muted tnum">${num(x.n, 0)} volte · vinte ${num(x.won, 0)}, Pinnacle ne attendeva ${num(x.expected, 0)}</span></div></div>` : '';
     return `<details class="fold"><summary><span>🏃 Forma delle squadre</span><small>${lab}</small></summary>
       <p class="muted" style="font-size:14px;">Prova su ${num(b.n, 0)} partite dello storico, in ordine di tempo e solo con le partite precedenti: una squadra che ultimamente ha fatto meglio di quanto diceva Pinnacle continua a farlo? Si misura l'errore dei pronostici con la forma contro Pinnacle da solo.</p>
-      <div class="prow"><span class="sdot ${lv}"></span><div><b>Errore ${b.diffPerMille <= 0 ? 'più basso' : 'più alto'} di ${num(Math.abs(b.diffPerMille), 1)}‰</b> <span class="muted tnum">meglio di Pinnacle in ${F.betterSeasons} stagioni su ${F.seasons} · indovinati ${num(b.hits, 0)} contro ${num(b.hitsPin, 0)}</span></div></div>
+      <div class="prow"><span class="sdot ${lv}"></span><div><b>${b.kind === 'rimbalzo' ? 'Rimbalzo (contro la forma)' : 'Seguire la forma'}: errore ${b.diffPerMille <= 0 ? 'più basso' : 'più alto'} di ${num(Math.abs(b.diffPerMille), 1)}‰</b> <span class="muted tnum">meglio di Pinnacle in ${F.betterSeasons} stagioni su ${F.seasons} · indovinati ${num(b.hits, 0)} contro ${num(b.hitsPin, 0)}</span></div></div>
+      ${F.bestForma && F.bestRimbalzo ? `<p class="muted tnum" style="margin:4px 0;font-size:13px;">Seguire la forma: ${pct(F.bestForma.diffPerMille, 1).replace('%', '‰')} · andarle contro: ${pct(F.bestRimbalzo.diffPerMille, 1).replace('%', '‰')} (negativo = meglio di Pinnacle)</p>` : ''}
       ${g(b.inForma, 'Squadre in forma')}${g(b.fuoriForma, 'Squadre fuori forma')}</details>`;
   }
   function brainCard(B) {
