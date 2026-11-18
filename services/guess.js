@@ -67,7 +67,7 @@ function learn(events, cal, adjust) {
   for (const e of [...events].sort((a, b) => a.t - b.t)) {
     const w = ctxWeights(loss, ctxLoss, e.ctx), x = { f: e.f, l: e.l, cal, adjust, elo: e.elo || null }, p = mix(x, w);
     const sel = SELS.reduce((a, b) => (p[b] > p[a] ? b : a), 'home');
-    out.push({ id: e.id, sel, prob: p[sel] });
+    out.push({ id: e.id, sel, pick: PICK[sel], prob: p[sel] });
     if (e.ctx && !ctxLoss[e.ctx]) { ctxLoss[e.ctx] = zero(); ctxN[e.ctx] = 0; }
     for (const k of KEYS) { const l = -Math.log(Math.max(1e-6, EXPERTS[k].of(x)[e.out])); loss[k] += l; if (e.ctx) ctxLoss[e.ctx][k] += l; }
     if (e.ctx) ctxN[e.ctx]++;

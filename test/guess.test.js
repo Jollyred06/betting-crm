@@ -53,3 +53,9 @@ console.log('pronostico: ok');
   assert.strictEqual(G.aiGuess({ pin_h: 2.6, pin_d: 3.3, pin_a: 2.8 }, { pin_h: 2.9, pin_d: 3.3, pin_a: 2.5 }, null, null, w).pick, '2');
   console.log('IA per tipo di partita: ok');
 }
+// 18/11/2026: nella lista "Ultime" il pronostico IA deve comparire (prima risultava vuoto e si vedeva quello di Pinnacle)
+{
+  const r = G.guessStats([{ event_id: 'q', created_at: '2026-11-16T10:00:00Z', commence_time: '2026-11-16T18:00:00Z', home: 'A', away: 'B', pin_h: 2.0, pin_d: 3.4, pin_a: 3.9, result: 'won', result_score: '1-0' }]);
+  assert.ok(['1', 'X', '2'].includes(r.recent[0].ai), 'pronostico IA presente nelle ultime');
+  console.log('pronostico IA nelle ultime: ok');
+}
