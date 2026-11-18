@@ -59,3 +59,19 @@ console.log('pronostico: ok');
   assert.ok(['1', 'X', '2'].includes(r.recent[0].ai), 'pronostico IA presente nelle ultime');
   console.log('pronostico IA nelle ultime: ok');
 }
+// 18/11/2026: taratura dal nostro database (campionati minori), senza senno di poi
+{
+  // 300 partite nei minori in cui la casa al ~55% vince solo il 40%: l'esperto "nostro" deve abbassare la casa
+  const rows = Array.from({ length: 300 }, (_, i) => ({ commence_time: new Date(Date.parse('2026-10-01') + i * 3600000).toISOString(), pin_h: 1.7, pin_d: 3.5, pin_a: 4.6, result_score: i % 10 < 4 ? '1-0' : i % 10 < 7 ? '1-1' : '0-1' }));
+  assert.strictEqual(G.ownGroup(rows[0]), 'minori');
+  const own = G.ownBuild(rows);
+  assert.ok(G.ownShift(own, 'minori', 'home', 0.55) < -0.05, 'casa sopravvalutata: si abbassa');
+  assert.strictEqual(G.ownShift(own, 'maggiori', 'home', 0.55), 0, 'nei maggiori nessun dato: nessuna correzione');
+  // apprendimento: la taratura usa solo le partite finite prima
+  const pq = (h, d, a) => { const g = G.guessOf(h, d, a); return { home: g.probs['1'], draw: g.probs.X, away: g.probs['2'] }; };
+  const evs = Array.from({ length: 60 }, (_, i) => ({ id: 'm' + i, t: Date.parse('2026-11-01') + i * 3600000, grp: 'minori', f: pq(1.7, 3.5, 4.6), l: pq(1.7, 3.5, 4.6), out: i % 10 < 4 ? 'home' : i % 10 < 7 ? 'draw' : 'away' }));
+  const L = G.learn(evs, null, null, rows);
+  assert.ok(L.weights.nostro > L.weights.primo, 'la taratura nostra prende fiducia'); assert.strictEqual(L.own.n, 300);
+  const early = G.learn([{ ...evs[0], t: Date.parse('2026-09-01') }], null, null, rows); assert.strictEqual(early.own.n, 300, 'alla fine tutte'); 
+  console.log('taratura dal nostro database: ok');
+}

@@ -111,7 +111,7 @@ router.get('/opinion', async (req, res) => {
   try { res.json(await require('../services/opinion').getOpinions(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 router.get('/guess', async (req, res) => {
-  try { res.json(await require('../services/guess').getGuessCached(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+  try { { const g = await require('../services/guess').getGuessCached(pool); res.json(g && g.ai ? { ...g, ai: { ...g.ai, own: undefined } } : g); } } catch (err) { res.status(500).json({ error: err.message }); }
 });
 // ordine delle chiusure per i segnali delle prossime 24 ore (sola lettura)
 router.get('/close-plan', async (req, res) => {

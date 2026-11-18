@@ -27,6 +27,23 @@ const probsOf = (h, d, a) => { const g = guessOf(h, d, a); return g ? { home: g.
  *  verso quelli che hanno sbagliato meno (pesi esponenziali sull'errore logaritmico, eta = 1). Nessuna regola fissa:
  *  se un ingrediente smette di funzionare, il suo peso scende da solo. Parte pura. */
 const ETA = 1;
+/** 🏠 TARATURA DAL NOSTRO DATABASE (18/11/2026): le partite viste dal CRM (goal_watch: quota Pinnacle e risultato), quasi tutte
+ *  di campionati minori che lo storico non copre. Per gruppo (maggiori/minori), esito e fascia: quanto Pinnacle sbaglia.
+ *  Nell'apprendimento si riempie in ordine di tempo (solo partite finite prima di quella da pronosticare: niente senno di poi). */
+const OWN_BANDS = [0, 0.15, 0.25, 0.35, 0.5, 0.65, 1.0001], OWN_K = 200;
+const ownBand = p => { for (let i = 0; i < OWN_BANDS.length - 1; i++) if (p >= OWN_BANDS[i] && p < OWN_BANDS[i + 1]) return i; return null; };
+const marginOf = r => { const h = Number(r.pin_h), d = Number(r.pin_d), a = Number(r.pin_a); return h > 1 && d > 1 && a > 1 ? (1 / h + 1 / d + 1 / a - 1) * 100 : null; };
+const ownGroup = r => { const m = marginOf(r); return m === null ? null : m < 6 ? 'maggiori' : 'minori'; };
+function ownNew() { const mk = () => SELS.map(() => OWN_BANDS.slice(1).map(() => ({ n: 0, exp: 0, obs: 0 }))); return { maggiori: mk(), minori: mk(), n: 0 }; }
+function ownAdd(own, r) {
+  const g = ownGroup(r), p = probsOf(r.pin_h, r.pin_d, r.pin_a), m = /^(\d+)-(\d+)$/.exec(String(r.result_score || ''));
+  if (!g || !p || !m) return;
+  const out = +m[1] > +m[2] ? 'home' : +m[1] === +m[2] ? 'draw' : 'away';
+  SELS.forEach((k, i) => { const b = ownBand(p[k]); if (b === null) return; const c = own[g][i][b]; c.n++; c.exp += p[k]; c.obs += out === k ? 1 : 0; });
+  own.n++;
+}
+function ownShift(own, g, k, p) { if (!own || !g) return 0; const b = ownBand(p); if (b === null) return 0; const c = own[g][SELS.indexOf(k)][b]; return c.n ? ((c.obs - c.exp) / c.n) * (c.n / (c.n + OWN_K)) : 0; }
+function ownBuild(rows) { const own = ownNew(); for (const r of rows) ownAdd(own, r); return own; }
 const norm = p => { const s = p.home + p.draw + p.away; return { home: p.home / s, draw: p.draw / s, away: p.away / s }; };
 const EXPERTS = {
   primo: { name: 'prima quota di Pinnacle', of: x => x.f },
@@ -34,6 +51,7 @@ const EXPERTS = {
   slancio: { name: 'direzione del mercato', of: x => norm(Object.fromEntries(SELS.map(k => [k, Math.max(0.01, x.l[k] + (x.l[k] - x.f[k]))]))) },
   storico: { name: 'correzione con lo storico', of: x => (x.cal && x.adjust ? norm(Object.fromEntries(SELS.map(k => [k, Math.max(0.01, x.l[k] + x.adjust(x.cal, null, k, x.l[k]).shift)]))) : x.l) },
   forza: { name: 'forza delle squadre (Elo dallo storico)', of: x => x.elo || x.l },
+  nostro: { name: 'taratura dal nostro database (campionati minori)', of: x => (x.own ? norm(Object.fromEntries(SELS.map(k => [k, Math.max(0.01, x.l[k] + ownShift(x.own, x.grp, k, x.l[k]))]))) : x.l) },
   casa: { name: 'vantaggio casa', of: x => norm({ home: x.l.home + 0.02, draw: Math.max(0.01, x.l.draw - 0.012), away: Math.max(0.01, x.l.away - 0.008) }) }
 };
 const KEYS = Object.keys(EXPERTS);
@@ -41,10 +59,11 @@ function weightsOf(loss) { const mn = Math.min(...KEYS.map(k => loss[k])), w = K
 function mix(x, weights) { const p = { home: 0, draw: 0, away: 0 }; for (const k of KEYS) { const q = EXPERTS[k].of(x); for (const s of SELS) p[s] += weights[k] * q[s]; } return p; }
 /** Pronostico IA per una partita con i pesi attuali. */
 function aiGuess(first, last, cal, adjust, weights = null, elo = null) {
-  if (weights && weights.byContext) { const c = contextOf(first); weights = (c && weights.byContext[c] && weights.byContext[c].weights) || weights.weights; }
   const f = probsOf(first.pin_h, first.pin_d, first.pin_a), l = (last && probsOf(last.pin_h, last.pin_d, last.pin_a)) || f;
   if (!f) return null;
-  const x = { f, l, cal, adjust, elo }, w = weights || Object.fromEntries(KEYS.map(k => [k, 1 / KEYS.length])), p = mix(x, w);
+  const own = weights && weights.own ? weights.own : null;
+  if (weights && weights.byContext) { const c = contextOf(first); weights = (c && weights.byContext[c] && weights.byContext[c].weights) || weights.weights; }
+  const x = { f, l, cal, adjust, elo, own, grp: ownGroup(first) }, w = weights || Object.fromEntries(KEYS.map(k => [k, 1 / KEYS.length])), p = mix(x, w);
   const sel = SELS.reduce((a, b) => (p[b] > p[a] ? b : a), 'home');
   return { sel, pick: PICK[sel], prob: p[sel], movedPts: 100 * (l[sel] - f[sel]) };
 }
@@ -61,11 +80,14 @@ function contextOf(first) {
 /** Pesi per una partita: errori di tutte le partite + errori delle partite dello stesso tipo (che quindi contano doppio). */
 function ctxWeights(loss, ctxLoss, ctx) { const c = ctx && ctxLoss[ctx]; return weightsOf(Object.fromEntries(KEYS.map(k => [k, loss[k] + (c ? c[k] : 0)]))); }
 /** Impara dai risultati in ordine di tempo: ogni partita e' pronosticata solo con quello che si sapeva prima (onesto). */
-function learn(events, cal, adjust) {
+function learn(events, cal, adjust, ownRows = []) {
   const zero = () => Object.fromEntries(KEYS.map(k => [k, 0]));
   const loss = zero(), ctxLoss = {}, ctxN = {}, out = [];
+  const own = ownNew(), src = [...ownRows].map(r => ({ r, t: Date.parse(r.commence_time) })).filter(o => Number.isFinite(o.t)).sort((a, b) => a.t - b.t);
+  let j = 0;
   for (const e of [...events].sort((a, b) => a.t - b.t)) {
-    const w = ctxWeights(loss, ctxLoss, e.ctx), x = { f: e.f, l: e.l, cal, adjust, elo: e.elo || null }, p = mix(x, w);
+    while (j < src.length && src[j].t < e.t - 3 * 3600000) ownAdd(own, src[j++].r);   // solo partite gia' finite
+    const w = ctxWeights(loss, ctxLoss, e.ctx), x = { f: e.f, l: e.l, cal, adjust, elo: e.elo || null, own, grp: e.grp || null }, p = mix(x, w);
     const sel = SELS.reduce((a, b) => (p[b] > p[a] ? b : a), 'home');
     out.push({ id: e.id, sel, pick: PICK[sel], prob: p[sel] });
     if (e.ctx && !ctxLoss[e.ctx]) { ctxLoss[e.ctx] = zero(); ctxN[e.ctx] = 0; }
@@ -73,12 +95,13 @@ function learn(events, cal, adjust) {
     if (e.ctx) ctxN[e.ctx]++;
   }
   const byContext = Object.fromEntries(Object.keys(ctxLoss).map(c => [c, { n: ctxN[c], weights: ctxWeights(loss, ctxLoss, c) }]));
-  return { weights: weightsOf(loss), ctxLoss, byContext, preds: new Map(out.map(o => [o.id, o])), learnedOn: events.length, withElo: events.filter(e => e.elo).length };
+  while (j < src.length) ownAdd(own, src[j++].r);
+  return { own, weights: weightsOf(loss), ctxLoss, byContext, preds: new Map(out.map(o => [o.id, o])), learnedOn: events.length, withElo: events.filter(e => e.elo).length };
 }
 const outcomeOf = score => { const m = String(score || '').match(/^(\d+)\s*-\s*(\d+)$/); if (!m) return null; const a = +m[1], b = +m[2]; return a > b ? 'home' : a === b ? 'draw' : 'away'; };
 
 /** Riepilogo: una riga per partita (prima lettura), con il risultato. Parte pura. */
-function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, eloOf = null } = {}) {
+function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, eloOf = null, ownRows = [] } = {}) {
   const first = new Map(), last = new Map();
   for (const r of [...rows].sort((x, y) => Date.parse(x.created_at) - Date.parse(y.created_at))) { if (!first.has(r.event_id)) first.set(r.event_id, r); if (r.pin_h) last.set(r.event_id, r); }
   const score = new Map();   // il risultato puo' arrivare su un'altra riga della stessa partita
@@ -88,9 +111,9 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
   const recent = [], evs = [];
   for (const [ev, r] of first) {
     const f = probsOf(r.pin_h, r.pin_d, r.pin_a), lr = last.get(ev), l = (lr && probsOf(lr.pin_h, lr.pin_d, lr.pin_a)) || f, out = outcomeOf(score.get(ev));
-    if (f && out) evs.push({ id: ev, t: Date.parse(r.commence_time), f, l, out, ctx: contextOf(r), elo: eloOf ? eloOf(r.home, r.away) : null });
+    if (f && out) evs.push({ id: ev, t: Date.parse(r.commence_time), f, l, out, ctx: contextOf(r), grp: ownGroup(r), elo: eloOf ? eloOf(r.home, r.away) : null });
   }
-  const model = learn(evs, cal, adjust);
+  const model = learn(evs, cal, adjust, ownRows);
   for (const [ev, r] of first) {
     const g = guessOf(r.pin_h, r.pin_d, r.pin_a), out = outcomeOf(score.get(ev));
     if (!g || !out) continue;
@@ -103,7 +126,7 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
   }
   const fin = t => ({ ...t, pct: t.n ? 100 * t.hit / t.n : null, expPct: t.n ? 100 * t.expected / t.n : null });
   recent.sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
-  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, recent: recent.slice(0, 10) };
+  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, recent: recent.slice(0, 10) };
 }
 
 let cacheG = null;
@@ -117,7 +140,8 @@ async function getGuess(pool) {
   // 16/11/2026: non aspetta i calcoli pesanti; se non sono ancora pronti si va avanti senza (e si preparano in sottofondo)
   const C = require('./calib'); let cal = null; try { cal = await C.getCalRaw(pool, { wait: false }); } catch (e) { /* senza storico: solo movimento */ }
   let eloOf = null; try { const E = require('./elo').peekElo(pool); eloOf = E ? E.of : null; } catch (e) { /* senza storico */ }
-  return guessStats(rows, { cal, adjust: C.adjust, eloOf });
+  let ownRows = []; try { ownRows = (await pool.query(`SELECT commence_time, pin_h, pin_d, pin_a, result_score FROM goal_watch WHERE pin_h IS NOT NULL AND result_score ~ '^[0-9]+-[0-9]+$'`)).rows; } catch (e) { /* facoltativo */ }
+  return guessStats(rows, { cal, adjust: C.adjust, eloOf, ownRows });
 }
 
-module.exports = { contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };
+module.exports = { ownBuild, ownShift, ownGroup, contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };

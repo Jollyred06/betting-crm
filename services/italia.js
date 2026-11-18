@@ -1314,7 +1314,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const latestPin = r => { const g = pinNow.get(r.event_id); return g && T(g.updated_at) > T(r.created_at) + 60000 ? { ...g, id: 'gw:' + r.event_id, selection: r.selection } : r; };
   // 16/11/2026: la pagina dei segnali non aspetta mai i calcoli pesanti (prima: fino a 40 secondi dopo un riavvio)
   let calAi = null, wAi = null; try { calAi = await require('./calib').getCalRaw(pool, { wait: false }); } catch (e) { /* storico non ancora scaricato */ }
-  try { const ga = (await require('./guess').getGuessCached(pool)).ai; wAi = { weights: ga.weights, byContext: ga.byContext }; } catch (e) { /* senza risultati: pesi uguali */ }
+  try { const ga = (await require('./guess').getGuessCached(pool)).ai; wAi = { weights: ga.weights, byContext: ga.byContext, own: ga.own }; } catch (e) { /* senza risultati: pesi uguali */ }
   let eloAi = null; try { const E = require('./elo').peekElo(pool); eloAi = E ? E.of : null; } catch (e) { /* senza storico */ }
   const firstRowOf = new Map(); for (const r of [...all].sort((x, y) => T(x.created_at) - T(y.created_at))) if (!firstRowOf.has(sigKey(r))) firstRowOf.set(sigKey(r), r);
   const out = {
