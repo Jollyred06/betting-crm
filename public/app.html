@@ -278,6 +278,7 @@
   <!-- HOME -->
   <main id="pane-home">
     <div id="oggi"><div class="sk l1"></div><div class="sk box"></div><div class="sk box"></div></div>
+    <section class="block contano"><h3>📌 Le cose che contano</h3><div id="contano" class="list"><div class="sk box"></div></div></section>
     <details class="fold quiet"><summary><span>Dettagli</span><small>tutti i consigli, prossimi segnali, sistema e crediti</small></summary>
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
     <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Tutti i consigli automatici. In Oggi vedi solo quelli rossi e gialli.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
@@ -1180,8 +1181,24 @@
       $('statusPill').innerHTML = `${sdot('bad')}<span>Problema</span>`;
     }
   }
+  // 18/11/2026: in cima a Oggi, poche righe con quello che conta davvero (saldo e valore, dove guadagni, conti, crediti, prossima decisione)
+  const DECISIONI = [['2026-11-23', 'Lunedì 23: revisione con i dati del weekend (trasferte nei minori, scansioni, IA, Svago, Coppe). Mandami il backup della mattina.'],
+    ['2026-11-30', 'Domenica 30: decisione su puntata e Kelly, soprattutto per le 💎 Top.']];
+  async function loadContano() {
+    try {
+      const [P, C] = await Promise.all([getJson('/api/tracker/played').catch(() => null), getJson('/api/tracker/credits').catch(() => null)]);
+      const row = (dot, title, text) => `<div class="prow"><span class="sdot ${dot}"></span><div><b>${title}</b> <span class="muted">${text}</span></div></div>`, out = [];
+      if (P && P.count) { const v = P.myValue; out.push(row(P.pnlEur >= 0 ? 'ok' : 'bad', `💶 Saldo ${signedMoney(P.pnlEur || 0)}`, `su ${P.count} giocate${v && v.measured ? ` · le tue quote battono la chiusura del ${pct(v.avgClvPct, 1)}${v.measured < 20 ? ' (ancora poche misure)' : ''}` : ''}`)); }
+      const L = P && P.lists; if (L) out.push(row(L.fuori.n && L.fuori.pnl < 0 ? 'warn' : 'ok', '⭐ Il guadagno viene dalle liste del CRM', `${signedMoney(L.stelle.pnl)} su ${L.stelle.n} giocate ⭐, contro ${signedMoney(L.fuori.pnl)} su ${L.fuori.n} fuori lista. Gioca le ⭐, per divertirti usa lo Svago.`));
+      out.push(row('warn', '🏦 Il conto dove ci sono le quote migliori', '888sport ha la quota più alta nel 60% delle ⭐: senza un conto lì perdi la maggior parte delle giocate buone. Dopo averlo aperto aggiorna MY_BOOKS su Render.'));
+      out.push(row('ok', '📊 Il metodo è provato', '14 stagioni, 37.000 giocate: giocando alla quota più alta quando paga più del giusto, +6,5%. Alla quota media, −0,5%. Conta il prezzo, non indovinare.'));
+      const cr = C && C.items && C.items[0]; if (cr && cr.plan) out.push(row(cr.plan.leftAtReset >= 30 ? 'ok' : 'warn', `💳 Crediti ${cr.remaining}`, `${cr.plan.perDay} al giorno, alla ricarica ne restano circa ${cr.plan.leftAtReset}${cr.plan.hours ? ` · scansioni alle ${cr.plan.hours.join(', ')}` : ''}`));
+      const today = new Date().toISOString().slice(0, 10), next = DECISIONI.find(([d]) => d >= today); if (next) out.push(row('info', '📅 Prossima decisione', next[1]));
+      $('contano').innerHTML = out.join('');
+    } catch (e) { $('contano').innerHTML = ''; }
+  }
   async function loadHome() {
-    loadOggi(); loadAdvice(); loadToday(); loadCredits();
+    loadOggi(); loadContano(); loadAdvice(); loadToday(); loadCredits();
     try {
       const [o, h, m, b] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health'), getJson('/api/tracker/milestones').catch(() => null), getJson('/api/tracker/bankroll').catch(() => null)]);
       bankData = b; renderMilestones(m); renderBankMini(b);
