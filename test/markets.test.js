@@ -26,3 +26,15 @@ assert.strictEqual(M.summarizeMarket([{ ...ah, bookmakers: ah.bookmakers.slice(1
   assert.strictEqual((await M.marketCheck({ query: async () => ({ rows: [] }) }, 'xyz', { ODSS_API_KEY: 'k' }, { http })).ok, false); assert.strictEqual(calls, 1);
   console.log('prova di altri mercati: ok');
 })().catch(e => { console.error(e); process.exit(1); });
+// doppia chance dal 1X2 di Pinnacle salvato
+{
+  const M2 = require('../services/markets');
+  assert.strictEqual(M2.dcKey('1X'), '1X'); assert.strictEqual(M2.dcKey('home_draw'), '1X'); assert.strictEqual(M2.dcKey('X2'), 'X2'); assert.strictEqual(M2.dcKey('12'), '12'); assert.strictEqual(M2.dcKey('pippo'), null);
+  // Pinnacle 2,00 / 3,60 / 4,20: 1X giusto circa 1/(0,49+0,27) = 1,31; snai 1,36 = circa +3%
+  const pins = new Map([['e', { pin_h: 2.0, pin_d: 3.6, pin_a: 4.2 }]]);
+  const rec = { event_id: 'e', market: 'dc', home_team: 'A', away_team: 'B', bookmakers: [{ key: 'snai', outcomes: { '1X': 1.36, X2: 1.6, '12': 1.25 } }] };
+  const s = M2.summarizeDC([rec], pins);
+  assert.strictEqual(s.partiteConPinnacle, 1); assert.strictEqual(s.quote, 3); assert.ok(s.esempi.length >= 1 && s.esempi[0].esito === '1X');
+  assert.strictEqual(M2.summarizeDC([rec], new Map()).quote, 0, 'senza 1X2 di Pinnacle non si confronta');
+  console.log('doppia chance dal 1X2: ok');
+}

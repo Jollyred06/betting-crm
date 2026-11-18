@@ -44,9 +44,56 @@ async function marketCheck(pool, market, env = process.env, { http, nowMs = Date
   if (!MARKETS[market]) return { ok: false, motivo: `mercato non previsto (${Object.keys(MARKETS).join(', ')})` };
   const I = require('./italia'), c = I.cfg(env);
   if (!c.key) return { ok: false, motivo: 'ODSS_API_KEY non impostata' };
-  const records = await I.fetchOdds(pool, c, { market, content: 'match', limit: 3000, bookmakers: [...new Set(['pinnacle', ...c.books, ...c.myBooks])].join(','),
+  const books = market === 'dc' ? [...new Set([...c.books, ...c.myBooks])] : [...new Set(['pinnacle', ...c.books, ...c.myBooks])];
+  const records = await I.fetchOdds(pool, c, { market, content: 'match', limit: 3000, bookmakers: books.join(','),
     commence_from: new Date(nowMs + 15 * 60000).toISOString(), commence_to: new Date(nowMs + 24 * 3600000).toISOString() }, 'market_check', http);
+  if (market === 'dc') {
+    const ids = [...new Set((records || []).map(r => r.event_id))];
+    const pins = new Map(ids.length ? (await pool.query(`SELECT event_id, pin_h, pin_d, pin_a FROM goal_watch WHERE event_id = ANY($1) AND pin_h IS NOT NULL`, [ids])).rows.map(r => [r.event_id, r]) : []);
+    return { ok: true, market, nome: MARKETS[market], ...summarizeDC(records, pins) };
+  }
   return { ok: true, market, nome: MARKETS[market], ...summarizeMarket(records) };
 }
 
-module.exports = { MARKETS, summarizeMarket, marketCheck };
+/** Doppia chance (18/11/2026): Pinnacle non la quota, quindi il prezzo giusto si ricava dal suo 1X2 salvato dalle scansioni
+ *  (goal_watch): 1X = 1 + X, X2 = X + 2, 12 = 1 + 2, con le probabilita' senza margine. I nomi degli esiti cambiano da sito a sito. */
+function dcKey(k) {
+  const K = String(k).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (['1X', 'X1', 'HOMEDRAW', 'HOMEORDRAW', 'DRAWHOME'].includes(K)) return '1X';
+  if (['X2', '2X', 'DRAWAWAY', 'DRAWORAWAY', 'AWAYDRAW'].includes(K)) return 'X2';
+  if (['12', '21', 'HOMEAWAY', 'HOMEORAWAY', 'AWAYHOME', 'NODRAW'].includes(K)) return '12';
+  return null;
+}
+function summarizeDC(records, pins, { minEdge = 2 } = {}) {
+  const { noVigPower } = require('./sharpSignals');
+  const edges = [], events = new Set(), withPin = new Set(), books = {}, keys = {}, unknown = {}, found = [];
+  for (const r of records || []) {
+    if ((r.scope || 'match') !== 'match' || (r.period || 'full_time') !== 'full_time' || (r.state || 'prematch') !== 'prematch') continue;
+    events.add(r.event_id);
+    const pin = pins.get(r.event_id); if (!pin) continue;
+    const p = noVigPower({ home: Number(pin.pin_h), draw: Number(pin.pin_d), away: Number(pin.pin_a) });
+    const fair = { '1X': p.home + p.draw, X2: p.draw + p.away, '12': p.home + p.away };
+    withPin.add(r.event_id);
+    for (const b of r.bookmakers || []) {
+      if (!b.outcomes) continue;
+      books[b.key] = (books[b.key] || 0) + 1;
+      for (const [k, v] of Object.entries(b.outcomes)) {
+        const K = dcKey(k), odd = Number(v);
+        if (!K) { unknown[k] = (unknown[k] || 0) + 1; continue; }
+        keys[K] = (keys[K] || 0) + 1;
+        if (!(odd > 1)) continue;
+        const e = (odd * fair[K] - 1) * 100; if (e > 25) continue;
+        edges.push(e);
+        if (e >= minEdge) found.push({ event: r.event_id, partita: `${r.home_team || '?'} – ${r.away_team || '?'}`, lega: r.league || null, linea: null, esito: K, sito: b.key, quota: odd, edgePct: Math.round(e * 10) / 10 });
+      }
+    }
+  }
+  edges.sort((a, b) => a - b);
+  const q = f => (edges.length ? Math.round(edges[Math.min(edges.length - 1, Math.floor(f * edges.length))] * 10) / 10 : null);
+  found.sort((a, b) => b.edgePct - a.edgePct);
+  return { righe: (records || []).length, partite: events.size, partiteConPinnacle: withPin.size, quote: edges.length, esiti: keys, esitiSconosciuti: unknown, siti: books,
+    vantaggioMediano: q(0.5), vantaggio90: q(0.9), conVantaggio: found.length, partiteConVantaggio: new Set(found.map(f => f.event)).size,
+    quotaConVantaggioPct: edges.length ? Math.round(1000 * found.length / edges.length) / 10 : null, esempi: found.slice(0, 5), prezzoGiusto: '1X2 di Pinnacle salvato dalle scansioni' };
+}
+
+module.exports = { MARKETS, summarizeMarket, summarizeDC, dcKey, marketCheck };
