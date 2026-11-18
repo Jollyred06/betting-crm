@@ -130,6 +130,21 @@ async function getPlayed(pool) {
       jl: part(out.items.filter(x => jlIds.has(x.id))), other: part(out.items.filter(x => !jlIds.has(x.id))),
       best: sorted.slice(0, 3).map(pick), worst: sorted.slice(-3).reverse().map(pick) };
   } catch (e) { out.myValue = null; }
+  // 18/11/2026: dove hai giocato. ⭐ = Justice League, Prova o Coppe; 🎈 Svago; ⚠️ fuori lista (nei dati perdono circa il 9%)
+  try {
+    const I = require('./italia');
+    const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I'`)).rows, mo = I.markOceani(all), key = r => r.event_id + '|' + r.selection;
+    const jlKeys = new Set(all.filter(r => (mo.get(r.id) || {}).final).map(key));
+    const byId = new Map(rows.map(r => [Number(r.id), r]));
+    const groupOf = x => { const r = byId.get(Number(x.id)); if (!r) return 'fuori';
+      const sg = { strategy: 'I', league: r.league, selection: r.selection, odd: Number(r.signal_odd), edge_pct: r.edge_pct, pin_h: r.pin_h, pin_d: r.pin_d, pin_a: r.pin_a, play: { odd: Number(x.odd) } };
+      if (jlKeys.has(key(r)) || I.isProva(sg) || I.isCoppe(sg)) return 'stelle';
+      return I.isSvago(sg) ? 'svago' : 'fuori'; };
+    const acc = () => ({ n: 0, settled: 0, pnl: 0, staked: 0 }), lists = { stelle: acc(), svago: acc(), fuori: acc() };
+    for (const x of out.items) { const g = lists[groupOf(x)]; x.list = Object.keys(lists).find(k => lists[k] === g); g.n++; if (x.pnlEur !== null) { g.settled++; g.pnl += x.pnlEur; g.staked += Number(x.stake) || 0; } }
+    for (const g of Object.values(lists)) g.roiPct = g.staked ? 100 * g.pnl / g.staked : null;
+    out.lists = lists;
+  } catch (e) { out.lists = null; }
   try {
     await ensureSkipped(pool);
     const sk = (await pool.query(`SELECT k.*, s.home, s.away, s.selection, s.commence_time, s.clv_pct FROM skipped_bets k JOIN italia_signals s ON s.id = k.signal_id ORDER BY k.created_at DESC LIMIT 500`)).rows;

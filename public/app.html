@@ -1412,7 +1412,9 @@
       return head + `<div class="move play"><span class="sdot ${stl(x)}"></span><div class="pm"><b>${esc(x.home)} – ${esc(x.away)}</b><small>${sel[x.selection] || ''} · ${esc(x.book)} ${num(x.odd, 2)} · ${money(x.stake)}${x.result === 'won' || x.result === 'lost' ? ' · ' + esc(x.score || '') : x.result === 'void' ? ' · annullata: non conta' : ''}${x.clvPct !== null ? ' · ' + pct(x.clvPct, 1) + ' vs chiusura' : ''}</small>
         <details class="pmore"><summary>⋯ modifica</summary>${past ? resEdit(x.signalId, x.home, x.away, fin) : ''}<button class="linkbtn" onclick="deletePlay(${x.id})">🗑️ Cancella giocata</button></details></div>
         <b class="pr ${x.pnlEur !== null ? cls(x.pnlEur) : 'muted'}">${x.pnlEur !== null ? signedMoney(x.pnlEur) : 'in attesa'}</b></div>`; }).join('');
-    $('playedBox').innerHTML = tiles
+    const L3 = d.lists, lrow = (dot, name, g, note) => `<div class="prow"><span class="sdot ${dot}"></span><div><b>${name}</b> <span class="muted tnum">${g.n} giocate${g.settled ? ` · saldo ${signedMoney(g.pnl)} (${pct(g.roiPct, 0)})` : ''}${note ? ' · ' + note : ''}</span></div></div>`;
+    const listsBox = L3 ? `<div class="block" style="margin:10px 0 4px"><h4 style="margin:0 0 4px">Dove hai giocato</h4>${lrow('ok', '⭐ Le liste del CRM', L3.stelle, 'Justice League, Prova e Coppe')}${lrow('info', '🎈 Svago', L3.svago, 'per divertimento, in media −7%')}${lrow(L3.fuori.n ? 'bad' : 'ok', '⚠️ Fuori lista', L3.fuori, 'in media perdono circa il 9%: meglio lo Svago')}</div>` : '';
+    $('playedBox').innerHTML = tiles + listsBox
       + (vbox ? `<details class="fold quiet"><summary><span>🎯 Il tuo valore</span><small>${verdictTxt}</small></summary>${vbox}</details>` : '')
       + `<details class="fold quiet"><summary><span>Tutti i numeri</span><small>saldo atteso, scarti, non giocate</small></summary><dl class="facts">
         <div><dt>Giocate</dt><dd>${d.count} · ${money(d.staked)} puntati</dd></div>
