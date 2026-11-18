@@ -64,7 +64,7 @@ function dcKey(k) {
   if (['12', '21', 'HOMEAWAY', 'HOMEORAWAY', 'AWAYHOME', 'NODRAW'].includes(K)) return '12';
   return null;
 }
-function summarizeDC(records, pins, { minEdge = 2 } = {}) {
+function summarizeDC(records, pins, { minEdge = 2, all = false } = {}) {
   const { noVigPower } = require('./sharpSignals');
   const edges = [], events = new Set(), withPin = new Set(), books = {}, keys = {}, unknown = {}, found = [];
   for (const r of records || []) {
@@ -84,7 +84,7 @@ function summarizeDC(records, pins, { minEdge = 2 } = {}) {
         if (!(odd > 1)) continue;
         const e = (odd * fair[K] - 1) * 100; if (e > 25) continue;
         edges.push(e);
-        if (e >= minEdge) found.push({ event: r.event_id, partita: `${r.home_team || '?'} – ${r.away_team || '?'}`, lega: r.league || null, linea: null, esito: K, sito: b.key, quota: odd, edgePct: Math.round(e * 10) / 10 });
+        if (e >= minEdge) found.push({ event: r.event_id, partita: `${r.home_team || '?'} – ${r.away_team || '?'}`, home: r.home_team || null, away: r.away_team || null, commence_time: r.commence_time || null, lega: r.league || null, linea: null, esito: K, sito: b.key, quota: odd, edgePct: Math.round(e * 10) / 10, fair: fair[K], pin });
       }
     }
   }
@@ -93,7 +93,7 @@ function summarizeDC(records, pins, { minEdge = 2 } = {}) {
   found.sort((a, b) => b.edgePct - a.edgePct);
   return { righe: (records || []).length, partite: events.size, partiteConPinnacle: withPin.size, quote: edges.length, esiti: keys, esitiSconosciuti: unknown, siti: books,
     vantaggioMediano: q(0.5), vantaggio90: q(0.9), conVantaggio: found.length, partiteConVantaggio: new Set(found.map(f => f.event)).size,
-    quotaConVantaggioPct: edges.length ? Math.round(1000 * found.length / edges.length) / 10 : null, esempi: found.slice(0, 5), prezzoGiusto: '1X2 di Pinnacle salvato dalle scansioni' };
+    quotaConVantaggioPct: edges.length ? Math.round(1000 * found.length / edges.length) / 10 : null, esempi: found.slice(0, 5), ...(all ? { tutti: found } : {}), prezzoGiusto: '1X2 di Pinnacle salvato dalle scansioni' };
 }
 
 module.exports = { MARKETS, summarizeMarket, summarizeDC, dcKey, marketCheck };

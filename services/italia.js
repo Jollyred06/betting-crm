@@ -364,7 +364,7 @@ async function planOf(pool, c, rem, nowMs = Date.now()) {
   const { rows } = await pool.query(`SELECT COUNT(*) FILTER (WHERE kind = 'close' AND at >= NOW() - INTERVAL '7 days')::int AS closes,
     COUNT(*) FILTER (WHERE at >= date_trunc('day', NOW()))::int AS today FROM italia_requests`);
   const pace = odssPace(rem, rows[0].today, c.resetDay, nowMs);
-  const mk = hours => ({ ...planScans({ remaining: rem, daysLeft: pace.daysLeft, closesPerDay: rows[0].closes / 7, fromHour: c.fromHour, toHour: c.toHour, maxReserve: c.closeReserve, hours, perScanExtra: c.ouEnabled ? 1 : 0 }), daysLeft: pace.daysLeft, resetAt: pace.resetAt });
+  const mk = hours => ({ ...planScans({ remaining: rem, daysLeft: pace.daysLeft, closesPerDay: rows[0].closes / 7 + (require('./dcpaper').dcCfg().on ? 1 : 0), fromHour: c.fromHour, toHour: c.toHour, maxReserve: c.closeReserve, hours, perScanExtra: c.ouEnabled ? 1 : 0 }), daysLeft: pace.daysLeft, resetAt: pace.resetAt });
   return choosePlan(mk, c);
 }
 /** Orari piu' fitti se il conto regge, altrimenti quelli di base (paracadute). Parte pura. */
@@ -542,6 +542,8 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
   try { Object.assign(out, await captureClosing(pool, c, { nowMs, http })); } catch (e) { out.erroreChiusura = e.message; }
   try { Object.assign(out, await scan(pool, c, { nowMs, http, notify })); } catch (e) { out.erroreScansione = e.message; }
   try { Object.assign(out, await require('./autoplay').runAutoplay(pool, { env, nowMs })); } catch (e) { out.erroreSimulate = e.message; }
+  try { Object.assign(out, await require('./dcpaper').dcDaily(pool, c, { nowMs, http, env })); } catch (e) { out.erroreDoppiaChance = e.message; }
+  try { await require('./dcpaper').settleDc(pool); } catch (e) { /* facoltativo */ }
   try { Object.assign(out, await require('./calib').maybeRefresh(pool, { nowMs })); } catch (e) { out.erroreStorico = e.message; }
   try { out.timbrati = await stampFlags(pool, c, nowMs); } catch (e) { out.erroreTimbro = e.message; }
   try { Object.assign(out, await require('./results').settleSignals(pool, { env, nowMs, http: resultsHttp, sameTeam })); } catch (e) { out.erroreRisultati = e.message; }
