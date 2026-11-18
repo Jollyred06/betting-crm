@@ -121,6 +121,10 @@ router.get('/close-plan', async (req, res) => {
 router.get('/backtest', async (req, res) => {
   try { res.json(await require('../services/backtest').getBacktest(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// 🏃 prova della forma sullo storico (solo misura, gratis)
+router.get('/forma-test', async (req, res) => {
+  try { res.json(await require('../services/forma').getFormaTest(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 // 🧪 prova di altri mercati: UNA richiesta odss, solo a mano e con la chiave
 router.post('/market-check', async (req, res) => {
   if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });

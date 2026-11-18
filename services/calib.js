@@ -188,6 +188,7 @@ async function rebuildModels(pool) {
   await buildCal(pool);
   try { await require('./elo').rebuild(pool); } catch (e) { /* facoltativo */ }
   try { await require('./backtest').getBacktest(pool, { force: true }); } catch (e) { /* facoltativo */ }
+  try { await require('./forma').getFormaTest(pool, { force: true }); } catch (e) { /* facoltativo */ }
 }
 
 module.exports = { rebuildModels, loadState, saveState, getCalRaw, BANDS, BAND_LABELS, K_LEAGUE, rowsToPin, urlsFor, refreshHistory, maybeRefresh, startRefresh, isRunning, calibrate, adjust, report, getCalibration, ensureCalib };

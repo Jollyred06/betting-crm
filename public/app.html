@@ -886,12 +886,12 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L, BK, GL, TM, BR, AU, CA, OP, GU, DC] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null), getJson('/api/tracker/calibration').catch(() => null), getJson('/api/tracker/opinion').catch(() => null), getJson('/api/tracker/guess').catch(() => null), getJson('/api/tracker/dc-paper').catch(() => null)]);
+      const [i, b, L, BK, GL, TM, BR, AU, CA, OP, GU, DC, FT] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null), getJson('/api/tracker/calibration').catch(() => null), getJson('/api/tracker/opinion').catch(() => null), getJson('/api/tracker/guess').catch(() => null), getJson('/api/tracker/dc-paper').catch(() => null), getJson('/api/tracker/forma-test').catch(() => null)]);
       const pane = (k, html) => `<div data-anv="${k}"${anView === k ? '' : ' hidden'}>${html}</div>`;
       const seg = `<div class="seg" role="tablist">${[['a', 'Riepilogo'], ['m', 'Misure'], ['r', 'Archivio']].map(([k, t]) => `<button class="tab${anView === k ? ' on' : ''}" data-an="${k}" onclick="anTab(this)">${t}</button>`).join('')}</div>`;
       $('italia').innerHTML = seg
         + pane('a', ruleCard(i) + teamCard(TM) + autoCard(AU))
-        + pane('m', guessCard(GU) + dcCard(DC) + brainCard(BR) + storicoCard(CA) + parereCard(OP) + booksCard(BK) + paperCard(i))
+        + pane('m', guessCard(GU) + dcCard(DC) + brainCard(BR) + storicoCard(CA) + formaCard(FT) + parereCard(OP) + booksCard(BK) + paperCard(i))
         + pane('r', heroTeam() + `<p class="muted" style="font-size:14px;margin:4px 0 2px;">⚽ Over/Under spento il 16 novembre: i siti italiani lo pagano in media il 9% meno del giusto (13 partite con valore su 665, saldo −11,6%). I dati restano qui sotto.</p>` + goalsCard(GL) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
           + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`);
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
@@ -1032,6 +1032,16 @@
     return `<details class="fold"><summary><span>📚 Storico e taratura</span><small>quanto Pinnacle ha ragione, su ${num(C.n, 0)} partite</small></summary>
       <p class="muted" style="font-size:14px;">${num(C.n, 0)} partite di ${C.leagues} campionati (${dd(C.from)}–${dd(C.to)}), con le quote di chiusura di Pinnacle.${C.allMatches ? ` In tutto ${num(C.allMatches, 0)} partite con il risultato (fino al ${dd(C.resultsTo)}), usate per la forza delle squadre.` : ''} Per ogni fascia: quanto previsto contro quanto uscito. Il giallo segna scostamenti che non sembrano fortuna.${C.running ? ' <b>Scarico in corso…</b>' : ''}</p>
       ${rows}${odd ? `<h4 style="margin:14px 0 2px;">Campionati dove Pinnacle sbaglia di più</h4>${odd}` : '<p class="muted">Nessun campionato con scostamenti evidenti.</p>'}</details>`;
+  }
+  // 18/11/2026: la forma delle squadre aiuta a prevedere meglio di Pinnacle? Misura sullo storico, poi decidiamo se farla esperto
+  function formaCard(F) {
+    if (!F || F.error || !F.best) return '';
+    const b = F.best, V = { aiuta: ['ok', 'aiuta: diventa un nuovo esperto per l\'IA'], quasi: ['warn', 'aiuta pochissimo, non abbastanza'], no: ['bad', 'non aiuta: Pinnacle ne tiene già conto'], pochi: ['info', 'pochi dati'] }, [lv, lab] = V[F.verdict] || V.pochi;
+    const g = (x, t) => x.n ? `<div class="prow"><span class="sdot ${Math.abs(x.z) >= 2.5 ? 'warn' : 'ok'}"></span><div><b>${t}</b> <span class="muted tnum">${num(x.n, 0)} volte · vinte ${num(x.won, 0)}, Pinnacle ne attendeva ${num(x.expected, 0)}</span></div></div>` : '';
+    return `<details class="fold"><summary><span>🏃 Forma delle squadre</span><small>${lab}</small></summary>
+      <p class="muted" style="font-size:14px;">Prova su ${num(b.n, 0)} partite dello storico, in ordine di tempo e solo con le partite precedenti: una squadra che ultimamente ha fatto meglio di quanto diceva Pinnacle continua a farlo? Si misura l'errore dei pronostici con la forma contro Pinnacle da solo.</p>
+      <div class="prow"><span class="sdot ${lv}"></span><div><b>Errore ${b.diffPerMille <= 0 ? 'più basso' : 'più alto'} di ${num(Math.abs(b.diffPerMille), 1)}‰</b> <span class="muted tnum">meglio di Pinnacle in ${F.betterSeasons} stagioni su ${F.seasons} · indovinati ${num(b.hits, 0)} contro ${num(b.hitsPin, 0)}</span></div></div>
+      ${g(b.inForma, 'Squadre in forma')}${g(b.fuoriForma, 'Squadre fuori forma')}</details>`;
   }
   function brainCard(B) {
     if (!B || !B.dimensions) return '';
