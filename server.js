@@ -74,4 +74,9 @@ app.listen(PORT, () => {
   const { enableRls } = require('./db/secure'), pool = require('./db/pool');
   const run = () => enableRls(pool).then(r => { if (r.attivata && r.attivata.length) console.log('RLS attivata su:', r.attivata.join(', ')); if (r.errore) console.log('RLS non attivata:', r.errore); });
   if (process.env.DATABASE_URL) { run(); setInterval(run, 6 * 3600000).unref(); }
+  // 19/11/2026: il cron di GitHub "ogni 10 minuti" in pratica parte ogni 6-8 ore, quindi Render dormiva quasi sempre e l'app
+  // si apriva in 40-50 s. Ora il server bussa da solo al proprio indirizzo pubblico ogni 10 minuti (/health non tocca Supabase).
+  // Un solo servizio gratuito acceso tutto il mese: 720-744 ore, dentro le 750 di Render. Si spegne con KEEP_AWAKE=false.
+  const self = process.env.RENDER_EXTERNAL_URL;
+  if (self && process.env.KEEP_AWAKE !== 'false') setInterval(() => { fetch(`${self}/health`).catch(() => {}); }, 10 * 60000);
 });
