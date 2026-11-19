@@ -78,5 +78,5 @@ app.listen(PORT, () => {
   // si apriva in 40-50 s. Ora il server bussa da solo al proprio indirizzo pubblico ogni 10 minuti (/health non tocca Supabase).
   // Un solo servizio gratuito acceso tutto il mese: 720-744 ore, dentro le 750 di Render. Si spegne con KEEP_AWAKE=false.
   const self = process.env.RENDER_EXTERNAL_URL;
-  if (self && process.env.KEEP_AWAKE !== 'false') setInterval(() => { fetch(`${self}/health`).catch(() => {}); }, 10 * 60000);
+  if (self && process.env.KEEP_AWAKE !== 'false') setInterval(() => { try { require(self.startsWith('https') ? 'https' : 'http').get(`${self}/health`, r => r.resume()).on('error', () => {}); } catch (e) { /* mai fermare il server per un ping */ } }, 10 * 60000);
 });
