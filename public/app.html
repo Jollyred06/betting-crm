@@ -1098,6 +1098,18 @@
   const tierOf = r => (!r ? null : r.top ? ['hi', '💎 Top'] : r.oceani ? ['mid', '⭐ Buona'] : r.prova ? ['pr', '🧪 Prova'] : r.coppe ? ['mid', '🏆 Coppa'] : ['lo', '⚪ Debole']);
   const voteChip = r => { const t = tierOf(r); return t ? `<span class="vote ${t[0]}" title="💎 Top e ⭐ Buona si giocano; 🧪 Prova solo in simulazione; ⚪ Debole no">${t[1]}</span>` : ''; };
   // probabilita' di vincere (prezzo giusto di Pinnacle) e guadagno atteso sui 2 euro alla quota che giochi
+  // 20/11/2026: quanto puntare. Sotto i 300 euro di cassa 2 euro fissi; sopra, un quarto di Kelly (minimo 2, massimo 2% della cassa)
+  let BANK = null;
+  function stakeOf(odd, p, bank = BANK) {
+    odd = Number(odd); p = Number(p); if (!(odd > 1 && p > 0 && bank > 0)) return 2;
+    if (bank < 300) return 2;
+    const k = (odd * p - 1) / (odd - 1); if (!(k > 0)) return 2;
+    return Math.max(2, Math.min(bank * k / 4, bank * 0.02));
+  }
+  function stakeLine(r) {
+    const odd = r.play ? r.play.odd : r.odd, s = stakeOf(odd, r.fair_prob);
+    return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(Math.round(s * 2) / 2, s % 1 ? 2 : 0)} €</b> · ${BANK && BANK >= 300 ? '¼ Kelly sulla cassa di ' + num(BANK, 0) + ' €, massimo 2%' : '2 € fissi finché la cassa è sotto i 300 €' + (BANK ? ' (ora ' + num(BANK, 0) + ' €)' : '')}</small>`;
+  }
   function probLine(r) {
     const p = r && Number(r.win_prob), odd = r && Number(r.play ? r.play.odd : r.odd);
     if (!(p > 0 && p < 1) || !(odd > 1)) return '';
@@ -1150,6 +1162,7 @@
       if (Array.isArray(d.scanHours) && d.scanHours.length) SCAN_HOURS = d.scanHours;
       if (Array.isArray(d.myBooks) && d.myBooks.length) myBookNames = d.myBooks;
       const b = d.budget || { start: 100, balance: 100, pnl: 0, stop: 60, playedToday: 0, maxPerDay: 5 }, ck = d.bestCheck;
+      if (d.budget && Number.isFinite(Number(d.budget.balance))) BANK = Number(d.budget.balance);
       const best = (d.best || []).map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
       const todo = P && P.items ? P.items.filter(x => !['won', 'lost', 'void'].includes(x.result) && Date.parse(x.commence_time) < Date.now() - 150 * 60000) : [];
       // le giocate di oggi (anche finite) e quelle delle prossime partite, dalla prima che si gioca
@@ -1327,7 +1340,7 @@
               return `<small class="guess">🤖 Pronostico IA: <b>${r.guess.ai ? r.guess.ai.pick : r.guess.pick}</b> (${num(100 * (r.guess.ai ? r.guess.ai.prob : r.guess.prob), 0)}%)${mark(r.guess.ai ? r.guess.ai.pick : r.guess.pick)} · Pinnacle: ${r.guess.pick}${mark(r.guess.pick)}</small>`; })() : ''}
             ${it && r.verdict ? `<div class="verdict ${r.verdict.play}"><b>${r.verdict.play === 'yes' ? `🟢 GIOCALA · ${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.liquid ? 'oceano' : 'fascia', 22)} ${r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}${r.top ? ' · 💎 Top' : ''}` : r.verdict.play === 'wait' ? '🟡 ASPETTA' : r.verdict.play === 'svago' ? '🎈 SVAGO' : '🔴 NON GIOCARE'}</b><span>${esc(r.verdict.text)}</span></div>` : ''}
             ${it && r.paper && r.paper.length && !(r.verdict && r.verdict.play === 'yes') ? `<small class="muted">🧪 Misurata sulla carta (${r.paper.map(k => k === 'bassa' ? 'fascia bassa' : k === 'medi' ? 'mercati medi' : k === 'alte' ? 'quote alte' : esc(k)).join(', ')}): non si gioca</small>` : ''}
-            ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? `<div class="ohero">${voteChip(r)}</div>` + probLine(r) + drawLine(r) : ''}
+            ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? `<div class="ohero">${voteChip(r)}</div>` + stakeLine(r) + probLine(r) + drawLine(r) : ''}
             ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? bookLink(r) : ''}
             ${it && (r.played || r.skipped || (r.verdict && r.verdict.play === 'yes')) ? playActions(r) : ''}
             ${it && !r.verdict && !r.play && !r.played && !r.skipped ? '<div class="todo-line no">⛔ Non giocabile sui tuoi siti</div>' : ''}
