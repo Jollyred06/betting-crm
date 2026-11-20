@@ -81,7 +81,10 @@ function summarizeDcPaper(rows) {
 async function getDcPaper(pool) {
   await ensureDc(pool);
   const rows = (await pool.query(`SELECT * FROM dc_signals ORDER BY created_at DESC LIMIT 500`)).rows;
-  return { on: dcCfg().on, hour: dcCfg().hour, ...summarizeDcPaper(rows) };
+  // 20/11: le letture fatte (anche quelle senza segnali), cosi' si vede che il giro gira davvero
+  const reads = (await pool.query(`SELECT r.at, r.ok, r.records, (SELECT COUNT(*)::int FROM dc_signals d WHERE d.created_at BETWEEN r.at - INTERVAL '5 minutes' AND r.at + INTERVAL '1 hour') AS signals
+    FROM italia_requests r WHERE r.kind = 'dc_paper' ORDER BY r.at DESC LIMIT 7`).catch(() => ({ rows: [] }))).rows;
+  return { on: dcCfg().on, hour: dcCfg().hour, ...summarizeDcPaper(rows), reads: reads.map(r => ({ at: r.at, ok: r.ok, records: r.records, signals: r.signals })) };
 }
 
 module.exports = { dcCfg, pickDc, dcDaily, settleDc, summarizeDcPaper, getDcPaper, outOf };

@@ -996,7 +996,8 @@
     return `<details class="fold"><summary><span>🎲 Doppia chance sulla carta</span><small>${D.on ? `una lettura al giorno alle ${D.hour}` : 'spenta'}</small></summary>
       <p class="muted" style="font-size:14px;">Le doppie chance pagate almeno il 2% più del giusto (giusto = probabilità di Pinnacle sull'1X2), solo nei campionati maggiori. Sulla carta, niente giocate: dopo 2–3 settimane si decide. La prima prova ha trovato valore solo nell'1,8% delle quote.</p>
       <div class="ktiles"><div class="ktile"><small class="muted">Segnali</small><b>${D.count}</b><small class="muted">${D.count - D.settled} aperti</small></div><div class="ktile"><small class="muted">Vinte / attese</small><b>${D.settled ? D.won + ' / ' + num(D.expected, 1) : '—'}</b><small class="muted">su ${D.settled} chiusi</small></div><div class="ktile"><small class="muted">Saldo</small><b>${D.settled ? pct(D.roiPct, 0) : '—'}</b><small class="muted">a puntata fissa</small></div></div>
-      ${rows || '<p class="muted">Ancora nessun segnale: la prima lettura è dopo la scansione delle 17.</p>'}</details>`;
+      ${(D.reads || []).length ? `<p class="muted tnum" style="font-size:13.5px;margin:6px 0;"><b>Letture fatte:</b> ${D.reads.map(r => `${liveDay(r.at)} ${r.ok ? `${num(r.records || 0, 0)} quote, ${r.signals} segnali` : 'non riuscita'}`).join(' · ')}</p>` : ''}
+      ${rows || `<p class="muted">${(D.reads || []).length ? 'Nessuna doppia chance ha superato il 2% finora: con la pausa per le nazionali i campionati maggiori sono quasi fermi, il test vero parte con il weekend.' : 'Ancora nessuna lettura: la prima è dopo la scansione delle 17.'}</p>`}</details>`;
   }
   const liveDay = t => { const d = t ? new Date(t) : null; return d && !isNaN(d) ? d.toLocaleDateString('it-IT', { day: 'numeric', month: 'numeric', timeZone: 'Europe/Rome' }) : '15/11'; };
   function guessCard(G) {
