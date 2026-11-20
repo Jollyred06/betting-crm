@@ -65,6 +65,9 @@ function cfg(env = process.env) {
     // ITALIA_SCAN_PLUS=false su Render per spegnerle.
     scanHoursPlus: String(env.ITALIA_SCAN_HOURS_PLUS === undefined ? '9,11,13,15,17,19,21' : env.ITALIA_SCAN_HOURS_PLUS).split(',').map(x => x.trim()).filter(x => x !== '').map(Number).filter(x => Number.isFinite(x) && x >= 0 && x < 24),
     scanPlus: String(env.ITALIA_SCAN_PLUS || '').trim().toLowerCase() !== 'false',
+    // 20/11/2026: nel weekend (500-950 partite al giorno, il valore sparisce in 1-2 ore) una scansione ogni ora, se i crediti reggono
+    scanHoursWeekend: String(env.ITALIA_SCAN_HOURS_WEEKEND === undefined ? '9,10,11,12,13,14,15,16,17,18,19,20,21' : env.ITALIA_SCAN_HOURS_WEEKEND).split(',').map(x => x.trim()).filter(x => x !== '').map(Number).filter(x => Number.isFinite(x) && x >= 0 && x < 24),
+    scanWeekend: String(env.ITALIA_SCAN_WEEKEND || '').trim().toLowerCase() !== 'false',
     monthlyCap: n('ITALIA_MONTHLY_CAP', 400),
     closeReserve: n('ITALIA_CLOSE_RESERVE', 60),
     // giorno del mese in cui odss ricarica le richieste (1° novembre 2026: 12)
@@ -365,14 +368,26 @@ async function planOf(pool, c, rem, nowMs = Date.now()) {
     COUNT(*) FILTER (WHERE at >= date_trunc('day', NOW()))::int AS today FROM italia_requests`);
   const pace = odssPace(rem, rows[0].today, c.resetDay, nowMs);
   const mk = hours => ({ ...planScans({ remaining: rem, daysLeft: pace.daysLeft, closesPerDay: rows[0].closes / 7 + (require('./dcpaper').dcCfg().on ? 1 : 0), fromHour: c.fromHour, toHour: c.toHour, maxReserve: c.closeReserve, hours, perScanExtra: c.ouEnabled ? 1 : 0 }), daysLeft: pace.daysLeft, resetAt: pace.resetAt });
-  return choosePlan(mk, c);
+  // giorni di sabato e domenica da oggi alla ricarica (ora italiana), e se oggi e' sabato o domenica
+  const wd = t => ['Sat', 'Sun'].includes(new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Rome', weekday: 'short' }).format(new Date(t)));
+  let weekendDays = 0; for (let t = nowMs; t < Date.parse(pace.resetAt); t += 86400000) if (wd(t)) weekendDays++;
+  return choosePlan(mk, c, { weekendDays, isWeekend: wd(nowMs) });
 }
 /** Orari piu' fitti se il conto regge, altrimenti quelli di base (paracadute). Parte pura. */
 const PLUS_MIN_LEFT = 30;
-function choosePlan(mk, c) {
+function choosePlan(mk, c, { weekendDays = 0, isWeekend = false } = {}) {
   const base = mk(c.scanHours);
   if (!c.scanPlus || !c.scanHours.length || !c.scanHoursPlus.length) return { ...base, plus: false };
   const plus = mk(c.scanHoursPlus);
+  // 20/11/2026: ogni ora nel weekend, solo se anche contando tutti i weekend fino alla ricarica restano almeno 30 richieste
+  const wk = c.scanWeekend && (c.scanHoursWeekend || []).length > c.scanHoursPlus.length ? c.scanHoursWeekend : null;
+  if (wk && weekendDays > 0) {
+    const extra = wk.length - c.scanHoursPlus.length, left = plus.leftAtReset - extra * weekendDays;
+    if (left >= Math.max(PLUS_MIN_LEFT, plus.reserve)) {
+      return isWeekend ? { ...plus, hours: wk, scansPerDay: wk.length, perDay: plus.perDay + extra, leftAtReset: left, plus: true, weekend: true }
+        : { ...plus, leftAtReset: left, plus: true, weekendHours: wk };
+    }
+  }
   if (plus.leftAtReset >= Math.max(PLUS_MIN_LEFT, plus.reserve)) return { ...plus, plus: true };
   return { ...base, plus: false, fallback: `con ${c.scanHoursPlus.length} scansioni al giorno alla ricarica resterebbero ${plus.leftAtReset} richieste (riserva ${Math.max(PLUS_MIN_LEFT, plus.reserve)}): restano ${c.scanHours.length}` };
 }
@@ -396,7 +411,7 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   if (!probe && rem !== null && rem <= (plan ? plan.reserve : c.closeReserve)) return { scan: 'quota odss quasi finita: restano solo le chiusure' };
   // 1° novembre 2026: richieste distribuite fino alla ricarica. Budget di oggi = rimaste / giorni alla ricarica;
   // se oggi e' gia' stato speso, niente scansione (le chiusure, che misurano il valore, continuano).
-  if (rem !== null && !probe) {
+  if (rem !== null && !probe && !(plan && plan.weekend)) {   // nel weekend il piano ha gia' contato i crediti di tutti i weekend: niente tetto giornaliero
     const p = odssPace(rem, (await pool.query(`SELECT COUNT(*)::int AS n FROM italia_requests WHERE at >= date_trunc('day', NOW())`)).rows[0].n, c.resetDay, nowMs);
     if (p.over) return { scan: `budget di oggi finito (${p.usedToday} su ${p.perDay})` };
   }

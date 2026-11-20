@@ -19,3 +19,16 @@ assert.ok(!b.plus && b.hours.length === 5 && /riserva/.test(b.fallback));
 assert.ok(!I.choosePlan(mk(435), { ...c, scanPlus: false }).plus, 'spento da Render');
 assert.ok(!I.cfg({ ITALIA_SCAN_PLUS: 'false' }).scanPlus);
 console.log('scansioni ogni 2 ore con paracadute: ok');
+// 20/11/2026: ogni ora nel weekend se i crediti reggono contando tutti i weekend fino alla ricarica
+{
+  assert.strictEqual(c.scanHoursWeekend.length, 13); assert.ok(c.scanWeekend);
+  const mk22 = rem => hours => ({ ...I.planScans({ remaining: rem, daysLeft: 22, closesPerDay: 5, hours, maxReserve: 30 }) });
+  const sat = I.choosePlan(mk22(385), c, { weekendDays: 6, isWeekend: true });
+  assert.ok(sat.weekend && sat.hours.length === 13 && sat.leftAtReset >= 30, JSON.stringify(sat));
+  const fri = I.choosePlan(mk22(385), c, { weekendDays: 6, isWeekend: false });
+  assert.ok(!fri.weekend && fri.hours.length === 7 && fri.leftAtReset === sat.leftAtReset, 'nei feriali ogni 2 ore, ma il conto tiene i weekend');
+  const poor = I.choosePlan(mk22(250), c, { weekendDays: 6, isWeekend: true });
+  assert.ok(!poor.weekend && poor.hours.length <= 7, 'paracadute: senza crediti niente ogni ora');
+  assert.ok(!I.choosePlan(mk22(385), { ...c, scanWeekend: false }, { weekendDays: 6, isWeekend: true }).weekend, 'spento da Render');
+  console.log('ogni ora nel weekend con paracadute: ok');
+}
