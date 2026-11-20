@@ -172,6 +172,8 @@
   .sheet h3 { margin-bottom:6px; } .sheet .btns { display:flex; gap:10px; margin-top:6px; }
 
   /* ---------- 1° novembre 2026: grafica piu' pulita, pallini di stato */
+  .list > .cassa, .cassa { display:block; padding:6px 0 10px; border-bottom:1px solid var(--line); } .cassa svg { display:block; width:100%; height:auto; font-family:var(--body); }
+  .cleg { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:13px; margin-top:4px; } .cleg > span { margin-right:14px; white-space:nowrap; } .cleg i { display:inline-block; width:12px; height:3px; border-radius:2px; vertical-align:middle; margin-right:5px; }
   .sdot { display:inline-block; width:11px; height:11px; border-radius:50%; flex:none; margin-top:6px; background:var(--muted); box-shadow:0 0 0 3px color-mix(in srgb, var(--muted) 18%, transparent); }
   .sdot.ok { background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); } .sdot.warn { background:var(--warn); box-shadow:0 0 0 3px color-mix(in srgb, var(--warn) 22%, transparent); }
   .sdot.bad { background:var(--bad); box-shadow:0 0 0 3px color-mix(in srgb, var(--bad) 20%, transparent); } .sdot.info { background:transparent; border:2px solid var(--muted); box-shadow:none; }
@@ -1195,11 +1197,33 @@
   // 18/11/2026: in cima a Oggi, poche righe con quello che conta davvero (saldo e valore, dove guadagni, conti, crediti, prossima decisione)
   const DECISIONI = [['2026-11-23', 'Lunedì 23: revisione con i dati del weekend (trasferte nei minori, scansioni, IA, Svago, Coppe). Mandami il backup della mattina.'],
     ['2026-11-30', 'Domenica 30: decisione su puntata e Kelly, soprattutto per le 💎 Top.']];
+  // 20/11/2026: andamento del saldo, giocata per giocata (tutte e solo ⭐), con le vinte: si capisce a colpo d'occhio dove va la cassa
+  function cassaChart(items) {
+    const done = (items || []).filter(x => ['won', 'lost', 'void', 'half_won', 'half_lost'].includes(x.result) && x.pnlEur != null && Number.isFinite(Number(x.pnlEur))).sort((a, b) => new Date(a.commence_time || a.at) - new Date(b.commence_time || b.at));
+    if (done.length < 3) return '';
+    let t = 0, st = 0; const all = [0], star = [0];
+    for (const x of done) { t += Number(x.pnlEur); all.push(t); if (x.list === 'stelle') st += Number(x.pnlEur); star.push(st); }
+    const W = 320, H = 120, P = 6, lo = Math.min(0, ...all, ...star), hi = Math.max(0, ...all, ...star), span = hi - lo || 1;
+    const X = i => P + (W - 2 * P - 44) * i / (all.length - 1), Y = v => P + (H - 2 * P) * (1 - (v - lo) / span);
+    const path = a => a.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+    const area = `${path(all)}L${X(all.length - 1).toFixed(1)},${Y(0).toFixed(1)}L${X(0).toFixed(1)},${Y(0).toFixed(1)}Z`;
+    const won = done.filter(x => x.result === 'won').length, last = all[all.length - 1], lastS = star[star.length - 1];
+    const lab = (v, c, dy) => `<text x="${W - 40}" y="${(Y(v) + dy).toFixed(1)}" fill="${c}" font-size="12" font-weight="700">${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(0)} €</text>`;
+    const gap = Math.abs(Y(last) - Y(lastS)) < 14 ? (Y(last) < Y(lastS) ? [-2, 12] : [12, -2]) : [4, 4];
+    return `<div class="cassa"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Andamento del saldo: ${signedMoney(last)} su ${done.length} giocate chiuse">
+      <line x1="${P}" x2="${W - 44}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="var(--line)" stroke-dasharray="3 3"/>
+      <path d="${area}" fill="var(--ink)" opacity=".07"/><path d="${path(all)}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="${path(star)}" fill="none" stroke="var(--ok)" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="${X(all.length - 1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="3" fill="var(--ink)"/><circle cx="${X(star.length - 1).toFixed(1)}" cy="${Y(lastS).toFixed(1)}" r="3" fill="var(--ok)"/>
+      ${lab(last, 'var(--ink)', gap[0])}${lab(lastS, 'var(--ok)', gap[1])}</svg>
+      <div class="cleg muted"><span><i style="background:var(--ink)"></i>tutte</span><span><i style="background:var(--ok)"></i>solo ⭐</span><span>vinte ${won} su ${done.length} (${Math.round(100 * won / done.length)}%)</span></div></div>`;
+  }
   async function loadContano() {
     try {
       const [P, C] = await Promise.all([getJson('/api/tracker/played').catch(() => null), getJson('/api/tracker/credits').catch(() => null)]);
       const row = (dot, title, text) => `<div class="prow"><span class="sdot ${dot}"></span><div><b>${title}</b> <span class="muted">${text}</span></div></div>`, out = [];
       if (P && P.count) { const v = P.myValue; out.push(row(P.pnlEur >= 0 ? 'ok' : 'bad', `💶 Saldo ${signedMoney(P.pnlEur || 0)}`, `su ${P.count} giocate${v && v.measured ? ` · le tue quote battono la chiusura del ${pct(v.avgClvPct, 1)}${v.measured < 20 ? ' (ancora poche misure)' : ''}` : ''}`)); }
+      if (P && P.items) out.push(cassaChart(P.items));
       const L = P && P.lists; if (L) out.push(row(L.fuori.n && L.fuori.pnl < 0 ? 'warn' : 'ok', '⭐ Il guadagno viene dalle liste del CRM', `${signedMoney(L.stelle.pnl)} su ${L.stelle.n} giocate ⭐, contro ${signedMoney(L.fuori.pnl)} su ${L.fuori.n} fuori lista. Gioca le ⭐, per divertirti usa lo Svago.`));
       out.push(row('warn', '🏦 Il conto dove ci sono le quote migliori', '888sport ha la quota più alta nel 60% delle ⭐: senza un conto lì perdi la maggior parte delle giocate buone. Dopo averlo aperto aggiorna MY_BOOKS su Render.'));
       out.push(row('ok', '📊 Il metodo è provato', '14 stagioni, 37.000 giocate: giocando alla quota più alta quando paga più del giusto, +6,5%. Alla quota media, −0,5%. Conta il prezzo, non indovinare.'));
