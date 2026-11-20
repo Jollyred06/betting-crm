@@ -412,7 +412,10 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
     try { Object.assign(golOut, await G.scanTotals(pool, c, { nowMs, http, merged, trio })); } catch (e) { golOut.erroreGol = e.message; }
     try { Object.assign(golOut, await G.valangaOdds(pool, c, { nowMs, http })); } catch (e) { golOut.erroreThor = e.message; } } catch (e) { /* facoltativo */ }
   // 🔒 le piu' sicure sulla carta (20/11): stessa richiesta, nessun credito in piu'
-  try { golOut.sicureCarta = await require('./sicurepaper').record(pool, mergeWithPinnacle(records), c.myBooks, nowMs); } catch (e) { golOut.erroreSicure = e.message; }
+  const mergedAll = mergeWithPinnacle(records);
+  try { golOut.sicureCarta = await require('./sicurepaper').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreSicure = e.message; }
+  // 🏆 le migliori del giorno sulla carta (20/11): fiducia + valore + quadro buono, stessa richiesta
+  try { golOut.miglioriCarta = await require('./migliori').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreMigliori = e.message; }
   const found = findSignals(records, c, nowMs);
   const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
   const foundT = c.tEnabled ? findSignals(records, cfgFor(c, 'T'), nowMs) : [];
@@ -547,6 +550,7 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
   try { Object.assign(out, await require('./dcpaper').dcDaily(pool, c, { nowMs, http, env })); } catch (e) { out.erroreDoppiaChance = e.message; }
   try { await require('./dcpaper').settleDc(pool); } catch (e) { /* facoltativo */ }
   try { await require('./sicurepaper').settle(pool); } catch (e) { /* facoltativo */ }
+  try { await require('./migliori').settle(pool); } catch (e) { /* facoltativo */ }
   try { Object.assign(out, await require('./calib').maybeRefresh(pool, { nowMs })); } catch (e) { out.erroreStorico = e.message; }
   try { out.timbrati = await stampFlags(pool, c, nowMs); } catch (e) { out.erroreTimbro = e.message; }
   try { Object.assign(out, await require('./results').settleSignals(pool, { env, nowMs, http: resultsHttp, sameTeam })); } catch (e) { out.erroreRisultati = e.message; }

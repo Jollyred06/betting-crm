@@ -281,6 +281,7 @@
   <main id="pane-home">
     <div id="oggi"><div class="sk l1"></div><div class="sk box"></div><div class="sk box"></div></div>
     <section class="block contano"><h3>📌 Le cose che contano</h3><div id="contano" class="list"><div class="sk box"></div></div></section>
+    <section class="block migliori" id="miglioriBox" hidden></section>
     <section class="block sicure" id="sicureBox" hidden></section>
     <details class="fold quiet"><summary><span>Dettagli</span><small>tutti i consigli, prossimi segnali, sistema e crediti</small></summary>
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
@@ -1249,6 +1250,23 @@
     } catch (e) { $('contano').innerHTML = ''; }
   }
   // 20/11/2026: per indovinare il piu' possibile conta la fiducia: le partite delle prossime 24 ore con il pronostico IA sopra il 65%
+  // 20/11/2026: le migliori del giorno secondo l'IA (fiducia + valore + quadro buono), sulla carta
+  async function loadMigliori() {
+    const box = $('miglioriBox'); if (!box) return;
+    try {
+      const M = await getJson('/api/tracker/migliori'), t = M.top || {};
+      const hhmm = x => new Date(x).toLocaleString('it-IT', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+      const rows = (M.next || []).map((x, i) => `<div class="prow"><span class="sdot ok"></span><div><b>${i + 1}. ${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">· <b>${x.pick}</b> a ${num(x.odd, 2)} su ${esc(x.book)} · ${hhmm(x.at)}</span><br><small class="muted">${x.reasons.map(esc).join(' · ')}</small></div></div>`).join('');
+      const I = M.ingredients || {}, ing = Object.entries({ casa: 'in casa', serio: 'campionato serio', ferma: 'quota ferma', valore: 'paga +3% o più', fiducia: 'sicura dal 65%' })
+        .filter(([k]) => I[k] && I[k].si.settled >= 5 && I[k].no.settled >= 5).map(([k, lab]) => `${lab}: ${pct(I[k].si.roiPct, 0)} contro ${pct(I[k].no.roiPct, 0)}`).join(' · ');
+      box.innerHTML = `<h3>🏆 Le migliori di oggi <small class="muted">· scelte dall'IA, prova sulla carta</small></h3>
+        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Le 5 partite delle prossime 24 ore con il punteggio più alto: sicure almeno al 50%, pagate almeno il giusto su un sito dove puoi giocare, meglio se in casa, in un campionato serio e con la quota ferma. Si registrano da sole a 2 € l'una: se in 2–3 settimane vincono spesso e guadagnano, diventano la lista da giocare.</p>
+        <div class="prow" style="margin:2px 0 8px"><span class="sdot ${!t.settled ? 'info' : t.pnl >= 0 ? 'ok' : 'bad'}"></span><div><b>🧪 Finora</b> <span class="muted tnum">${t.settled ? `vinte ${t.won} su ${t.settled} (${num(100 * t.won / t.settled, 0)}%, attese ${num(100 * t.expected / t.settled, 0)}%) · saldo ${signedMoney(t.pnl)} (${pct(t.roiPct, 1)}) · quota media ${num(t.avgOdd, 2)}` : `parte con le scansioni dal ${liveDay(M.since)}`}</span></div></div>
+        ${ing ? `<p class="muted tnum" style="font-size:13px;margin:0 0 8px;"><b>Quale ingrediente aiuta</b> (saldo % con e senza): ${ing}</p>` : ''}
+        <div class="list">${rows || '<p class="muted">Nessuna partita sicura e pagata il giusto nelle prossime 24 ore: le cerca a ogni scansione.</p>'}</div>`;
+      box.hidden = false;
+    } catch (e) { box.hidden = true; }
+  }
   async function loadSicure() {
     const box = $('sicureBox'); if (!box) return;
     try {
@@ -1264,7 +1282,7 @@
     } catch (e) { box.hidden = true; }
   }
   async function loadHome() {
-    loadOggi(); loadContano(); loadSicure(); loadAdvice(); loadToday(); loadCredits();
+    loadOggi(); loadContano(); loadMigliori(); loadSicure(); loadAdvice(); loadToday(); loadCredits();
     try {
       const [o, h, m, b] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health'), getJson('/api/tracker/milestones').catch(() => null), getJson('/api/tracker/bankroll').catch(() => null)]);
       bankData = b; renderMilestones(m); renderBankMini(b);

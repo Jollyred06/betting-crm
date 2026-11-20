@@ -134,6 +134,9 @@ router.post('/market-check', async (req, res) => {
 router.get('/sicure', async (req, res) => {
   try { res.json(await require('../services/sicure').getSicure(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+router.get('/migliori', async (req, res) => {
+  try { res.json(await require('../services/migliori').getMigliori(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/sicure-paper', async (req, res) => {
   try { res.json(await require('../services/sicurepaper').getSicurePaper(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
