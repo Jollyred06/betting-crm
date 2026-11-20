@@ -281,6 +281,7 @@
   <main id="pane-home">
     <div id="oggi"><div class="sk l1"></div><div class="sk box"></div><div class="sk box"></div></div>
     <section class="block contano"><h3>📌 Le cose che contano</h3><div id="contano" class="list"><div class="sk box"></div></div></section>
+    <section class="block sicure" id="sicureBox" hidden></section>
     <details class="fold quiet"><summary><span>Dettagli</span><small>tutti i consigli, prossimi segnali, sistema e crediti</small></summary>
     <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
     <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Tutti i consigli automatici. In Oggi vedi solo quelli rossi e gialli.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
@@ -1233,8 +1234,22 @@
       $('contano').innerHTML = out.join('');
     } catch (e) { $('contano').innerHTML = ''; }
   }
+  // 20/11/2026: per indovinare il piu' possibile conta la fiducia: le partite delle prossime 24 ore con il pronostico IA sopra il 65%
+  async function loadSicure() {
+    const box = $('sicureBox'); if (!box) return;
+    try {
+      const S = await getJson('/api/tracker/sicure'); const T = Object.fromEntries((S.tiers || []).map(t => [t.key, t]));
+      const st = k => T[k] && T[k].n ? `${num(T[k].pct, 0)}% (${T[k].hit} su ${T[k].n})` : '—';
+      const hhmm = t => new Date(t).toLocaleString('it-IT', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+      const rows = (S.list || []).map(x => `<div class="prow"><span class="sdot ${x.tier === 'top' ? 'ok' : 'info'}"></span><div><b>${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">${x.src === 'ia' ? '🤖' : ''} <b>${x.pick}</b> al ${num(100 * x.prob, 0)}% · quota giusta ${num(x.fair, 2)} · ${hhmm(x.at)} · ${esc(x.league || '')}</span></div></div>`).join('');
+      box.innerHTML = `<h3>🔒 Le più sicure <small class="muted">· prossime 24 ore, pronostico IA sopra il 65%</small></h3>
+        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Nel nostro database (${num(S.settled, 0)} partite chiuse) il pronostico è stato giusto: <b>sopra il 75% → ${st('top')}</b> · 65–75% → ${st('alta')} · 55–65% → ${st('media')} · 45–55% → ${st('bassa')} · sotto il 45% → ${st('aperta')}. Sono pronostici per indovinare, non giocate di valore: le quote sono basse e di solito pagano meno del giusto. Se ne giochi una, usa lo Svago.</p>
+        <div class="list">${rows || '<p class="muted">Nessuna partita sopra il 65% nelle prossime 24 ore.</p>'}</div>`;
+      box.hidden = false;
+    } catch (e) { box.hidden = true; }
+  }
   async function loadHome() {
-    loadOggi(); loadContano(); loadAdvice(); loadToday(); loadCredits();
+    loadOggi(); loadContano(); loadSicure(); loadAdvice(); loadToday(); loadCredits();
     try {
       const [o, h, m, b] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health'), getJson('/api/tracker/milestones').catch(() => null), getJson('/api/tracker/bankroll').catch(() => null)]);
       bankData = b; renderMilestones(m); renderBankMini(b);

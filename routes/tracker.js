@@ -130,6 +130,10 @@ router.post('/market-check', async (req, res) => {
   if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
   try { res.json(await require('../services/markets').marketCheck(pool, String(req.query.market || ''))); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// 🔒 le piu' sicure: pronostico IA con la fiducia, per indovinare il piu' possibile (non sono giocate di valore)
+router.get('/sicure', async (req, res) => {
+  try { res.json(await require('../services/sicure').getSicure(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/dc-paper', async (req, res) => {
   try { res.json(await require('../services/dcpaper').getDcPaper(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
