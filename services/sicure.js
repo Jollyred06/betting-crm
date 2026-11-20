@@ -56,7 +56,7 @@ async function getSicure(pool, { nowMs = Date.now() } = {}) {
   // pronostico IA con i pesi imparati (se pronti; altrimenti Pinnacle, che e' quasi sempre uguale)
   let ai = null;
   try {
-    const GS = require('./guess'), C = require('./calib'), ga = (await GS.getGuessCached(pool)).ai;
+    const GS = require('./guess'), C = require('./calib'), ga = GS.peekGuess(pool).ai;
     const cal = await C.getCalRaw(pool, { wait: false }).catch(() => null), E = require('./elo').peekElo(pool), w = { weights: ga.weights, byContext: ga.byContext, own: ga.own };
     ai = (first, last) => GS.aiGuess({ ...first, league: last.league }, last, cal, C.adjust, w, E ? E.of(last.home, last.away) : null);
   } catch (e) { ai = null; }

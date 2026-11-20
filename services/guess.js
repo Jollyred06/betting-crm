@@ -55,7 +55,10 @@ const EXPERTS = {
   casa: { name: 'vantaggio casa', of: x => norm({ home: x.l.home + 0.02, draw: Math.max(0.01, x.l.draw - 0.012), away: Math.max(0.01, x.l.away - 0.008) }) }
 };
 const KEYS = Object.keys(EXPERTS);
-function weightsOf(loss) { const mn = Math.min(...KEYS.map(k => loss[k])), w = KEYS.map(k => Math.exp(-ETA * (loss[k] - mn))), s = w.reduce((a, b) => a + b, 0); return Object.fromEntries(KEYS.map((k, i) => [k, w[i] / s])); }
+// 20/11/2026: quota fissa del 10% divisa tra tutti (fixed share): nessun esperto sparisce del tutto, cosi' se uno smette di
+// funzionare (o un altro comincia) l'IA se ne accorge in fretta. Sul backup: stessa precisione, pesi meno estremi.
+const SHARE = 0.1;
+function weightsOf(loss) { const mn = Math.min(...KEYS.map(k => loss[k])), w = KEYS.map(k => Math.exp(-ETA * (loss[k] - mn))), s = w.reduce((a, b) => a + b, 0); return Object.fromEntries(KEYS.map((k, i) => [k, (1 - SHARE) * w[i] / s + SHARE / KEYS.length])); }
 function mix(x, weights) { const p = { home: 0, draw: 0, away: 0 }; for (const k of KEYS) { const q = EXPERTS[k].of(x); for (const s of SELS) p[s] += weights[k] * q[s]; } return p; }
 /** Pronostico IA per una partita con i pesi attuali. */
 function aiGuess(first, last, cal, adjust, weights = null, elo = null) {
@@ -143,24 +146,34 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
   }
   const fin = t => ({ ...t, pct: t.n ? 100 * t.hit / t.n : null, expPct: t.n ? 100 * t.expected / t.n : null });
   recent.sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
-  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, extra: evs.filter(e => e.extra).length, weekly: weeklyOf(evs, model.preds), withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, recent: recent.slice(0, 10) };
+  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, withCal: !!cal, extra: evs.filter(e => e.extra).length, weekly: weeklyOf(evs, model.preds), withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, recent: recent.slice(0, 10) };
 }
 
 let cacheG = null;
 /** Statistiche e pesi attuali (in memoria 10 minuti): servono anche ai pronostici delle partite aperte. */
 async function getGuessCached(pool, { nowMs = Date.now() } = {}) {
-  if (cacheG && nowMs - cacheG.at < 10 * 60000) return cacheG.val;
-  const val = await getGuess(pool); cacheG = { at: nowMs, val }; return val;
+  if (cacheG && nowMs - cacheG.at < (cacheG.full ? 10 : 1) * 60000) return cacheG.val;
+  const val = await getGuess(pool); cacheG = { at: nowMs, val, full: !!(val && val.ai && val.ai.withElo && val.ai.withCal) }; return val;
+}
+/** Senza aspettare (20/11/2026): l'ultimo calcolo pronto; se non c'e' o e' vecchio, lo rifa' in sottofondo. Per /italia e le sicure. */
+let pendingG = null;
+function peekGuess(pool, { nowMs = Date.now() } = {}) {
+  const stale = !cacheG || nowMs - cacheG.at >= (cacheG.full ? 10 : 1) * 60000;
+  if (stale && !pendingG) pendingG = getGuessCached(pool, { nowMs }).catch(() => null).finally(() => { pendingG = null; });
+  return cacheG ? cacheG.val : null;
 }
 async function getGuess(pool) {
   const rows = (await pool.query(`SELECT event_id, created_at, commence_time, home, away, pin_h, pin_d, pin_a, result, result_score FROM italia_signals WHERE strategy = 'I'`)).rows;
   // 16/11/2026: non aspetta i calcoli pesanti; se non sono ancora pronti si va avanti senza (e si preparano in sottofondo)
-  const C = require('./calib'); let cal = null; try { cal = await C.getCalRaw(pool, { wait: false }); } catch (e) { /* senza storico: solo movimento */ }
-  let eloOf = null; try { const E = require('./elo').peekElo(pool); eloOf = E ? E.of : null; } catch (e) { /* senza storico */ }
+  // 20/11/2026: dopo un riavvio storico ed Elo non erano ancora pronti e l'IA imparava senza (forza nota per 0): ora li aspetta
+  // fino a 20 secondi (sono salvati nel database, di solito bastano pochi secondi); se non arrivano, va avanti e riprova fra 1 minuto
+  const within = (pr, ms) => Promise.race([pr, new Promise(r => setTimeout(() => r(null), ms))]);
+  const C = require('./calib'); let cal = null; try { cal = await within(C.getCalRaw(pool, { wait: true }), 20000); } catch (e) { /* senza storico: solo movimento */ }
+  let eloOf = null; try { const E = await within(require('./elo').getEloCached(pool), 20000); eloOf = E ? E.of : null; } catch (e) { /* senza storico */ }
   let ownRows = []; try { ownRows = (await pool.query(`SELECT g.event_id, g.league, g.home, g.away, g.commence_time, g.pin_h, g.pin_d, g.pin_a, g.result_score, f.pin_h AS f_h, f.pin_d AS f_d, f.pin_a AS f_a
     FROM goal_watch g LEFT JOIN LATERAL (SELECT pin_h, pin_d, pin_a FROM pin_history p WHERE p.event_id = g.event_id ORDER BY p.at LIMIT 1) f ON true
     WHERE g.pin_h IS NOT NULL AND g.result_score ~ '^[0-9]+-[0-9]+$'`)).rows; } catch (e) { /* facoltativo */ }
   return guessStats(rows, { cal, adjust: C.adjust, eloOf, ownRows, extraRows: ownRows });
 }
 
-module.exports = { weeklyOf, weekOf, ownBuild, ownShift, ownGroup, contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };
+module.exports = { peekGuess, weeklyOf, weekOf, ownBuild, ownShift, ownGroup, contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };
