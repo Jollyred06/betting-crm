@@ -75,3 +75,16 @@ console.log('pronostico: ok');
   const early = G.learn([{ ...evs[0], t: Date.parse('2026-09-01') }], null, null, rows); assert.strictEqual(early.own.n, 300, 'alla fine tutte'); 
   console.log('taratura dal nostro database: ok');
 }
+// 20/11: impara anche dalle altre partite (extraRows) e mostra il percorso settimana per settimana
+{
+  const GS = require('../services/guess');
+  const base = [{ event_id: 'i1', created_at: '2026-11-16T10:00:00Z', commence_time: '2026-11-16T15:00:00Z', home: 'A', away: 'B', pin_h: 2, pin_d: 3.4, pin_a: 3.8, result_score: '1-0' }];
+  const extra = []; for (let i = 0; i < 30; i++) extra.push({ event_id: 'g' + i, commence_time: new Date(Date.parse('2026-11-02T15:00:00Z') + i * 86400000 / 3).toISOString(), home: 'H' + i, away: 'A' + i, pin_h: 2.2, pin_d: 3.3, pin_a: 3.4, result_score: i % 2 ? '1-0' : '0-0' });
+  extra.push({ event_id: 'i1', commence_time: '2026-11-16T15:00:00Z', pin_h: 2, pin_d: 3.4, pin_a: 3.8, result_score: '1-0' });
+  const a = GS.guessStats(base, { extraRows: extra });
+  assert.strictEqual(a.ai.learnedOn, 31); assert.strictEqual(a.ai.extra, 30);
+  assert.strictEqual(a.all.n, 1, 'i conteggi IA contro Pinnacle restano sulle partite di sempre');
+  assert.ok(a.ai.weekly.length >= 2 && a.ai.weekly.reduce((s, w) => s + w.n, 0) === 31);
+  assert.strictEqual(GS.weekOf('2026-11-20T10:00:00Z'), '2026-11-16');
+  console.log('impara da tutte le partite: ok');
+}

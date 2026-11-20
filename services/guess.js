@@ -101,7 +101,18 @@ function learn(events, cal, adjust, ownRows = []) {
 const outcomeOf = score => { const m = String(score || '').match(/^(\d+)\s*-\s*(\d+)$/); if (!m) return null; const a = +m[1], b = +m[2]; return a > b ? 'home' : a === b ? 'draw' : 'away'; };
 
 /** Riepilogo: una riga per partita (prima lettura), con il risultato. Parte pura. */
-function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, eloOf = null, ownRows = [] } = {}) {
+const weekOf = t => { const d = new Date(t); const day = (d.getUTCDay() + 6) % 7; d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() - day); return d.toISOString().slice(0, 10); };
+/** 📈 Settimana per settimana (20/11/2026): quante ne indovina l'IA e quante l'ultima quota di Pinnacle, per vedere se impara. */
+function weeklyOf(evs, preds) {
+  const W = new Map();
+  for (const e of evs) { const a = preds.get(e.id); if (!a) continue; const k = weekOf(e.t); if (!W.has(k)) W.set(k, { week: k, n: 0, ai: 0, pin: 0 }); const w = W.get(k);
+    const pinSel = SELS.reduce((x, y) => (e.l[y] > e.l[x] ? y : x), 'home'); w.n++; w.ai += a.sel === e.out ? 1 : 0; w.pin += pinSel === e.out ? 1 : 0; }
+  return [...W.values()].sort((a, b) => a.week.localeCompare(b.week));
+}
+/** extraRows (20/11/2026): tutte le altre partite chiuse viste dal CRM (goal_watch, ~125 al giorno), con la prima quota letta
+ *  (f_h/f_d/f_a da pin_history) se c'e'. Servono solo a IMPARARE: l'IA impara da 4-5 volte piu' risultati. I conteggi
+ *  "IA contro Pinnacle" restano sulle partite di sempre, per confrontarli con i giorni prima. */
+function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, eloOf = null, ownRows = [], extraRows = [] } = {}) {
   const first = new Map(), last = new Map();
   for (const r of [...rows].sort((x, y) => Date.parse(x.created_at) - Date.parse(y.created_at))) { if (!first.has(r.event_id)) first.set(r.event_id, r); if (r.pin_h) last.set(r.event_id, r); }
   const score = new Map();   // il risultato puo' arrivare su un'altra riga della stessa partita
@@ -112,6 +123,12 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
   for (const [ev, r] of first) {
     const f = probsOf(r.pin_h, r.pin_d, r.pin_a), lr = last.get(ev), l = (lr && probsOf(lr.pin_h, lr.pin_d, lr.pin_a)) || f, out = outcomeOf(score.get(ev));
     if (f && out) evs.push({ id: ev, t: Date.parse(r.commence_time), f, l, out, ctx: contextOf(r), grp: ownGroup(r), elo: eloOf ? eloOf(r.home, r.away) : null });
+  }
+  const known = new Set(evs.map(e => e.id));
+  for (const r of extraRows) {
+    if (known.has(r.event_id)) continue;
+    const l = probsOf(r.pin_h, r.pin_d, r.pin_a), f = probsOf(r.f_h, r.f_d, r.f_a) || l, out = outcomeOf(r.result_score);
+    if (l && out) { known.add(r.event_id); evs.push({ id: r.event_id, t: Date.parse(r.commence_time), f, l, out, ctx: contextOf(r), grp: ownGroup(r), elo: eloOf ? eloOf(r.home, r.away) : null, extra: true }); }
   }
   const model = learn(evs, cal, adjust, ownRows);
   for (const [ev, r] of first) {
@@ -126,7 +143,7 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
   }
   const fin = t => ({ ...t, pct: t.n ? 100 * t.hit / t.n : null, expPct: t.n ? 100 * t.expected / t.n : null });
   recent.sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
-  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, recent: recent.slice(0, 10) };
+  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, extra: evs.filter(e => e.extra).length, weekly: weeklyOf(evs, model.preds), withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, recent: recent.slice(0, 10) };
 }
 
 let cacheG = null;
@@ -140,8 +157,10 @@ async function getGuess(pool) {
   // 16/11/2026: non aspetta i calcoli pesanti; se non sono ancora pronti si va avanti senza (e si preparano in sottofondo)
   const C = require('./calib'); let cal = null; try { cal = await C.getCalRaw(pool, { wait: false }); } catch (e) { /* senza storico: solo movimento */ }
   let eloOf = null; try { const E = require('./elo').peekElo(pool); eloOf = E ? E.of : null; } catch (e) { /* senza storico */ }
-  let ownRows = []; try { ownRows = (await pool.query(`SELECT commence_time, pin_h, pin_d, pin_a, result_score FROM goal_watch WHERE pin_h IS NOT NULL AND result_score ~ '^[0-9]+-[0-9]+$'`)).rows; } catch (e) { /* facoltativo */ }
-  return guessStats(rows, { cal, adjust: C.adjust, eloOf, ownRows });
+  let ownRows = []; try { ownRows = (await pool.query(`SELECT g.event_id, g.league, g.home, g.away, g.commence_time, g.pin_h, g.pin_d, g.pin_a, g.result_score, f.pin_h AS f_h, f.pin_d AS f_d, f.pin_a AS f_a
+    FROM goal_watch g LEFT JOIN LATERAL (SELECT pin_h, pin_d, pin_a FROM pin_history p WHERE p.event_id = g.event_id ORDER BY p.at LIMIT 1) f ON true
+    WHERE g.pin_h IS NOT NULL AND g.result_score ~ '^[0-9]+-[0-9]+$'`)).rows; } catch (e) { /* facoltativo */ }
+  return guessStats(rows, { cal, adjust: C.adjust, eloOf, ownRows, extraRows: ownRows });
 }
 
-module.exports = { ownBuild, ownShift, ownGroup, contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };
+module.exports = { weeklyOf, weekOf, ownBuild, ownShift, ownGroup, contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };
