@@ -13,6 +13,9 @@
  */
 const BASE = 0.2, STOP = 10, MIN_ODD = 2, MAX_ODD = 3.5, MIN_EDGE = 2, SINCE = '2026-11-22T00:00:00Z';
 const PICK = { home: '1', draw: 'X', away: '2' };
+// puntata minima per sito (21/11, verificati da Christian): sotto 1 euro si puo' giocare solo su 888sport
+const BOOK_MIN = { eurobet: 1, goldbet: 1, '888sport_it': 0.01 };
+const minOf = k => (BOOK_MIN[k] === undefined ? 1 : BOOK_MIN[k]);
 const T = x => new Date(x).getTime();
 const ROME_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' });
 const dayOf = t => ROME_DAY.format(new Date(t));
@@ -32,10 +35,19 @@ function ladderScore(x) {
   const fav = x.isFav ? 2 : 0;
   return 100 * x.prob + fav + (x.isHome ? 1 : 0) + (x.isMajor ? 1 : 0) + (x.movedPts !== null && x.movedPts !== undefined && Math.abs(x.movedPts) < 2 ? 1 : 0) + Math.min(x.edgePct, 8) / 4;
 }
-/** Parte pura: le candidate di una lettura (riusa le candidate delle Migliori, che hanno gia' fiducia, valore e quadro). */
-function pickScalata(cands) {
-  return (cands || []).filter(x => x.odd >= MIN_ODD && x.odd <= MAX_ODD && x.edgePct >= MIN_EDGE)
-    .map(x => ({ ...x, score: ladderScore(x) })).sort((a, b) => b.score - a.score);
+/** Parte pura: le candidate di una lettura (riusa le candidate delle Migliori, che hanno gia' fiducia, valore e quadro).
+ *  stake (21/11): la puntata del gradino; si tengono solo i siti che la accettano, e quota e valore sono quelli del sito migliore
+ *  tra questi (ai gradini 1-3, sotto 1 euro, solo 888sport). */
+function pickScalata(cands, stake = 0) {
+  const out = [];
+  for (const x of cands || []) {
+    let odd = x.odd, book = x.book;
+    if (stake > 0) { const ok = Object.entries(x.quotes || {}).filter(([k]) => minOf(k) <= stake + 1e-9).sort((a, b) => b[1] - a[1]); if (!ok.length) continue; [book, odd] = ok[0]; }
+    const edgePct = (odd * x.prob - 1) * 100;
+    if (odd < MIN_ODD || odd > MAX_ODD || edgePct < MIN_EDGE) continue;
+    const y = { ...x, book, odd, edgePct }; out.push({ ...y, score: ladderScore(y) });
+  }
+  return out.sort((a, b) => b.score - a.score);
 }
 function reasonsOf(x) {
   const r = [`vince il ${Math.round(100 * x.prob)}%`, `paga +${x.edgePct.toFixed(1).replace('.', ',')}% più del giusto`];
@@ -53,9 +65,12 @@ async function record(pool, merged, books, nowMs = Date.now()) {
   if (ids.length) for (const f of (await pool.query(`SELECT DISTINCT ON (event_id) event_id, pin_h, pin_d, pin_a FROM pin_history WHERE event_id = ANY($1) ORDER BY event_id, at`, [ids]).catch(() => ({ rows: [] }))).rows) firstPin.set(f.event_id, f);
   // candidate: tutte le giocate di valore (le Migliori chiedono almeno il 50%, la scalata no: quota 2-3,50 = 29-50%)
   const cands = M.pickMigliori(merged, books, nowMs, firstPin, { minProb: 0.25 });
-  const taken = new Set((await pool.query(`SELECT day FROM scalata_picks WHERE day >= $1`, [dayOf(nowMs)])).rows.map(r => r.day));
+  // la scalata va in ordine: finche' la giocata precedente non ha il risultato non si sceglie la prossima (la puntata dipende da li')
+  const all = (await pool.query(`SELECT day, odd, result FROM scalata_picks ORDER BY day`)).rows;
+  if (all.some(r => r.result !== 'won' && r.result !== 'lost')) return 0;
+  const stake = ladder(all).nextStake, taken = new Set(all.map(r => r.day)), today = dayOf(nowMs);
   const best = new Map();
-  for (const x of pickScalata(cands)) { const d = dayOf(x.commence_time); if (taken.has(d) || best.has(d) || T(x.commence_time) < nowMs + 30 * 60000) continue; best.set(d, x); }
+  for (const x of pickScalata(cands, stake)) { const d = dayOf(x.commence_time); if (d !== today || taken.has(d) || best.has(d) || T(x.commence_time) < nowMs + 30 * 60000) continue; best.set(d, x); }
   let n = 0;
   for (const [d, x] of best) {
     const r = await pool.query(`INSERT INTO scalata_picks (day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, score, reasons, quotes)
@@ -104,4 +119,4 @@ async function setKellyCassa(pool, value) {
   await require('./calib').ensureCalib(pool); await require('./calib').saveState(pool, 'kelly_cassa', { value: v, at: new Date().toISOString() }); return v;
 }
 
-module.exports = { ladderScore, pickScalata, reasonsOf, record, settle, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };
+module.exports = { BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };
