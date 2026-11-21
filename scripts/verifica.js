@@ -35,7 +35,8 @@ const CHECKS = [
   ['/api/tracker/dc-paper', r => (r.json && Array.isArray(r.json.reads)) || 'doppia chance mancante'],
   ['/api/tracker/calibration', r => (r.json && !r.json.error) || 'storico mancante'],
   ['/api/tracker/backtest', r => (r.json && !r.json.error) || 'prova sullo storico mancante'],
-  ['/api/tracker/forma-test', r => (r.json && !!r.json.verdict) || 'prova della forma mancante']
+  ['/api/tracker/forma-test', r => (r.json && !!r.json.verdict) || 'prova della forma mancante'],
+  ['/api/tracker/casse-siti', r => (r.json && Array.isArray(r.json.books)) || 'casse per sito mancanti']
 ];
 
 (async () => {

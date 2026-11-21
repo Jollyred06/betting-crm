@@ -1126,7 +1126,7 @@
   function stakeLine(r) {
     const odd = r.play ? r.play.odd : r.odd, s = stakeOf(odd, r.fair_prob);
     if (KELLY) { const bk = String(r.play ? r.play.book : r.book || ''), mn = BOOK_MIN[bk.toLowerCase()];
-      return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(mn && s < mn ? mn : s, 2)} €</b> · ¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${mn && s < mn ? ` (Kelly dice ${num(s, 2)} €, su ${esc(bk)} il minimo è ${num(mn, 0)} €)` : ''}</small>`; }
+      return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(mn && s < mn ? mn : s, 2)} €</b> · ¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${mn && s < mn ? ` (Kelly dice ${num(s, 2)} €, su ${esc(bk)} il minimo è ${num(mn, 0)} €)` : ''}${cashWarn(bk, mn && s < mn ? mn : s)}</small>`; }
     return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(Math.round(s * 2) / 2, s % 1 ? 2 : 0)} €</b> · ${BANK && BANK >= 300 ? '¼ Kelly sulla cassa di ' + num(BANK, 0) + ' €, massimo 2%' : '2 € fissi finché la cassa è sotto i 300 €' + (BANK ? ' (ora ' + num(BANK, 0) + ' €)' : '')}</small>`;
   }
   function probLine(r) {
@@ -1273,10 +1273,32 @@
   // 📈 KELLY e 🪜 SCALATA (21/11/2026): due sezioni separate. Kelly = quanto puntare su ogni ⭐ in base alla cassa (lungo periodo);
   // Scalata = una partita al giorno scelta per perdere poco, da 0,20 a raddoppio, freno a 10
   let SCALATA_HTML = '<div class="sk box"></div>';
+  // 🏦 casse per sito (21/11): saldo di ogni sito, aggiornato con le giocate; avviso se la puntata non ci sta
+  let BOOKCASH = null;
+  const bookNorm = b => { const k = String(b || '').toLowerCase().replace(/[^a-z0-9]/g, ''); return k === '888sportit' ? '888sport' : k; };
+  function cashWarn(book, stake) {
+    const b = BOOKCASH && (BOOKCASH.books || []).find(x => x.key === bookNorm(book));
+    return b && b.saldo !== null && stake > b.saldo + 1e-9 ? ` <b class="neg">⚠️ su ${esc(b.name)} hai solo ${num(b.saldo, 2)} €: ricarica o gioca su un altro sito</b>` : '';
+  }
+  function bookCashHtml() {
+    if (!BOOKCASH) return '';
+    const rows = BOOKCASH.books.map(b => `<div class="prow" style="margin:0 0 6px"><span class="sdot ${b.saldo === null ? 'info' : b.saldo >= 5 ? 'ok' : 'warn'}"></span><div><b>${esc(b.name)}:</b> <input id="bc_${b.key}" type="number" inputmode="decimal" min="0" step="1" value="" placeholder="${b.saldo === null ? 'saldo' : num(b.saldo, 2)}" style="width:90px"> € <button class="chipbtn" onclick="saveBookCash('${b.key}', this)">Salva</button><br><small class="muted tnum">${b.saldo === null ? 'scrivi quanto c\'è adesso sul sito' : `adesso <b>${num(b.saldo, 2)} €</b>${b.open ? ` · in gioco ${num(b.open, 2)} €` : ''}${b.bets ? ` · ${b.bets} giocate, ${signedMoney(b.pnl)}` : ''} · scritto il ${new Date(b.since).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}`}</small></div></div>`).join('');
+    return `<h3 style="margin-top:14px">🏦 Saldo per sito</h3>
+      <p class="muted" style="font-size:14px;margin:4px 0 8px;">Scrivi il saldo che vedi su ogni sito: da lì il CRM lo aggiorna da solo con le giocate (⭐, svago e scalata) e ti avvisa se una puntata non ci sta. Se non torna, riscrivilo quando vuoi. Kelly e scalata non cambiano.</p>
+      ${rows}${BOOKCASH.total !== null ? `<small class="muted tnum">Totale sui siti: <b>${num(BOOKCASH.total, 2)} €</b></small>` : ''}`;
+  }
+  async function saveBookCash(k, btn) {
+    const v = Number(String($('bc_' + k).value).replace(',', '.')); if (!(v >= 0) || $('bc_' + k).value === '') { alert('Scrivi il saldo in euro, per esempio 100'); return; }
+    if (!(await ensureKey())) return; btn.disabled = true;
+    try { const r = await fetch('/api/tracker/casse-siti', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book: k, saldo: v }) });
+      const j = await r.json().catch(() => ({})); if (!r.ok) { alert('Non salvato: ' + (j.error || r.status)); return; } btn.textContent = '✅'; memo.clear(); loadScalata(); refreshViews(); }
+    finally { btn.disabled = false; }
+  }
   async function loadScalata() {
     const kb = $('kellyBox');
     try {
-      const [S, d] = await Promise.all([getJson('/api/tracker/scalata'), getJson('/api/tracker/italia').catch(() => null)]);
+      const [S, d, BC] = await Promise.all([getJson('/api/tracker/scalata'), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/casse-siti').catch(() => null)]);
+      BOOKCASH = BC;
       KELLY = (S.kelly && S.kelly.now > 0 ? S.kelly.now : S.kellyCassa) || null;
       const hhmm = x => new Date(x).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
       if (kb) kb.innerHTML = `<h3>📈 La tua cassa per Kelly</h3>
@@ -1284,7 +1306,7 @@
         <div class="prow" style="margin:0 0 8px"><span class="sdot ${KELLY ? 'ok' : 'info'}"></span><div><b>Cassa:</b> <input id="kellyIn" type="number" inputmode="decimal" min="10" step="10" value="${S.kellyCassa || ''}" placeholder="es. 500" style="width:100px"> € <button class="chipbtn" onclick="saveKelly(this)">Salva</button>${S.kelly ? `<br><small class="muted tnum">adesso ${num(S.kelly.now, 2)} € (${signedMoney(S.kelly.pnl)} su ${S.kelly.n} giocate da quando l'hai scritta)</small>` : ''}</div></div>
         <h3 style="margin-top:14px">🪜 La cassa della scalata</h3>
         <p class="muted" style="font-size:14px;margin:4px 0 8px;">Soldi tenuti da parte solo per la scalata. La partenza di ogni giro è la cassa ÷ 1.250 (con 250 € si parte da 0,20 €): sale quando la scalata vince, scende quando perde. Quando raddoppia, ritira la cassa iniziale.</p>
-        <div class="prow" style="margin:0 0 8px"><span class="sdot ${S.cassa ? 'ok' : 'info'}"></span><div><b>Cassa scalata:</b> <input id="scalIn" type="number" inputmode="decimal" min="10" step="10" value="${S.cassa || ''}" placeholder="es. 250" style="width:100px"> € <button class="chipbtn" onclick="saveScalCassa(this)">Salva</button>${S.cassa ? `<br><small class="muted tnum">adesso ${num(S.cassaNow, 2)} € · partenza ${num(S.base, 2)} €${S.withdrawn ? ` · ritirati ${num(S.withdrawn, 0)} €` : ''}</small>` : ''}</div></div>`;
+        <div class="prow" style="margin:0 0 8px"><span class="sdot ${S.cassa ? 'ok' : 'info'}"></span><div><b>Cassa scalata:</b> <input id="scalIn" type="number" inputmode="decimal" min="10" step="10" value="${S.cassa || ''}" placeholder="es. 250" style="width:100px"> € <button class="chipbtn" onclick="saveScalCassa(this)">Salva</button>${S.cassa ? `<br><small class="muted tnum">adesso ${num(S.cassaNow, 2)} € · partenza ${num(S.base, 2)} €${S.withdrawn ? ` · ritirati ${num(S.withdrawn, 0)} €` : ''}</small>` : ''}</div></div>` + bookCashHtml();
       if (kb) kb.hidden = false;
       // Scalata
       const n = S.next, lossNow = S.lostInCycle || 0;
@@ -1295,7 +1317,7 @@
         ${n ? (() => { const st = ((S.steps || []).find(x => x.open) || {}).stake || S.nextStake;
           // il sito dove giocarla: la quota piu' alta tra quelli che accettano questa puntata e hanno ancora valore
           const ok = (n.quotes || []).filter(q => !(BOOK_MIN[String(q.key).toLowerCase()] > st) && q.edgePct >= 0), use = ok[0] || { book: n.book, odd: n.odd };
-          return `<div class="prow"><span class="sdot ok"></span><div><b>${Date.parse(n.commence_time) < Date.now() ? "In corso" : "Gioca"}: ${esc(n.home)} – ${esc(n.away)}</b> <span class="muted tnum">· <b>${esc(n.pick)}</b> a ${num(use.odd, 2)} o più su ${esc(use.book)} · ${hhmm(n.commence_time)}</span>`; })() + `<br><span class="tnum">💶 punta <b>${num(((S.steps || []).find(x => x.open) || {}).stake || S.nextStake, 2)} €</b></span> <small class="muted">· ${(n.reasons || []).map(esc).join(' · ')}</small>
+          return `<div class="prow"><span class="sdot ok"></span><div><b>${Date.parse(n.commence_time) < Date.now() ? "In corso" : "Gioca"}: ${esc(n.home)} – ${esc(n.away)}</b> <span class="muted tnum">· <b>${esc(n.pick)}</b> a ${num(use.odd, 2)} o più su ${esc(use.book)} · ${hhmm(n.commence_time)}</span>${Date.parse(n.commence_time) < Date.now() ? '' : cashWarn(use.book, st)}`; })() + `<br><span class="tnum">💶 punta <b>${num(((S.steps || []).find(x => x.open) || {}).stake || S.nextStake, 2)} €</b></span> <small class="muted">· ${(n.reasons || []).map(esc).join(' · ')}</small>
           ${Date.parse(n.commence_time) < Date.now() ? `<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="chipbtn" onclick="scalataResult(${n.id}, 'won', this)">✅ Vinta</button><button class="chipbtn" onclick="scalataResult(${n.id}, 'lost', this)">❌ Persa</button><a class="tlink" href="${resUrl(n.home, n.away, n.commence_time)}" target="_blank" rel="noopener">🔎 risultato</a></div><small class="muted">Segnala l'esito appena finisce: la prossima partita arriva subito (o alla scansione successiva). Se non lo segni, si chiude da solo.</small>`
             : `<div style="margin-top:8px"><button class="chipbtn" onclick="scalataResult(${n.id}, 'skip', this)">🚫 Non la gioco</button> <small class="muted">non conta: stesso gradino, te ne propone un'altra</small></div>`}</div></div>` : `<p class="muted">${S.waiting ? 'In attesa del risultato della giocata in corso.' : `Nessuna partita adatta per ora: la cerca a ogni scansione${Date.now() < Date.parse(S.since) ? ` (si parte dal ${liveDay(S.since)})` : ''}.`}</p>`}
         <details class="pmore"><summary>come funziona${stepsHtml ? ' · ultimi gradini' : ''}</summary><p class="muted" style="font-size:13.5px">Una partita alla volta (anche più nello stesso giorno), scelta per perdere il meno possibile: pagata più del giusto, quota 2–3,50, la più probabile (meglio se favorita, in casa, con la quota ferma). Se perde, la prossima al doppio; se vince, si riparte da 0,20 €. Dopo ${S.stop} perse di fila ci si ferma: perdita massima ${num(S.maxLoss, 2)} €. Sullo storico: +1.085 € in 14 anni, freno mai scattato.</p>${stepsHtml}</details>`;

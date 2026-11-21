@@ -107,7 +107,7 @@ async function settle(pool) {
 /** cassa (21/11 sera, deciso con Christian): la partenza di ogni giro = cassa della scalata / 1.250, arrotondata in giu' a 0,10
  *  (minimo 0,10). Cassa della scalata = quella dichiarata - i ritiri + il saldo della scalata. Senza cassa: partenza fissa 0,20. */
 const baseFor = c => Math.max(0.1, Math.floor(c / 1250 * 10 + 1e-9) / 10);
-function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, lastLevel = 0 } = {}) {
+function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, lastLevel = 0, keepAll = false } = {}) {
   const adaptive = Number(cassa) > 0, bankAt = p => Number(cassa) - Number(withdrawn || 0) + p;
   if (adaptive) base = baseFor(bankAt(0));
   const key = r => `${r.commence_time ? new Date(r.commence_time).toISOString() : r.day}|${String(r.id || 0).padStart(9, '0')}`;
@@ -129,7 +129,7 @@ function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, l
     withdrawAlert: !adaptive ? 0 : !Number(withdrawn) ? (cassaNow >= 2 * Number(cassa) ? Number(cassa) : 0)
       : (Number(lastLevel) > 0 && cassaNow >= 2 * Number(lastLevel) ? Math.floor((cassaNow - Number(lastLevel)) / 2) : 0),
     firstWithdraw: adaptive && !Number(withdrawn), lastLevel: Number(lastLevel) || null,
-    steps: steps.slice(-15).reverse() };
+    steps: keepAll ? steps : steps.slice(-15).reverse() };   // keepAll: tutti i gradini, in ordine (per le casse dei siti)
 }
 async function getScalata(pool, { nowMs = Date.now() } = {}) {
   await ensure(pool);

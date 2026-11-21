@@ -158,6 +158,15 @@ router.post('/kelly-cassa', async (req, res) => {
   if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
   try { const v = await require('../services/scalata').setKellyCassa(pool, (req.body || {}).cassa); require('../services/cache').clear(); res.json({ success: true, cassa: v }); } catch (err) { res.status(400).json({ error: err.message }); }
 });
+// 🏦 casse per sito (21/11): saldo di Goldbet, 888sport, Eurobet aggiornato con le giocate
+router.get('/casse-siti', async (req, res) => {
+  try { res.json(await require('../services/bookcash').getBookCash(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+router.post('/casse-siti', async (req, res) => {
+  if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { const b = req.body || {}; const v = await require('../services/bookcash').setBookCash(pool, b.book, b.saldo); require('../services/cache').clear(); res.json({ success: true, ...v }); }
+  catch (err) { res.status(err.status || 500).json({ error: err.message }); }
+});
 router.get('/migliori', async (req, res) => {
   try { res.json(await require('../services/migliori').getMigliori(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
