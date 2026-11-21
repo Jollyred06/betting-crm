@@ -30,7 +30,7 @@ function simulate(rows, { base = 0.2, cap = Infinity, bank = Infinity, double = 
   }
   const days = [...byDay.values()].map(l => l.sort((a, b) => a.odd - b.odd)[pick]).filter(Boolean).sort((a, b) => a.d.localeCompare(b.d));
   let lossRun = 0, lost = 0, maxStake = 0, maxLost = 0, longest = 0, pnl = 0, staked = 0, busts = 0, cycles = 0, peak = 0, maxDd = 0, bets = 0, draws = 0;
-  const seasons = new Map();
+  const seasons = new Map(), hist = {};   // hist[k] = quante volte si e' arrivati ad almeno k pareggi mancati di fila
   for (const x of days) {
     const target = base * 2;                                       // obiettivo di ogni giro: quanto rende la prima puntata a quota ~3
     // il metodo del video (chiarito da Christian): si raddoppia la puntata dopo ogni pareggio mancato, 0,20 0,40 0,80 1,60...
@@ -42,11 +42,14 @@ function simulate(rows, { base = 0.2, cap = Infinity, bank = Infinity, double = 
     if (stake > cap || lost + stake > bank || lossRun >= maxSteps) { busts++; S.busts++; lost = 0; lossRun = 0; stake = double ? base : target / (x.odd - 1); }
     bets++; S.bets++; staked += stake; maxStake = Math.max(maxStake, stake); S.maxStake = Math.max(S.maxStake, stake);
     if (x.draw) { const win = stake * (x.odd - 1); pnl += win; S.pnl += win; draws++; S.draws++; cycles++; lost = 0; lossRun = 0; }
-    else { pnl -= stake; S.pnl -= stake; lost += stake; lossRun++; longest = Math.max(longest, lossRun); S.longest = Math.max(S.longest, lossRun); maxLost = Math.max(maxLost, lost); }
+    else { pnl -= stake; S.pnl -= stake; lost += stake; lossRun++; hist[lossRun] = (hist[lossRun] || 0) + 1; longest = Math.max(longest, lossRun); S.longest = Math.max(S.longest, lossRun); maxLost = Math.max(maxLost, lost); }
     peak = Math.max(peak, pnl); maxDd = Math.max(maxDd, peak - pnl);
   }
   const avgOdd = days.length ? days.reduce((a, x) => a + x.odd, 0) / days.length : null;
   return { days: days.length, bets, draws, drawPct: bets ? 100 * draws / bets : null, avgOdd, fairDrawPct: avgOdd ? 100 / avgOdd : null,
+    // 21/11: quanto puo' durare la serie negativa. Osservato: quante serie hanno raggiunto almeno k. Atteso: con la probabilita'
+    // di pareggio q giocata ogni giorno, P(almeno k di fila) = (1-q)^k per ogni partenza: serie attese ~ partenze x (1-q)^k
+    streaks: Object.keys(hist).map(Number).sort((a, b) => a - b).map(k => ({ k, seen: hist[k], expected: draws ? (draws + 1) * (1 - draws / bets) ** k : null })),
     cycles, pnl, staked, roiPct: staked ? 100 * pnl / staked : null, maxStake, maxLost, longest, busts, maxDrawdown: maxDd,
     seasons: [...seasons.values()].sort((a, b) => a.season.localeCompare(b.season)) };
 }
@@ -68,7 +71,7 @@ function flat(rows, stake = 2) {
   let pnl = 0, n = 0, w = 0; for (const r of rows) { const o = Number(r.ad); if (!(o > 1)) continue; n++; if (Number(r.hg) === Number(r.ag)) { w++; pnl += stake * (o - 1); } else pnl -= stake; }
   return { bets: n, draws: w, pnl, staked: stake * n, roiPct: n ? 100 * pnl / (stake * n) : null };
 }
-const MT_VERSION = 5;
+const MT_VERSION = 6;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
