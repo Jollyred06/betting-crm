@@ -1254,6 +1254,7 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
 }
 
 async function getItalia(pool, env = process.env, strategy = 'I') {
+  const T0 = Date.now(), TM = {};   // tempi in millisecondi (out.timing): per capire dove si aspetta
   strategy = STRATEGIES[strategy] ? strategy : 'I';
   const c = cfgFor(cfg(env), strategy);
   const base = { strategy, ...STRATEGIES[strategy], active: !!c.key && (strategy !== 'B' || c.bEnabled), books: c.books.map(b => BOOK_NAMES[b] || b), rules: { minEdge: c.minEdge, maxEdge: c.maxEdge, maxOdd: c.maxOdd, windowHours: c.windowHours, scanEveryMin: c.scanEveryMin, monthlyCap: c.monthlyCap } };
@@ -1267,6 +1268,17 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     usedThisMonth(pool),
     pool.query(`SELECT at, ok, kind, records, quota_remaining, note FROM italia_requests ORDER BY id DESC LIMIT 1`)]);
   const all = allRes.rows;
+  TM.lista = Date.now() - T0;
+  // 21/11/2026 (velocita', "quando metto che ho giocato e' lento"): le letture che dipendono solo dalla lista partono tutte
+  // insieme, subito, invece che una dopo l'altra (erano ~10 viaggi in fila verso Supabase: 6-9 secondi il sabato)
+  const isI = strategy === 'I', soft = pr => Promise.resolve(pr).catch(() => null), PL = require('./played');
+  const evsAll = [...new Set(all.map(r => r.event_id))], top30 = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))];
+  const pre = isI ? {
+    played: soft(PL.playedSignalIds(pool)), skipped: soft(PL.skippedSignalIds(pool)), checks: soft(R.pendingChecks(pool)),
+    tq: soft(evsAll.length ? pool.query(`SELECT event_id, phase, quotes, created_at FROM italia_signals WHERE strategy = 'T' AND event_id = ANY($1) ORDER BY created_at`, [evsAll]) : { rows: [] }),
+    pin: soft(top30.length ? pool.query(`SELECT event_id, pin_h, pin_d, pin_a, updated_at FROM goal_watch WHERE event_id = ANY($1)`, [top30]) : { rows: [] }),
+    hist: soft(top30.length ? pinHistory(pool, top30) : null), playedSum: soft(PL.getPlayed(pool)), team: soft(require('./team').stateOf(pool)), rem: soft(lastRemaining(pool))
+  } : {};
   const rows = primaryRows(all);   // le misure restano sulla prima uscita; la F2 guarda anche le riletture
   const last = lastRes.rows[0] || null;
   const byBook = [...new Set(rows.map(r => r.book))].map(b => ({ book: BOOK_NAMES[b] || b, ...stats(rows.filter(r => r.book === b)) })).sort((a, b) => b.signals - a.signals);
@@ -1298,10 +1310,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const fin3 = strategy === 'I' ? markFinal3(rows) : new Map();
   const fin3Rows = rows.filter(r => fin3.get(r.id) && fin3.get(r.id).final);
   const nwRows = rows.filter(r => r.netwin_clv_pct !== null).map(r => ({ clv_pct: r.netwin_clv_pct }));
-  const played = strategy === 'I' ? await require('./played').playedSignalIds(pool) : new Map();
+  const played = isI ? ((await pre.played) || new Map()) : new Map();
   // una giocata vale per la partita e l'esito, anche se la scheda mostrata e' la rilettura
   const playedByKey = new Map(all.filter(r => played.get(Number(r.id))).map(r => [sigKey(r), played.get(Number(r.id))]));
-  const skipped = strategy === 'I' ? await require('./played').skippedSignalIds(pool) : new Map();
+  const skipped = isI ? ((await pre.skipped) || new Map()) : new Map();
   const skippedByKey = new Map(all.filter(r => skipped.get(Number(r.id))).map(r => [sigKey(r), skipped.get(Number(r.id))]));
   const SEL_IDX = { home: 0, draw: 1, away: 2 };
   // 1° novembre 2026: quote di TUTTI i siti dove Christian ha il conto (MY_BOOKS). Le quote dei siti fuori dalla I (es. Fastbet)
@@ -1310,8 +1322,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const tQuotes = new Map();
   if (strategy === 'I') {
     try {
-      const evs = [...new Set(all.map(r => r.event_id))];
-      const tr = evs.length ? (await pool.query(`SELECT event_id, phase, quotes, created_at FROM italia_signals WHERE strategy = 'T' AND event_id = ANY($1) ORDER BY created_at`, [evs])).rows : [];
+      const tr = ((await pre.tq) || { rows: [] }).rows;
       for (const t of tr) { const q = parseQ(t.quotes); if (q) { tQuotes.set(`${t.event_id}|${t.phase || ''}`, q); tQuotes.set(t.event_id, q); } }
     } catch (e) { /* facoltativo */ }
   }
@@ -1319,7 +1330,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const altOdds = r => { const q = quotesOf(r), out = {};
     for (const k of c.myBooks) { const v = q[k] && Number(q[k][SEL_IDX[r.selection]]); if (v > 1) out[BOOK_NAMES[k] || k] = v; }
     return Object.keys(out).length ? out : null; };
-  const checks = strategy === 'I' ? await R.pendingChecks(pool).catch(() => []) : [];
+  const checks = isI ? ((await pre.checks) || []) : [];
   // 👥 consenso dei siti italiani (1° novembre 2026): sulle 296 I con chiusura, 4+ siti sopra il giusto = CLV +6,6%;
   // quota oltre l'8% sopra la mediana degli altri siti ("isolata") = vinte sotto le attese. Si mostra e si misura, non filtra.
   const consOf = r => consensusOf(Number(r.odd), Number(r.fair_prob), r.selection, quotesOf(r));
@@ -1328,10 +1339,10 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     return { ...oddsStats(now), results: R.resultStats(now), retro: { ...oddsStats(all2), results: R.resultStats(all2) } }; };
   // ultima lettura di Pinnacle di ogni partita (goal_watch si aggiorna a ogni giro, anche quando il vantaggio e' sparito e non nasce una riga nuova)
   const pinNow = new Map();
-  if (strategy === 'I') { try { const ids = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))];
-    if (ids.length) for (const g of (await pool.query(`SELECT event_id, pin_h, pin_d, pin_a, updated_at FROM goal_watch WHERE event_id = ANY($1)`, [ids])).rows) pinNow.set(g.event_id, g); } catch (e) { /* tabella facoltativa */ } }
+  if (isI) { try { for (const g of ((await pre.pin) || { rows: [] }).rows) pinNow.set(g.event_id, g); } catch (e) { /* tabella facoltativa */ } }
   // ⚡ Quicksilver: storia di Pinnacle delle partite in lista
-  let qsMap = new Map(); if (strategy === 'I') { const ids = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))]; if (ids.length) qsMap = markQuick(all.filter(r => ids.includes(r.event_id)), await pinHistory(pool, ids)); }
+  let qsMap = new Map(); if (strategy === 'I') { const ids = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))]; if (ids.length) qsMap = markQuick(all.filter(r => ids.includes(r.event_id)), (await pre.hist) || await pinHistory(pool, ids)); }
+  TM.letture = Date.now() - T0;
   const quickKeys = new Set(all.filter(r => qsMap.get(r.id)).map(sigKey));
   const latestPin = r => { const g = pinNow.get(r.event_id); return g && T(g.updated_at) > T(r.created_at) + 60000 ? { ...g, id: 'gw:' + r.event_id, selection: r.selection } : r; };
   // 16/11/2026: la pagina dei segnali non aspetta mai i calcoli pesanti (prima: fino a 40 secondi dopo un riavvio)
@@ -1402,7 +1413,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     }))
   };
   if (strategy === 'I') {
-    let playedSum = null; try { playedSum = await require('./played').getPlayed(pool); } catch (e) { /* tabella non ancora creata */ }
+    const playedSum = await pre.playedSum;
     // 16/11/2026: le giocate fatte dalla lista Svago (dal suo avvio) si riconoscono dal segnale e hanno un budget a parte
     try {
       const its = (playedSum && playedSum.items) || [], ids = its.map(x => Number(x.signalId)).filter(Boolean);
@@ -1412,11 +1423,11 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     const budget = budgetOf(playedSum, budgetCfg(env));
     const sc = svagoCfg(env), sb = svagoBudget((playedSum && playedSum.items) || [], sc);
     out.svagoBudget = sb;
-    try { const remS = await lastRemaining(pool); const pl = remS !== null ? await planOf(pool, c, remS) : null; out.scanHours = pl && pl.hours ? pl.hours : c.scanHours; } catch (e) { out.scanHours = c.scanHours; }
+    try { const remS = await pre.rem; const pl = remS !== null ? await planOf(pool, c, remS) : null; out.scanHours = pl && pl.hours ? pl.hours : c.scanHours; } catch (e) { out.scanHours = c.scanHours; }
     out.budget = budget;
     const bc = budgetCfg(env);
     out.bestOnlySafe = bc.onlySafe; out.bestRule = bc.rule; out.myBooks = c.myBooks.map(k => BOOK_NAMES[k] || k);
-    let team = null; try { team = (await require('./team').stateOf(pool)).on; } catch (e) { /* pagella facoltativa */ }
+    const team = ((await pre.team) || {}).on || null;
     if (team) bc.noAwayThin = bc.noAwayThin && team.muro !== false;
     out.team = team;
     out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd, noAwayThin: bc.noAwayThin, team });
@@ -1443,9 +1454,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     // 🧪 sulla carta (14 novembre): i gruppi fuori dalle ⭐, misurati a parte (da oggi e all'indietro)
     // 14 novembre: qui si leggono TUTTI i segnali, non solo gli ultimi 600 (solo le colonne che servono, senza le quote complete)
     { const t0 = T(PAPER.since), part = l => { const res = R.resultStats(l), d = l.filter(r => r.result === 'won' || r.result === 'lost'); return { ...oddsStats(l), results: { ...res, expected: d.reduce((a, r) => a + Number(r.fair_prob || 0), 0) } }; };
-      let every = all;
-      try { every = (await pool.query(`SELECT id, event_id, strategy, selection, created_at, commence_time, league, book, odd, fair_prob, edge_pct, pin_h, pin_d, pin_a, clv_pct, result
-        FROM italia_signals WHERE strategy = $1`, [strategy])).rows; if (!every.length) every = all; } catch (e) { every = all; }
+      const every = all;   // 21/11: la lista legge gia' TUTTI i segnali (niente limite): una seconda lettura era doppia
       out.paperGroups = PAPER.groups.map(g => { const m = markPaperGroup(every, g), l = every.filter(r => (m.get(r.id) || {}).final);
         return { key: g.key, name: g.name, rule: g.rule, since: PAPER.since, ...part(l.filter(r => T(r.created_at) >= t0)), retro: part(l) }; }); }
     // 💎 Top contro le altre Justice League: su tutte (regole applicate all'indietro, prima lettura) e da quando c'e' il segno
@@ -1465,6 +1474,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     const grp = l => { const now = l.filter(r => T(r.created_at) >= t0); return { ...oddsStats(now), results: R.resultStats(now), retro: { ...oddsStats(l), results: R.resultStats(l) } }; };
     out.homeField = { rules: AWAY_THIN, active: bc.noAwayThin, kept: grp(hf.filter(r => !isAwayThin(r))), awayThin: grp(hf.filter(isAwayThin)) };
   }
+  TM.totale = Date.now() - T0; out.timing = TM;
   return out;
 }
 
