@@ -282,6 +282,8 @@
   <main id="pane-home">
     <div id="oggi"><div class="sk l1"></div><div class="sk box"></div><div class="sk box"></div></div>
     <section class="block contano"><h3>📌 Le cose che contano</h3><div id="contano" class="list"><div class="sk box"></div></div></section>
+    <section class="block kelly" id="kellyBox" hidden></section>
+    <section class="block scalata" id="scalataBox" hidden></section>
     <section class="block migliori" id="miglioriBox" hidden></section>
     <section class="block sicure" id="sicureBox" hidden></section>
     <details class="fold quiet"><summary><span>Dettagli</span><small>tutti i consigli, prossimi segnali, sistema e crediti</small></summary>
@@ -1106,15 +1108,18 @@
   const voteChip = r => { const t = tierOf(r); return t ? `<span class="vote ${t[0]}" title="💎 Top e ⭐ Buona si giocano; 🧪 Prova solo in simulazione; ⚪ Debole no">${t[1]}</span>` : ''; };
   // probabilita' di vincere (prezzo giusto di Pinnacle) e guadagno atteso sui 2 euro alla quota che giochi
   // 20/11/2026: quanto puntare. Sotto i 300 euro di cassa 2 euro fissi; sopra, un quarto di Kelly (minimo 2, massimo 2% della cassa)
-  let BANK = null;
+  let BANK = null, KELLY = null;   // KELLY: la cassa dichiarata per Kelly (21/11); se c'e', comanda lei
   function stakeOf(odd, p, bank = BANK) {
-    odd = Number(odd); p = Number(p); if (!(odd > 1 && p > 0 && bank > 0)) return 2;
+    odd = Number(odd); p = Number(p);
+    if (KELLY) { const k = (odd * p - 1) / (odd - 1); return k > 0 ? Math.max(0.1, Math.min(KELLY * k / 4, KELLY * 0.02)) : 0; }
+    if (!(odd > 1 && p > 0 && bank > 0)) return 2;
     if (bank < 300) return 2;
     const k = (odd * p - 1) / (odd - 1); if (!(k > 0)) return 2;
     return Math.max(2, Math.min(bank * k / 4, bank * 0.02));
   }
   function stakeLine(r) {
     const odd = r.play ? r.play.odd : r.odd, s = stakeOf(odd, r.fair_prob);
+    if (KELLY) return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(s, 2)} €</b> · ¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${s < 2 ? ' (dove il minimo è 2 €, gioca 2 €)' : ''}</small>`;
     return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(Math.round(s * 2) / 2, s % 1 ? 2 : 0)} €</b> · ${BANK && BANK >= 300 ? '¼ Kelly sulla cassa di ' + num(BANK, 0) + ' €, massimo 2%' : '2 € fissi finché la cassa è sotto i 300 €' + (BANK ? ' (ora ' + num(BANK, 0) + ' €)' : '')}</small>`;
   }
   function probLine(r) {
@@ -1257,6 +1262,40 @@
   }
   // 20/11/2026: per indovinare il piu' possibile conta la fiducia: le partite delle prossime 24 ore con il pronostico IA sopra il 65%
   // 20/11/2026: le migliori del giorno secondo l'IA (fiducia + valore + quadro buono), sulla carta
+  // 📈 KELLY e 🪜 SCALATA (21/11/2026): due sezioni separate. Kelly = quanto puntare su ogni ⭐ in base alla cassa (lungo periodo);
+  // Scalata = una partita al giorno scelta per perdere poco, da 0,20 a raddoppio, freno a 10
+  async function loadScalata() {
+    const kb = $('kellyBox'), sb = $('scalataBox'); if (!kb || !sb) return;
+    try {
+      const [S, d] = await Promise.all([getJson('/api/tracker/scalata'), getJson('/api/tracker/italia').catch(() => null)]);
+      KELLY = S.kellyCassa || null;
+      const hhmm = x => new Date(x).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+      // Kelly: le ⭐ ancora da giocare con la puntata
+      const best = new Set((d && d.best) || []), stars = ((d && d.recent) || []).filter(r => best.has(r.id) && r.play && !r.played && !r.skipped && Date.parse(r.commence_time) > Date.now());
+      const krows = stars.map(r => { const st = stakeOf(r.play.odd, r.fair_prob); return `<div class="prow"><span class="sdot ok"></span><div><b>${esc(r.home)} – ${esc(r.away)}</b> <span class="muted tnum">· <b>${esc(r.pick)}</b> a ${num(r.play.odd, 2)} su ${esc(r.play.book_name || r.play.book || '')} · ${hhmm(r.commence_time)}</span><br><span class="tnum">💶 punta <b>${num(st, 2)} €</b></span> <small class="muted">· valore ${pct((r.play.odd * r.fair_prob - 1) * 100, 1)}</small></div></div>`; }).join('');
+      kb.innerHTML = `<h3>📈 Kelly <small class="muted">· per guadagnare nel lungo periodo</small></h3>
+        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Su ogni ⭐ la puntata giusta per la tua cassa: un quarto di Kelly, mai più del 2%. Più valore = puntata più alta; se la cassa scende, le puntate scendono da sole. Sullo storico: da 500 € a circa 6.800 € in 14 anni, mai sotto 451 €.</p>
+        <div class="prow" style="margin:0 0 8px"><span class="sdot info"></span><div><b>La tua cassa:</b> <input id="kellyIn" type="number" inputmode="decimal" min="10" step="10" value="${KELLY || ''}" placeholder="es. 500" style="width:100px"> € <button class="btn small" onclick="saveKelly(this)">Salva</button> <small class="muted">${KELLY ? '' : '(finché non la scrivi, valgono 2 € fissi)'}</small></div></div>
+        <div class="list">${krows || '<p class="muted">Nessuna ⭐ da giocare adesso: compaiono con le scansioni.</p>'}</div>`;
+      kb.hidden = false;
+      // Scalata
+      const n = S.next, lossNow = S.lostInCycle || 0;
+      const stepsHtml = (S.steps || []).slice(0, 8).map(x => `<div class="prow"><span class="sdot ${x.open ? 'info' : x.pnl >= 0 ? 'ok' : 'bad'}"></span><div><b>${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">· ${esc(x.pick || '')} a ${num(x.odd, 2)} · gradino ${x.step} · ${num(x.stake, 2)} €${x.open ? ' · in corso' : ` · ${x.result === 'won' ? '✅' : '❌'} ${x.result_score || ''} · ${signedMoney(x.pnl)}`}${x.cycleEnd === 'freno' ? ' · 🛑 freno' : ''}</span></div></div>`).join('');
+      sb.innerHTML = `<h3>🪜 Scalata <small class="muted">· da 0,20 €, raddoppio, freno a ${S.stop}</small></h3>
+        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Una partita al giorno scelta per perdere il meno possibile: pagata più del giusto, quota 2–3,50 (sotto 2 il raddoppio non recupera), la più probabile, meglio se favorita (🤝 IA d'accordo), in casa e con la quota ferma. Se perde, la prossima si gioca al doppio; se vince, si riparte da 0,20. Dopo ${S.stop} perse di fila ci si ferma: perdita massima ${num(S.maxLoss, 2)} €. Sullo storico: +701 € in 14 anni, 2 anni in perdita.</p>
+        <div class="prow" style="margin:0 0 8px"><span class="sdot ${S.step >= 7 ? 'warn' : 'ok'}"></span><div><b>Gradino ${S.step} di ${S.stop}</b> <span class="muted tnum">· prossima puntata <b>${num(S.nextStake, 2)} €</b>${lossNow ? ` · da recuperare ${num(lossNow, 2)} €` : ''} · saldo scalata ${signedMoney(S.pnl || 0)}${S.stops ? ` · freni scattati ${S.stops}` : ''}</span></div></div>
+        ${n ? `<div class="prow"><span class="sdot ok"></span><div><b>Oggi: ${esc(n.home)} – ${esc(n.away)}</b> <span class="muted tnum">· <b>${esc(n.pick)}</b> a ${num(n.odd, 2)} o più su ${esc(n.book)} · ${hhmm(n.commence_time)}</span><br><span class="tnum">💶 punta <b>${num(((S.steps || []).find(x => x.open && x.day === n.day) || {}).stake || S.nextStake, 2)} €</b></span> <small class="muted">· ${(n.reasons || []).map(esc).join(' · ')}</small></div></div>` : `<p class="muted">${S.waiting ? 'In attesa del risultato della giocata in corso.' : `Nessuna partita adatta per ora: la cerca a ogni scansione${Date.now() < Date.parse(S.since) ? ` (si parte dal ${liveDay(S.since)})` : ''}.`}</p>`}
+        ${stepsHtml ? `<details class="pmore"><summary>ultimi gradini</summary>${stepsHtml}</details>` : ''}`;
+      sb.hidden = false;
+    } catch (e) { kb.hidden = true; sb.hidden = true; }
+  }
+  async function saveKelly(btn) {
+    const v = Number(String($('kellyIn').value).replace(',', '.')); if (!(v >= 10)) { alert('Scrivi la cassa in euro, per esempio 500'); return; }
+    const key = await ensureKey(); if (!key) return; btn.disabled = true;
+    try { const r = await fetch('/api/tracker/kelly-cassa', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ cassa: v }) });
+      const j = await r.json().catch(() => ({})); if (!r.ok) { alert('Non salvata: ' + (j.error || r.status)); return; } KELLY = j.cassa; memo.clear(); loadScalata(); refreshViews(); }
+    finally { btn.disabled = false; }
+  }
   async function loadMigliori() {
     const box = $('miglioriBox'); if (!box) return;
     try {
@@ -1289,7 +1328,7 @@
     } catch (e) { box.hidden = true; }
   }
   async function loadHome() {
-    loadOggi(); loadContano(); loadMigliori(); loadSicure(); loadAdvice(); loadToday(); loadCredits();
+    loadOggi(); loadContano(); loadScalata(); loadMigliori(); loadSicure(); loadAdvice(); loadToday(); loadCredits();
     try {
       const [o, h, m, b] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health'), getJson('/api/tracker/milestones').catch(() => null), getJson('/api/tracker/bankroll').catch(() => null)]);
       bankData = b; renderMilestones(m); renderBankMini(b);

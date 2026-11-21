@@ -431,6 +431,8 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   try { golOut.sicureCarta = await require('./sicurepaper').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreSicure = e.message; }
   // 🏆 le migliori del giorno sulla carta (20/11): fiducia + valore + quadro buono, stessa richiesta
   try { golOut.miglioriCarta = await require('./migliori').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreMigliori = e.message; }
+  // 🪜 la scalata (21/11): la giocata del giorno, fissata alla prima scansione che la trova
+  try { golOut.scalata = await require('./scalata').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreScalata = e.message; }
   const found = findSignals(records, c, nowMs);
   const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
   const foundT = c.tEnabled ? findSignals(records, cfgFor(c, 'T'), nowMs) : [];
@@ -566,6 +568,7 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
   try { await require('./dcpaper').settleDc(pool); } catch (e) { /* facoltativo */ }
   try { await require('./sicurepaper').settle(pool); } catch (e) { /* facoltativo */ }
   try { await require('./migliori').settle(pool); } catch (e) { /* facoltativo */ }
+  try { await require('./scalata').settle(pool); } catch (e) { /* facoltativo */ }
   try { Object.assign(out, await require('./calib').maybeRefresh(pool, { nowMs })); } catch (e) { out.erroreStorico = e.message; }
   try { out.timbrati = await stampFlags(pool, c, nowMs); } catch (e) { out.erroreTimbro = e.message; }
   try { Object.assign(out, await require('./results').settleSignals(pool, { env, nowMs, http: resultsHttp, sameTeam })); } catch (e) { out.erroreRisultati = e.message; }

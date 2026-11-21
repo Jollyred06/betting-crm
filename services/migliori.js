@@ -35,7 +35,7 @@ function reasonsOf(x) {
 }
 
 /** Parte pura: le candidate di una lettura. firstPin: Map event_id -> {pin_h,pin_d,pin_a} della prima lettura. */
-function pickMigliori(merged, books, nowMs = Date.now(), firstPin = new Map()) {
+function pickMigliori(merged, books, nowMs = Date.now(), firstPin = new Map(), { minProb = MIN_PROB } = {}) {
   const I = require('./italia'), out = [];
   for (const r of merged || []) {
     const start = T(r.commence_time);
@@ -46,7 +46,8 @@ function pickMigliori(merged, books, nowMs = Date.now(), firstPin = new Map()) {
     if (over < 1 || margin > MAX_MARGIN) continue;
     const fair = noVigPower(pin), f0 = firstPin.get(r.event_id), first = f0 && I.trio({ HOME: f0.pin_h, DRAW: f0.pin_d, AWAY: f0.pin_a }), pf = first ? noVigPower(first) : null;
     for (const sel of ['home', 'draw', 'away']) {
-      const prob = fair[sel]; if (prob < MIN_PROB) continue;
+      const prob = fair[sel]; if (prob < minProb) continue;
+      const isFav = ['home', 'draw', 'away'].every(o => fair[o] <= prob);   // l'esito e' anche il favorito (come il pronostico IA)
       const quotes = {}; let best = null;
       for (const b of bs) {
         if (!books.includes(b.key) || (b.suspended || []).includes(OUT[sel])) continue;
@@ -56,7 +57,7 @@ function pickMigliori(merged, books, nowMs = Date.now(), firstPin = new Map()) {
       if (!best || best.odd < MIN_ODD) continue;
       const edgePct = (best.odd * prob - 1) * 100; if (edgePct < MIN_EDGE) continue;
       const x = { event_id: r.event_id, league: r.league, home: r.home_team, away: r.away_team, commence_time: r.commence_time, selection: sel, prob, book: best.book, odd: best.odd,
-        edgePct, margin, isHome: sel === 'home', isMajor: margin < 6, movedPts: pf ? 100 * (prob - pf[sel]) : null, quotes };
+        edgePct, margin, isFav, isHome: sel === 'home', isMajor: margin < 6, movedPts: pf ? 100 * (prob - pf[sel]) : null, quotes };
       out.push({ ...x, score: scoreOf(x) });
     }
   }

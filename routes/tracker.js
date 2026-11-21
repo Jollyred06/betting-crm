@@ -138,6 +138,14 @@ router.get('/sicure', async (req, res) => {
 router.get('/martingala', async (req, res) => {
   try { res.json(await require('../services/martingala').getMartingala(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// 🪜 scalata (martingala con il freno a 10, da 0,20) e 📈 cassa per Kelly
+router.get('/scalata', async (req, res) => {
+  try { const S = require('../services/scalata'); res.json({ ...(await S.getScalata(pool)), kellyCassa: await S.getKellyCassa(pool) }); } catch (err) { res.status(500).json({ error: err.message }); }
+});
+router.post('/kelly-cassa', async (req, res) => {
+  if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { const v = await require('../services/scalata').setKellyCassa(pool, (req.body || {}).cassa); require('../services/cache').clear(); res.json({ success: true, cassa: v }); } catch (err) { res.status(400).json({ error: err.message }); }
+});
 router.get('/migliori', async (req, res) => {
   try { res.json(await require('../services/migliori').getMigliori(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
