@@ -142,6 +142,10 @@ router.get('/martingala', async (req, res) => {
 router.get('/scalata', async (req, res) => {
   try { const S = require('../services/scalata'); res.json({ ...(await S.getScalata(pool)), kellyCassa: await S.getKellyCassa(pool) }); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+router.post('/scalata/:id/result', async (req, res) => {
+  if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
+  try { await require('../services/scalata').setResult(pool, req.params.id, (req.body || {}).result, (req.body || {}).score || null); require('../services/cache').clear(); res.json({ success: true }); } catch (err) { res.status(400).json({ error: err.message }); }
+});
 router.post('/kelly-cassa', async (req, res) => {
   if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
   try { const v = await require('../services/scalata').setKellyCassa(pool, (req.body || {}).cassa); require('../services/cache').clear(); res.json({ success: true, cassa: v }); } catch (err) { res.status(400).json({ error: err.message }); }

@@ -27,6 +27,10 @@ async function ensure(pool) {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), result TEXT, result_score TEXT, settled_at TIMESTAMPTZ)`);
   // 21/11: le quote di tutti i miei siti, per giocare dove la puntata minima lo permette (Eurobet 1 euro, Goldbet 0,10)
   await pool.query(`ALTER TABLE scalata_picks ADD COLUMN IF NOT EXISTS quotes JSONB`);
+  // 21/11 sera: piu' giocate nello stesso giorno, una dopo l'altra (non piu' una al giorno); 'manual' = esito segnato da Christian
+  await pool.query(`ALTER TABLE scalata_picks DROP CONSTRAINT IF EXISTS scalata_picks_day_key`);
+  await pool.query(`ALTER TABLE scalata_picks ADD COLUMN IF NOT EXISTS manual BOOLEAN NOT NULL DEFAULT FALSE`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS scalata_picks_ev_sel ON scalata_picks (event_id, selection)`);
   ready = true;
 }
 
@@ -57,8 +61,10 @@ function reasonsOf(x) {
 }
 
 /** Dopo ogni scansione: se per un giorno non c'e' ancora la giocata, si fissa la migliore candidata di quel giorno. */
+let lastRead = null;   // l'ultima lettura delle quote (per scegliere subito la prossima dopo un esito segnato a mano)
 async function record(pool, merged, books, nowMs = Date.now()) {
   if (nowMs < T(SINCE)) return 0;
+  if (merged && merged.length) lastRead = { merged, books, at: nowMs };
   await ensure(pool);
   const M = require('./migliori');
   const ids = [...new Set((merged || []).map(r => r.event_id))], firstPin = new Map();
@@ -66,19 +72,27 @@ async function record(pool, merged, books, nowMs = Date.now()) {
   // candidate: tutte le giocate di valore (le Migliori chiedono almeno il 50%, la scalata no: quota 2-3,50 = 29-50%)
   const cands = M.pickMigliori(merged, books, nowMs, firstPin, { minProb: 0.25 });
   // la scalata va in ordine: finche' la giocata precedente non ha il risultato non si sceglie la prossima (la puntata dipende da li')
-  const all = (await pool.query(`SELECT day, odd, result FROM scalata_picks ORDER BY day`)).rows;
+  // Piu' giocate nello stesso giorno (21/11 sera): appena la precedente ha l'esito (automatico o segnato a mano) si sceglie la
+  // prossima, tra le partite che iniziano da 30 minuti a 12 ore da adesso, mai una gia' usata.
+  const all = (await pool.query(`SELECT id, day, event_id, selection, commence_time, odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
   if (all.some(r => r.result !== 'won' && r.result !== 'lost')) return 0;
-  const stake = ladder(all).nextStake, taken = new Set(all.map(r => r.day)), today = dayOf(nowMs);
-  const best = new Map();
-  for (const x of pickScalata(cands, stake)) { const d = dayOf(x.commence_time); if (d !== today || taken.has(d) || best.has(d) || T(x.commence_time) < nowMs + 30 * 60000) continue; best.set(d, x); }
-  let n = 0;
-  for (const [d, x] of best) {
-    const r = await pool.query(`INSERT INTO scalata_picks (day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, score, reasons, quotes)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (day) DO NOTHING`,
-      [d, x.event_id, x.selection, x.league, x.home, x.away, x.commence_time, x.prob, x.book, x.odd, x.edgePct, x.score, JSON.stringify(reasonsOf(x)), JSON.stringify(x.quotes || {})]);
-    n += r.rowCount;
-  }
-  return n;
+  const stake = ladder(all).nextStake, used = new Set(all.map(r => r.event_id));
+  const x = pickScalata(cands, stake).find(c => !used.has(c.event_id) && T(c.commence_time) >= nowMs + 30 * 60000 && T(c.commence_time) <= nowMs + 12 * 3600000);
+  if (!x) return 0;
+  const r = await pool.query(`INSERT INTO scalata_picks (day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, score, reasons, quotes)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (event_id, selection) DO NOTHING`,
+    [dayOf(x.commence_time), x.event_id, x.selection, x.league, x.home, x.away, x.commence_time, x.prob, x.book, x.odd, x.edgePct, x.score, JSON.stringify(reasonsOf(x)), JSON.stringify(x.quotes || {})]);
+  return r.rowCount;
+}
+/** Esito segnato a mano da Christian (per non aspettare i risultati automatici): vale subito per il calcolo della scalata. */
+async function setResult(pool, id, result, score = null) {
+  if (!['won', 'lost'].includes(result)) throw new Error('Esito non valido (vinta o persa)');
+  await ensure(pool);
+  const r = await pool.query(`UPDATE scalata_picks SET result = $2, result_score = $3, manual = TRUE, settled_at = NOW() WHERE id = $1 RETURNING id`, [Number(id), result, score]);
+  if (!r.rowCount) throw new Error('Giocata della scalata non trovata');
+  // la prossima subito, con le quote dell'ultima scansione (se non piu' vecchie di 3 ore); altrimenti alla scansione successiva
+  if (lastRead && Date.now() - lastRead.at < 3 * 3600000) { try { await record(pool, lastRead.merged, lastRead.books); } catch (e) { /* alla prossima scansione */ } }
+  return true;
 }
 async function settle(pool) {
   await ensure(pool);
@@ -90,7 +104,8 @@ async function settle(pool) {
 
 /** Parte pura: la scalata giorno per giorno (raddoppio, freno a 10) e la puntata di oggi. */
 function ladder(rows, { base = BASE, stop = STOP } = {}) {
-  const list = [...rows].sort((a, b) => a.day.localeCompare(b.day)); let k = 0, lost = 0, pnl = 0, staked = 0, stops = 0, cycles = 0, maxK = 0, waiting = false;
+  const key = r => `${r.commence_time ? new Date(r.commence_time).toISOString() : r.day}|${String(r.id || 0).padStart(9, '0')}`;
+  const list = [...rows].sort((a, b) => key(a).localeCompare(key(b))); let k = 0, lost = 0, pnl = 0, staked = 0, stops = 0, cycles = 0, maxK = 0, waiting = false;
   const steps = [];
   for (const r of list) {
     const stake = base * 2 ** k, odd = Number(r.odd), res = r.result;
@@ -105,10 +120,10 @@ function ladder(rows, { base = BASE, stop = STOP } = {}) {
 async function getScalata(pool, { nowMs = Date.now() } = {}) {
   await ensure(pool);
   const BN = require('./italia').BOOK_NAMES || {};
-  const rows = (await pool.query(`SELECT day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, quotes, result, result_score FROM scalata_picks ORDER BY day`)).rows
+  const rows = (await pool.query(`SELECT id, day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, quotes, result, result_score, manual FROM scalata_picks ORDER BY commence_time, id`)).rows
     .map(r => ({ ...r, prob: Number(r.prob), odd: Number(r.odd), edgePct: Number(r.edge_pct), pick: PICK[r.selection], bookKey: r.book, book: BN[r.book] || r.book,
       quotes: Object.entries(r.quotes || {}).map(([k, q]) => ({ key: k, book: BN[k] || k, odd: Number(q), edgePct: (Number(q) * Number(r.prob) - 1) * 100 })).sort((a, b) => b.odd - a.odd) }));
-  const L = ladder(rows), today = dayOf(nowMs), next = rows.find(r => r.day >= today && !r.result && T(r.commence_time) > nowMs - 3 * 3600000);
+  const L = ladder(rows), next = rows.find(r => r.result !== 'won' && r.result !== 'lost');   // la giocata in corso (una alla volta)
   return { since: SINCE, rules: { base: BASE, stop: STOP, minOdd: MIN_ODD, maxOdd: MAX_ODD, minEdge: MIN_EDGE }, ...L, next: next || null };
 }
 
@@ -119,4 +134,4 @@ async function setKellyCassa(pool, value) {
   await require('./calib').ensureCalib(pool); await require('./calib').saveState(pool, 'kelly_cassa', { value: v, at: new Date().toISOString() }); return v;
 }
 
-module.exports = { BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };
+module.exports = { BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };

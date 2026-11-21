@@ -33,3 +33,10 @@ console.log('scalata e freno: ok');
   assert.strictEqual(high.find(x => x.event_id === 'x').book, 'eurobet');
   console.log('scalata sul sito che accetta la puntata: ok');
 }
+// 21/11 sera: piu' giocate nello stesso giorno, in ordine di ora
+{
+  const L = S.ladder([{ id: 2, day: '2026-11-22', commence_time: '2026-11-22T18:00:00Z', odd: 2.4, result: 'won' }, { id: 1, day: '2026-11-22', commence_time: '2026-11-22T13:00:00Z', odd: 2.4, result: 'lost' }]);
+  assert.ok(Math.abs(L.pnl - (0.4 * 1.4 - 0.2)) < 1e-9, 'prima la persa delle 13 (0,20), poi la vinta delle 18 (0,40): ' + L.pnl);
+  assert.strictEqual(L.nextStake, 0.2);
+  console.log('piu\' giocate nello stesso giorno: ok');
+}
