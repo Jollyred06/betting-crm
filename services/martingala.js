@@ -76,7 +76,7 @@ function flat(rows, stake = 2) {
   let pnl = 0, n = 0, w = 0; for (const r of rows) { const o = Number(r.ad); if (!(o > 1)) continue; n++; if (Number(r.hg) === Number(r.ag)) { w++; pnl += stake * (o - 1); } else pnl -= stake; }
   return { bets: n, draws: w, pnl, staked: stake * n, roiPct: n ? 100 * pnl / (stake * n) : null };
 }
-const MT_VERSION = 7;
+const MT_VERSION = 8;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
@@ -100,6 +100,13 @@ async function getMartingala(pool, { force = false } = {}) {
       return { casa: one(H), pareggio: one(D), trasferta: one(A), tutti: one([...H, ...D, ...A]),
         // la fascia delle stelle: quota 2-3,50
         stelle: one([...valueOf(rows, 'home', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'away', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'draw', 0.02, { minOdd: 2, maxOdd: 3.5 })]) }; })(),
+    // 21/11 sera: la scalata di valore nella fascia delle stelle (quota 2-3,50, dove il raddoppio recupera davvero): ogni giorno la
+    // giocata di valore piu' probabile della fascia, raddoppio da 0,20, freno a 6/8/10 o niente; e 2/3 scalate in parallelo; e la
+    // stessa giocata del giorno a 0,20 fissi, per vedere quanto aggiunge la scalata
+    fascia: (() => { const band = [...valueOf(rows, 'home', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'draw', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'away', 0.02, { minOdd: 2, maxOdd: 3.5 })];
+      const daily = simulate(band, { double: true }), fixedDaily = simulate(band, { maxSteps: 0 });
+      return { giocate: band.length, senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
+        parallele2: parallel(band, 2, { maxSteps: 8 }), parallele3: parallel(band, 3, { maxSteps: 8 }), fissaUnaAlGiorno: fixedDaily }; })(),
     // solo pareggi pagati piu' del giusto (alla quota piu' alta): raddoppio, una e tre scalate, e a puntata fissa per confronto
     valore: { una: simulate(valueDraws(rows)), tre: parallel(valueDraws(rows), 3), fissa: flat(valueDraws(rows)) },
     // per confronto: la scalata "giusta" che alza solo quanto basta per recuperare (meno aggressiva del raddoppio)
