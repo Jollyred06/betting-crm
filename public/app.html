@@ -274,26 +274,13 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <div><div class="brand">Betting CRM</div><div class="tag">Value betting · 2 € a giocata</div></div>
+    <div><div class="brand">Betting CRM</div><div class="tag">Value betting</div></div>
     <div class="pill" id="statusPill"><i class="cm info"></i><span>Controllo</span></div>
   </header>
 
   <!-- HOME -->
   <main id="pane-home">
     <div id="oggi"><div class="sk l1"></div><div class="sk box"></div><div class="sk box"></div></div>
-    <section class="block contano"><h3>📌 Le cose che contano</h3><div id="contano" class="list"><div class="sk box"></div></div></section>
-    <section class="block kelly" id="kellyBox" hidden></section>
-    <section class="block scalata" id="scalataBox" hidden></section>
-    <section class="block migliori" id="miglioriBox" hidden></section>
-    <section class="block sicure" id="sicureBox" hidden></section>
-    <details class="fold quiet"><summary><span>Dettagli</span><small>tutti i consigli, prossimi segnali, sistema e crediti</small></summary>
-    <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
-    <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Tutti i consigli automatici. In Oggi vedi solo quelli rossi e gialli.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
-    <section class="block today"><h3>⚽ Prossimi segnali</h3><p class="muted sub">I prossimi segnali giocabili sui tuoi siti. Si giocano solo le ⭐ in Oggi.</p><div id="today"><div class="sk box"></div></div>
-      <button class="ghost" onclick="show('signals')">Tutti i segnali →</button></section>
-    <section class="block"><h3>💳 Crediti</h3><p class="muted sub">Quanto resta su ogni piattaforma collegata. Il CRM rallenta da solo se i crediti non bastano fino alla ricarica.</p><div id="credits" class="list"><div class="sk box"></div></div></section>
-    <section class="block"><h3>Controlli</h3><div id="checks" class="list"></div></section>
-    </details>
   </main>
 
   <!-- SEGNALI -->
@@ -324,6 +311,10 @@
       <p class="muted sub">Riepilogo: cosa giochi e come sta andando. Misure: i controlli sul sistema. Archivio: le idee vecchie.</p>
       <div id="italia"></div>
     </section>
+    <details class="fold"><summary><span>🧪 Sulla carta</span><small>le Migliori di oggi e le Più sicure: si misurano, non si giocano</small></summary>
+    <section class="block migliori" id="miglioriBox" hidden></section>
+    <section class="block sicure" id="sicureBox" hidden></section>
+    </details>
     <details class="fold quiet"><summary><span>Strategia A e scartate</span><small>il test di ottobre e le idee che non battevano il mercato</small></summary>
     <details class="fold"><summary><span>Strategia A · in archivio dal 1° novembre</span><small>verdetto, numeri, tappe, bankroll di carta</small></summary>
     <section class="block"><div id="bankMini"></div></section>
@@ -346,6 +337,7 @@
 
   <!-- BANKROLL -->
   <main id="pane-bankroll" style="display:none;">
+    <section class="block contano"><h3>📈 Andamento</h3><div id="contano" class="list"><div class="sk box"></div></div></section>
     <section class="block">
       <h3>Le mie giocate</h3>
       <p class="muted sub">Le partite che hai giocato davvero, con la quota presa. Il valore dice se le tue quote battono quelle di chiusura.</p>
@@ -384,6 +376,15 @@
 
   <!-- ALTRO -->
   <main id="pane-more" style="display:none;">
+    <section class="block kelly" id="kellyBox" hidden></section>
+    <details class="fold quiet"><summary><span>Consigli, crediti e controlli</span><small>il Consigliere, i prossimi segnali, i crediti</small></summary>
+    <div id="todo" class="todo"><i class="cm info"></i><div><b>Caricamento</b><span>Un momento…</span></div></div>
+    <section class="block advisor"><h3>🤖 Il Consigliere</h3><p class="muted sub">Tutti i consigli automatici. In Oggi vedi solo quelli rossi e gialli.</p><div id="advice" class="list"><div class="sk box"></div></div></section>
+    <section class="block today"><h3>⚽ Prossimi segnali</h3><p class="muted sub">I prossimi segnali giocabili sui tuoi siti. Si giocano solo le ⭐ in Oggi.</p><div id="today"><div class="sk box"></div></div>
+      <button class="ghost" onclick="show('signals')">Tutti i segnali →</button></section>
+    <section class="block"><h3>💳 Crediti</h3><p class="muted sub">Quanto resta su ogni piattaforma collegata. Il CRM rallenta da solo se i crediti non bastano fino alla ricarica.</p><div id="credits" class="list"><div class="sk box"></div></div></section>
+    <section class="block"><h3>Controlli</h3><div id="checks" class="list"></div></section>
+    </details>
     <section class="block">
       <div class="seg" id="moreTabs">
         <button class="on" data-t="actions" onclick="moreTab(this)">Azioni</button>
@@ -1159,7 +1160,7 @@
       <div class="ot"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.coppe ? 'coppe' : r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.svago && !r.oceani && !r.prova && !r.coppe ? '🎈 Svago' : r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}</span>${voteChip(r)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>
-        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${probLine(r)}
+        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${r.played || r.skipped || r.svago ? '' : stakeLine(r)}${probLine(r)}
         ${drawLine(r)}
         <div class="ochips">${isoChip(r)}</div>
         ${r.played || r.skipped ? '' : bookLink(r)}
@@ -1185,9 +1186,10 @@
       if (ck && ck.level === 'allarme') alerts.push({ lv: 'bad', t: 'Le vinte sono troppo sotto le attese', s: `${ck.won} vinte su ${ck.n}, attese ${num(ck.expected, 1)}. Fermati e mandami il backup.` });
       (C && C.items || []).filter(i => i.level === 'bad' || i.level === 'warn').forEach(i => alerts.push({ lv: i.level === 'bad' ? 'bad' : 'warn', t: i.name, s: i.text }));
       (A && A.advice || []).filter(x => x.level === 'bad').forEach(x => alerts.push({ lv: 'bad', t: x.title, s: x.text }));
-      const lv = b.stopped || (ck && ck.level === 'allarme') ? 'bad' : alerts.length || todo.length ? 'warn' : 'ok';
-      const head = b.stopped ? 'Stop raggiunto: niente giocate' : ck && ck.level === 'allarme' ? 'Fermati: controlliamo i numeri' : todo.length ? `${todo.length} ${todo.length === 1 ? 'risultato' : 'risultati'} da segnare` : alerts.length ? 'Tutto ok, con un avviso' : 'Tutto in ordine';
-      $('statusPill').innerHTML = `${sdot(lv)}<span>${lv === 'ok' ? 'Tutto ok' : lv === 'warn' ? 'Da fare' : 'Fermati'}</span>`;
+      const dayOnly = b.stopped && !(b.balance <= b.stop) && /oggi|settimana/.test(b.stopWhy || '');
+      const lv = (b.stopped && !dayOnly) || (ck && ck.level === 'allarme') ? 'bad' : b.stopped ? 'warn' : alerts.length || todo.length ? 'warn' : 'ok';
+      const head = b.stopped ? (dayOnly ? `Pausa: ${b.stopWhy}` : 'Stop raggiunto: niente giocate') : ck && ck.level === 'allarme' ? 'Fermati: controlliamo i numeri' : todo.length ? `${todo.length} ${todo.length === 1 ? 'risultato' : 'risultati'} da segnare` : alerts.length ? 'Tutto ok, con un avviso' : 'Tutto in ordine';
+      $('statusPill').innerHTML = `${sdot(lv)}<span>${lv === 'ok' ? 'Tutto ok' : dayOnly ? 'Pausa' : lv === 'warn' ? 'Da fare' : 'Fermati'}</span>`;
       const room = Math.max(0, b.maxPerDay - b.playedToday), span = Math.max(1, b.start * 1.5 - b.stop), pos = Math.max(0, Math.min(100, 100 * (b.balance - b.stop) / span));
       el.innerHTML = `
         ${lv === 'ok' ? '' : `<section class="ostate ${lv}">${sdot(lv)}<b>${esc(head)}</b></section>`}
@@ -1199,18 +1201,22 @@
           <div class="ometa"><span>Oggi: <b>${b.playedToday} su ${b.maxPerDay}</b> giocate</span>${ck && ck.n ? `<span>${sdot(ck.level === 'allarme' ? 'bad' : ck.level === 'attenzione' ? 'warn' : ck.level === 'ok' ? 'ok' : 'info')}Lista: ${ck.won} vinte su ${ck.n} (attese ${num(ck.expected, 1)})</span>` : ''}</div>
         </section>
         <section class="block">
-          <h3>⭐ Da giocare <small class="muted">${b.stopped ? '' : room ? `· 2 € l'una · ancora ${room} oggi` : '· per oggi basta così'}</small></h3>
-          ${b.stopped ? `<div class="callout warn"><b>Stop a ${money(b.stop)} raggiunto.</b> Niente giocate finché non controlliamo i numeri insieme: mandami il backup.</div>`
+          <h3>⭐ Da giocare <small class="muted">${b.stopped ? '' : room ? `· ${KELLY ? 'puntata Kelly su ogni riga' : "2 € l'una"} · ancora ${room} oggi` : '· per oggi basta così'}</small></h3>
+          ${b.stopped ? (dayOnly ? `<div class="callout warn"><b>${esc(b.stopWhy)}.</b> È il freno per le giornate storte: si riparte da solo${/settimana/.test(b.stopWhy) ? ' lunedì' : ' domani'}. La scalata non si ferma.</div>` : `<div class="callout warn"><b>Stop a ${money(b.stop)} raggiunto.</b> Niente giocate finché non controlliamo i numeri insieme: mandami il backup.</div>`)
             : best.length ? best.map(oggiRow).join('')
             : `<div class="oempty">${room ? 'Niente da giocare adesso. Le partite giuste compaiono qui da sole: il CRM controlla ' + scanTxt() + '.' : 'Hai già fatto le giocate di oggi.'}</div>`}
         </section>
+        <section class="block scalata" id="scalataSlot">${SCALATA_HTML}</section>
         ${(() => { const sb = d.svagoBudget; if (!sb || !sb.on) return '';
           const sv = (d.svagoList || []).map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
           const left = Math.max(0, sb.monthLossEur + Math.min(0, sb.pnlMonth));
-          return `<section class="block svago"><h3>🎈 Svago <small class="muted">· per divertimento, 2 € l'una · oggi ${sb.playedToday} su ${sb.perDay}</small></h3>
+          return `<details class="fold quiet svago"><summary><span>🎈 Svago</span><small>per divertimento, 2 € l'una · oggi ${sb.playedToday} su ${sb.perDay}</small></summary>
             <p class="muted" style="font-size:13.5px;margin:2px 0 6px;">Il risultato più probabile, non giocate di valore: in media si perde circa il 7%. Questo mese ${signedMoney(sb.pnlMonth)}, perdita massima ${money(sb.monthLossEur)} (restano ${money(left)}).</p>
-            ${sb.stopped ? `<div class="oempty">${esc(sb.stopWhy || 'Svago fermo.')}</div>` : sv.length ? sv.map(oggiRow).join('') : `<div class="oempty">Niente Svago adesso: compaiono con le prossime scansioni (${scanTxt()}).</div>`}</section>`; })()}
-        ${mine.length ? `<section class="block"><h3>🎯 Le tue giocate <small class="muted">· oggi e prossime</small></h3><div class="card3">${mine.map(x => { const t = Date.parse(x.commence_time), st = x.result === 'won' ? `<span class="chip won">vinta ${esc(x.score || '')}</span>` : x.result === 'lost' ? `<span class="chip lost">persa ${esc(x.score || '')}</span>` : x.result === 'void' ? '<span class="chip">annullata</span>' : Date.now() < t ? `<span class="muted">alle ${dt(x.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>` : Date.now() < t + 115 * 60000 ? '<span class="chip live">● in corso</span>' : '<span class="muted">finita, risultato in arrivo</span>';
+            ${sb.stopped ? `<div class="oempty">${esc(sb.stopWhy || 'Svago fermo.')}</div>` : sv.length ? sv.map(oggiRow).join('') : `<div class="oempty">Niente Svago adesso: compaiono con le prossime scansioni (${scanTxt()}).</div>`}</details>`; })()}
+        ${(() => { const done = mine.filter(x => x.result === 'won' || x.result === 'lost'); if (!done.length) return '';
+          const w = done.filter(x => x.result === 'won').length, pl = done.reduce((a, x) => a + Number(x.pnlEur || 0), 0);
+          return `<p class="muted tnum" style="margin:4px 2px 0">Finite oggi: <b>${w} vinte</b> su ${done.length} · ${signedMoney(pl)} <a class="tlink" href="#" onclick="show('bankroll');return false">vedi</a></p>`; })()}
+        ${mine.filter(x => x.result !== 'won' && x.result !== 'lost').length ? `<section class="block"><h3>🎯 Le tue giocate <small class="muted">· in corso e prossime</small></h3><div class="card3">${mine.filter(x => x.result !== 'won' && x.result !== 'lost').map(x => { const t = Date.parse(x.commence_time), st = x.result === 'won' ? `<span class="chip won">vinta ${esc(x.score || '')}</span>` : x.result === 'lost' ? `<span class="chip lost">persa ${esc(x.score || '')}</span>` : x.result === 'void' ? '<span class="chip">annullata</span>' : Date.now() < t ? `<span class="muted">alle ${dt(x.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>` : Date.now() < t + 115 * 60000 ? '<span class="chip live">● in corso</span>' : '<span class="muted">finita, risultato in arrivo</span>';
             return `<div class="oplay"><div><b>${esc(x.home)} – ${esc(x.away)}</b><small>${esc({ home: '1', draw: 'X', away: '2' }[x.selection] || '')} su ${esc(x.book)} a ${num(x.odd, 2)} · ${money(x.stake)} · <a class="tlink" href="${liveUrl(x.home, x.away)}" rel="noopener" onclick="rememberSpot()">🔎 su Google</a></small></div><div class="ores">${st}${x.pnlEur !== null ? `<b class="${cls(x.pnlEur)}">${signedMoney(x.pnlEur)}</b>` : ''}</div></div>`; }).join('')}</div></section>` : ''}
         ${todo.length ? `<section class="block"><h3>✏️ Da segnare</h3><div class="card3">${todo.slice(0, 6).map(x => `<div class="otodo">${esc(x.home)} – ${esc(x.away)}<small>${esc(x.book)} ${num(x.odd, 2)}</small></div>`).join('')}<button class="primary wide" onclick="show('bankroll')">Segna i risultati</button></div><p class="muted">Quelle delle serie maggiori si chiudono da sole entro domattina.</p></section>` : ''}
         ${(d.checks || []).length ? `<section class="block"><h3>🔍 Risultati da ricontrollare</h3><div class="card3">${d.checks.map(x => `<div class="ocheck"><b>${esc(x.match)}</b><small>Hai scritto <b>${esc(x.mine)}</b>, per ${esc(x.src || 'la fonte ufficiale')} è <b>${esc(x.official)}</b> (90 minuti). <a class="tlink" href="${resUrl(x.home, x.away, x.commence_time)}" target="_blank" rel="noopener">🔎 verifica</a></small>
@@ -1252,10 +1258,6 @@
       const row = (dot, title, text) => `<div class="prow"><span class="sdot ${dot}"></span><div><b>${title}</b> <span class="muted">${text}</span></div></div>`, out = [];
       if (P && P.count) { const v = P.myValue; out.push(row(P.pnlEur >= 0 ? 'ok' : 'bad', `💶 Saldo ${signedMoney(P.pnlEur || 0)}`, `su ${P.count} giocate${v && v.measured ? ` · le tue quote battono la chiusura del ${pct(v.avgClvPct, 1)}${v.measured < 20 ? ' (ancora poche misure)' : ''}` : ''}`)); }
       if (P && P.items) out.push(cassaChart(P.items));
-      const L = P && P.lists; if (L) out.push(row(L.fuori.n && L.fuori.pnl < 0 ? 'warn' : 'ok', '⭐ Il guadagno viene dalle liste del CRM', `${signedMoney(L.stelle.pnl)} su ${L.stelle.n} giocate ⭐, contro ${signedMoney(L.fuori.pnl)} su ${L.fuori.n} fuori lista. Gioca le ⭐, per divertirti usa lo Svago.`));
-      out.push(row('warn', '🏦 Il conto dove ci sono le quote migliori', '888sport ha la quota più alta nel 60% delle ⭐: senza un conto lì perdi la maggior parte delle giocate buone. Dopo averlo aperto aggiorna MY_BOOKS su Render.'));
-      out.push(row('ok', '📊 Il metodo è provato', '14 stagioni, 37.000 giocate: giocando alla quota più alta quando paga più del giusto, +6,5%. Alla quota media, −0,5%. Conta il prezzo, non indovinare.'));
-      const cr = C && C.items && C.items[0]; if (cr && cr.plan) out.push(row(cr.plan.leftAtReset >= 30 ? 'ok' : 'warn', `💳 Crediti ${cr.remaining}`, `${cr.plan.perDay} al giorno, alla ricarica ne restano circa ${cr.plan.leftAtReset}${cr.plan.hours ? ` · scansioni alle ${cr.plan.hours.join(', ')}` : ''}`));
       const today = new Date().toISOString().slice(0, 10), next = DECISIONI.find(([d]) => d >= today); if (next) out.push(row('info', '📅 Prossima decisione', next[1]));
       $('contano').innerHTML = out.join('');
     } catch (e) { $('contano').innerHTML = ''; }
@@ -1264,30 +1266,26 @@
   // 20/11/2026: le migliori del giorno secondo l'IA (fiducia + valore + quadro buono), sulla carta
   // 📈 KELLY e 🪜 SCALATA (21/11/2026): due sezioni separate. Kelly = quanto puntare su ogni ⭐ in base alla cassa (lungo periodo);
   // Scalata = una partita al giorno scelta per perdere poco, da 0,20 a raddoppio, freno a 10
+  let SCALATA_HTML = '<div class="sk box"></div>';
   async function loadScalata() {
-    const kb = $('kellyBox'), sb = $('scalataBox'); if (!kb || !sb) return;
+    const kb = $('kellyBox');
     try {
       const [S, d] = await Promise.all([getJson('/api/tracker/scalata'), getJson('/api/tracker/italia').catch(() => null)]);
       KELLY = S.kellyCassa || null;
       const hhmm = x => new Date(x).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
-      // Kelly: le ⭐ ancora da giocare con la puntata
-      const best = new Set((d && d.best) || []), stars = ((d && d.recent) || []).filter(r => best.has(r.id) && r.play && !r.played && !r.skipped && Date.parse(r.commence_time) > Date.now());
-      const krows = stars.map(r => { const st = stakeOf(r.play.odd, r.fair_prob); return `<div class="prow"><span class="sdot ok"></span><div><b>${esc(r.home)} – ${esc(r.away)}</b> <span class="muted tnum">· <b>${esc(r.pick)}</b> a ${num(r.play.odd, 2)} su ${esc(r.play.book_name || r.play.book || '')} · ${hhmm(r.commence_time)}</span><br><span class="tnum">💶 punta <b>${num(st, 2)} €</b></span> <small class="muted">· valore ${pct((r.play.odd * r.fair_prob - 1) * 100, 1)}</small></div></div>`; }).join('');
-      kb.innerHTML = `<h3>📈 Kelly <small class="muted">· per guadagnare nel lungo periodo</small></h3>
-        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Su ogni ⭐ la puntata giusta per la tua cassa: un quarto di Kelly, mai più del 2%. Più valore = puntata più alta; se la cassa scende, le puntate scendono da sole. Sullo storico: da 500 € a circa 6.800 € in 14 anni, mai sotto 451 €.</p>
-        <div class="prow" style="margin:0 0 8px"><span class="sdot info"></span><div><b>La tua cassa:</b> <input id="kellyIn" type="number" inputmode="decimal" min="10" step="10" value="${KELLY || ''}" placeholder="es. 500" style="width:100px"> € <button class="btn small" onclick="saveKelly(this)">Salva</button> <small class="muted">${KELLY ? '' : '(finché non la scrivi, valgono 2 € fissi)'}</small></div></div>
-        <div class="list">${krows || '<p class="muted">Nessuna ⭐ da giocare adesso: compaiono con le scansioni.</p>'}</div>`;
-      kb.hidden = false;
+      if (kb) kb.innerHTML = `<h3>📈 La tua cassa per Kelly</h3>
+        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Su ogni ⭐ il CRM ti dice quanto puntare: un quarto di Kelly sulla cassa, mai più del 2%. Se non la scrivi, valgono 2 € fissi.</p>
+        <div class="prow" style="margin:0 0 8px"><span class="sdot ${KELLY ? 'ok' : 'info'}"></span><div><b>Cassa:</b> <input id="kellyIn" type="number" inputmode="decimal" min="10" step="10" value="${KELLY || ''}" placeholder="es. 500" style="width:100px"> € <button class="btn small" onclick="saveKelly(this)">Salva</button></div></div>`;
+      if (kb) kb.hidden = false;
       // Scalata
       const n = S.next, lossNow = S.lostInCycle || 0;
       const stepsHtml = (S.steps || []).slice(0, 8).map(x => `<div class="prow"><span class="sdot ${x.open ? 'info' : x.pnl >= 0 ? 'ok' : 'bad'}"></span><div><b>${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">· ${esc(x.pick || '')} a ${num(x.odd, 2)} · gradino ${x.step} · ${num(x.stake, 2)} €${x.open ? ' · in corso' : ` · ${x.result === 'won' ? '✅' : '❌'} ${x.result_score || ''} · ${signedMoney(x.pnl)}`}${x.cycleEnd === 'freno' ? ' · 🛑 freno' : ''}</span></div></div>`).join('');
-      sb.innerHTML = `<h3>🪜 Scalata <small class="muted">· da 0,20 €, raddoppio, freno a ${S.stop}</small></h3>
-        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Una partita al giorno scelta per perdere il meno possibile: pagata più del giusto, quota 2–3,50 (sotto 2 il raddoppio non recupera), la più probabile, meglio se favorita (🤝 IA d'accordo), in casa e con la quota ferma. Se perde, la prossima si gioca al doppio; se vince, si riparte da 0,20. Dopo ${S.stop} perse di fila ci si ferma: perdita massima ${num(S.maxLoss, 2)} €. Sullo storico: +701 € in 14 anni, 2 anni in perdita.</p>
-        <div class="prow" style="margin:0 0 8px"><span class="sdot ${S.step >= 7 ? 'warn' : 'ok'}"></span><div><b>Gradino ${S.step} di ${S.stop}</b> <span class="muted tnum">· prossima puntata <b>${num(S.nextStake, 2)} €</b>${lossNow ? ` · da recuperare ${num(lossNow, 2)} €` : ''} · saldo scalata ${signedMoney(S.pnl || 0)}${S.stops ? ` · freni scattati ${S.stops}` : ''}</span></div></div>
+      SCALATA_HTML = `<h3>🪜 Scalata <small class="muted">· gradino ${S.step} di ${S.stop}</small></h3>
+        <p class="muted tnum" style="font-size:13.5px;margin:2px 0 6px">${S.step >= 7 ? '⚠️ ' : ''}prossima puntata <b>${num(S.nextStake, 2)} €</b>${lossNow ? ` · da recuperare ${num(lossNow, 2)} €` : ''} · saldo ${signedMoney(S.pnl || 0)}${S.stops ? ` · freni ${S.stops}` : ''}</p>
         ${n ? `<div class="prow"><span class="sdot ok"></span><div><b>Oggi: ${esc(n.home)} – ${esc(n.away)}</b> <span class="muted tnum">· <b>${esc(n.pick)}</b> a ${num(n.odd, 2)} o più su ${esc(n.book)} · ${hhmm(n.commence_time)}</span><br><span class="tnum">💶 punta <b>${num(((S.steps || []).find(x => x.open && x.day === n.day) || {}).stake || S.nextStake, 2)} €</b></span> <small class="muted">· ${(n.reasons || []).map(esc).join(' · ')}</small></div></div>` : `<p class="muted">${S.waiting ? 'In attesa del risultato della giocata in corso.' : `Nessuna partita adatta per ora: la cerca a ogni scansione${Date.now() < Date.parse(S.since) ? ` (si parte dal ${liveDay(S.since)})` : ''}.`}</p>`}
-        ${stepsHtml ? `<details class="pmore"><summary>ultimi gradini</summary>${stepsHtml}</details>` : ''}`;
-      sb.hidden = false;
-    } catch (e) { kb.hidden = true; sb.hidden = true; }
+        <details class="pmore"><summary>come funziona${stepsHtml ? ' · ultimi gradini' : ''}</summary><p class="muted" style="font-size:13.5px">Una partita al giorno, scelta per perdere il meno possibile: pagata più del giusto, quota 2–3,50, la più probabile (meglio se favorita, in casa, con la quota ferma). Se perde, la prossima al doppio; se vince, si riparte da 0,20 €. Dopo ${S.stop} perse di fila ci si ferma: perdita massima ${num(S.maxLoss, 2)} €. Sullo storico: +1.085 € in 14 anni, freno mai scattato.</p>${stepsHtml}</details>`;
+      const sl = $('scalataSlot'); if (sl) sl.innerHTML = SCALATA_HTML;
+    } catch (e) { SCALATA_HTML = ''; const sl = $('scalataSlot'); if (sl) sl.innerHTML = ''; if (kb) kb.hidden = true; }
   }
   async function saveKelly(btn) {
     const v = Number(String($('kellyIn').value).replace(',', '.')); if (!(v >= 10)) { alert('Scrivi la cassa in euro, per esempio 500'); return; }
@@ -1445,7 +1443,9 @@
     // vinte contro attese della lista da giocare: la protezione contro un valore che sulla carta c'e' ma nei risultati no
     const ck = d.bestCheck, ckLine = !ck || !ck.n ? '' : `<div class="wcheck ${ck.level}"><span>📊 Risultati della lista: <b>${ck.won} vinte su ${ck.n}</b>, attese ${num(ck.expected, 1)} · saldo carta <span class="${cls(ck.pnlEur)}">${signedMoney(ck.pnlEur)}</span></span><small>${ck.level === 'pochi' ? `giudizio da ${ck.minN} risultati` : ck.level === 'ok' ? 'in linea con le attese' : ck.level === 'attenzione' ? 'un po\' sotto le attese: normale sfortuna, si continua' : '⚠️ troppo sotto le attese per essere solo sfortuna: fermati e mandami il backup'}</small></div>`;
     let body;
-    if (b.stopped) body = `<div class="callout warn"><b>Fermati: il budget è sceso a ${money(b.balance)}, sotto lo stop di ${money(b.stop)}.</b> Niente giocate finché non controlliamo insieme i numeri (mandami il backup).</div>`;
+    if (b.stopped) body = !(b.balance <= b.stop) && /oggi|settimana/.test(b.stopWhy || '')
+      ? `<div class="callout warn"><b>Pausa: ${esc(b.stopWhy)}.</b> È il freno per le giornate storte: si riparte da solo${/settimana/.test(b.stopWhy) ? ' lunedì' : ' domani'}.</div>`
+      : `<div class="callout warn"><b>Fermati: il budget è sceso a ${money(b.balance)}, sotto lo stop di ${money(b.stop)}.</b> Niente giocate finché non controlliamo insieme i numeri (mandami il backup).</div>`;
     else if (b.playedToday >= b.maxPerDay) body = `<p class="muted hidnote">Hai già fatto ${b.playedToday} giocate oggi: per oggi basta così. Meno giocate scelte bene, meno errori.</p>`;
     else if (!items.length) body = `<p class="muted hidnote">Niente da giocare adesso: il CRM controlla ${scanTxt()}.</p>`;
     else body = items.map(r => ticket(r, '<span class="chip it">IT</span>')).join('');
