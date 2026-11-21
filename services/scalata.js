@@ -22,6 +22,8 @@ async function ensure(pool) {
   await pool.query(`CREATE TABLE IF NOT EXISTS scalata_picks (id SERIAL PRIMARY KEY, day TEXT NOT NULL UNIQUE, event_id TEXT NOT NULL, selection TEXT NOT NULL,
     league TEXT, home TEXT, away TEXT, commence_time TIMESTAMPTZ, prob NUMERIC(8,5), book TEXT, odd NUMERIC(8,3), edge_pct NUMERIC(8,3), score NUMERIC(8,3), reasons JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), result TEXT, result_score TEXT, settled_at TIMESTAMPTZ)`);
+  // 21/11: le quote di tutti i miei siti, per giocare dove la puntata minima lo permette (Eurobet 1 euro, Goldbet 0,10)
+  await pool.query(`ALTER TABLE scalata_picks ADD COLUMN IF NOT EXISTS quotes JSONB`);
   ready = true;
 }
 
@@ -56,9 +58,9 @@ async function record(pool, merged, books, nowMs = Date.now()) {
   for (const x of pickScalata(cands)) { const d = dayOf(x.commence_time); if (taken.has(d) || best.has(d) || T(x.commence_time) < nowMs + 30 * 60000) continue; best.set(d, x); }
   let n = 0;
   for (const [d, x] of best) {
-    const r = await pool.query(`INSERT INTO scalata_picks (day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, score, reasons)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (day) DO NOTHING`,
-      [d, x.event_id, x.selection, x.league, x.home, x.away, x.commence_time, x.prob, x.book, x.odd, x.edgePct, x.score, JSON.stringify(reasonsOf(x))]);
+    const r = await pool.query(`INSERT INTO scalata_picks (day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, score, reasons, quotes)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (day) DO NOTHING`,
+      [d, x.event_id, x.selection, x.league, x.home, x.away, x.commence_time, x.prob, x.book, x.odd, x.edgePct, x.score, JSON.stringify(reasonsOf(x)), JSON.stringify(x.quotes || {})]);
     n += r.rowCount;
   }
   return n;
@@ -87,8 +89,10 @@ function ladder(rows, { base = BASE, stop = STOP } = {}) {
 }
 async function getScalata(pool, { nowMs = Date.now() } = {}) {
   await ensure(pool);
-  const rows = (await pool.query(`SELECT day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, result, result_score FROM scalata_picks ORDER BY day`)).rows
-    .map(r => ({ ...r, prob: Number(r.prob), odd: Number(r.odd), edgePct: Number(r.edge_pct), pick: PICK[r.selection], book: (require('./italia').BOOK_NAMES || {})[r.book] || r.book }));
+  const BN = require('./italia').BOOK_NAMES || {};
+  const rows = (await pool.query(`SELECT day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, quotes, result, result_score FROM scalata_picks ORDER BY day`)).rows
+    .map(r => ({ ...r, prob: Number(r.prob), odd: Number(r.odd), edgePct: Number(r.edge_pct), pick: PICK[r.selection], bookKey: r.book, book: BN[r.book] || r.book,
+      quotes: Object.entries(r.quotes || {}).map(([k, q]) => ({ key: k, book: BN[k] || k, odd: Number(q), edgePct: (Number(q) * Number(r.prob) - 1) * 100 })).sort((a, b) => b.odd - a.odd) }));
   const L = ladder(rows), today = dayOf(nowMs), next = rows.find(r => r.day >= today && !r.result && T(r.commence_time) > nowMs - 3 * 3600000);
   return { since: SINCE, rules: { base: BASE, stop: STOP, minOdd: MIN_ODD, maxOdd: MAX_ODD, minEdge: MIN_EDGE }, ...L, next: next || null };
 }
