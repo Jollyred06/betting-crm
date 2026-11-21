@@ -1287,7 +1287,7 @@
       const n = S.next, lossNow = S.lostInCycle || 0;
       const stepsHtml = (S.steps || []).slice(0, 8).map(x => `<div class="prow"><span class="sdot ${x.open ? 'info' : x.pnl >= 0 ? 'ok' : 'bad'}"></span><div><b>${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">· ${esc(x.pick || '')} a ${num(x.odd, 2)} · gradino ${x.step} · ${num(x.stake, 2)} €${x.open ? ' · in corso' : ` · ${x.result === 'won' ? '✅' : '❌'} ${x.result_score || ''} · ${signedMoney(x.pnl)}`}${x.cycleEnd === 'freno' ? ' · 🛑 freno' : ''}</span></div></div>`).join('');
       SCALATA_HTML = `<h3>🪜 Scalata <small class="muted">· gradino ${S.step} di ${S.stop}${S.cassa ? ` · cassa ${num(S.cassaNow, 0)} €` : ''}</small></h3>
-        ${S.withdrawAlert ? `<div class="callout ok" style="margin:4px 0 8px"><b>🎉 La cassa della scalata è raddoppiata: ritira i tuoi ${num(S.withdrawAlert, 0)} € iniziali.</b> Da qui in poi giochi solo con i soldi vinti. <button class="chipbtn" onclick="scalWithdraw(${S.withdrawAlert}, this)">Ho ritirato</button></div>` : ''}
+        ${S.withdrawAlert ? `<div class="callout ok" style="margin:4px 0 8px"><b>🎉 La cassa della scalata è raddoppiata: ritira ${num(S.withdrawAlert, 0)} €${S.firstWithdraw ? ' (i tuoi soldi iniziali)' : ' (metà del guadagno)'}.</b> ${S.firstWithdraw ? 'Da qui in poi giochi solo con i soldi vinti.' : 'Il resto continua a lavorare.'} <button class="chipbtn" onclick="scalWithdraw(${S.withdrawAlert}, this)">Ho ritirato</button></div>` : ''}
         <p class="muted tnum" style="font-size:13.5px;margin:2px 0 6px">${S.step >= 7 ? '⚠️ ' : ''}prossima puntata <b>${num(S.nextStake, 2)} €</b>${lossNow ? ` · da recuperare ${num(lossNow, 2)} €` : ''} · saldo ${signedMoney(S.pnl || 0)}${S.stops ? ` · freni ${S.stops}` : ''}</p>
         ${n ? (() => { const st = ((S.steps || []).find(x => x.open) || {}).stake || S.nextStake;
           // il sito dove giocarla: la quota piu' alta tra quelli che accettano questa puntata e hanno ancora valore
@@ -1312,7 +1312,7 @@
     finally { btn.disabled = false; }
   }
   function saveScalCassa(btn) { const v = Number(String($('scalIn').value).replace(',', '.')); if (!(v >= 10)) { alert('Scrivi la cassa della scalata in euro, per esempio 250'); return; } postScalCassa({ cassa: v }, btn); }
-  function scalWithdraw(v, btn) { if (confirm(`Confermi di aver ritirato ${v} € dal conto?`)) postScalCassa({ withdrawn: v }, btn); }
+  function scalWithdraw(v, btn) { if (confirm(`Confermi di aver ritirato ${v} € dal conto?`)) postScalCassa({ withdraw: v }, btn); }
   async function saveKelly(btn) {
     const v = Number(String($('kellyIn').value).replace(',', '.')); if (!(v >= 10)) { alert('Scrivi la cassa in euro, per esempio 500'); return; }
     if (!(await ensureKey())) return; btn.disabled = true;   // ensureKey dice solo se c'e' la chiave: la chiave e' la variabile 'key'

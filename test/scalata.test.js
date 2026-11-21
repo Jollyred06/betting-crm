@@ -53,3 +53,9 @@ console.log('scalata e freno: ok');
   const R = S.ladder([], { cassa: 250, withdrawn: 0 }); assert.strictEqual(R.cassaNow, 250);
   console.log('partenza adattiva e ritiro: ok');
 }
+{ // ritiro a ogni raddoppio dopo il primo: livello 260 dopo il ritiro, a 520 si ritira meta' del guadagno (130)
+  const L = S.ladder([], { cassa: 250, withdrawn: 250, lastLevel: 260 }); assert.strictEqual(L.cassaNow, 0);
+  const rows = [{ id: 1, commence_time: '2026-12-01T12:00:00Z', odd: 2.5, result: 'won' }];
+  const M = S.ladder(rows, { cassa: 1000, withdrawn: 250, lastLevel: 375 }); // cassaNow = 750 + vincita
+  assert.strictEqual(M.withdrawAlert, Math.floor((M.cassaNow - 375) / 2)); assert.ok(!M.firstWithdraw);
+  console.log('ritiro a ogni raddoppio: ok'); }

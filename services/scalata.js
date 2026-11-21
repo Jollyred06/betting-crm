@@ -107,7 +107,7 @@ async function settle(pool) {
 /** cassa (21/11 sera, deciso con Christian): la partenza di ogni giro = cassa della scalata / 1.250, arrotondata in giu' a 0,10
  *  (minimo 0,10). Cassa della scalata = quella dichiarata - i ritiri + il saldo della scalata. Senza cassa: partenza fissa 0,20. */
 const baseFor = c => Math.max(0.1, Math.floor(c / 1250 * 10 + 1e-9) / 10);
-function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0 } = {}) {
+function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, lastLevel = 0 } = {}) {
   const adaptive = Number(cassa) > 0, bankAt = p => Number(cassa) - Number(withdrawn || 0) + p;
   if (adaptive) base = baseFor(bankAt(0));
   const key = r => `${r.commence_time ? new Date(r.commence_time).toISOString() : r.day}|${String(r.id || 0).padStart(9, '0')}`;
@@ -125,7 +125,10 @@ function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0 } 
   return { base, stop, maxLoss: base * (2 ** stop - 1), step: k + 1, nextStake: base * 2 ** k, lostInCycle: lost, pnl, staked, cycles, stops, maxStep: maxK, waiting,
     cassa: adaptive ? Number(cassa) : null, withdrawn: Number(withdrawn || 0), cassaNow,
     // ritiro del capitale: appena la cassa della scalata raddoppia, si ritira la cassa iniziale (una volta)
-    withdrawAlert: adaptive && !Number(withdrawn) && cassaNow >= 2 * Number(cassa) ? Number(cassa) : 0,
+    // 21/11 sera: dopo il primo ritiro, ogni volta che la cassa raddoppia ancora (rispetto a dopo l'ultimo ritiro) si ritira meta' del guadagno
+    withdrawAlert: !adaptive ? 0 : !Number(withdrawn) ? (cassaNow >= 2 * Number(cassa) ? Number(cassa) : 0)
+      : (Number(lastLevel) > 0 && cassaNow >= 2 * Number(lastLevel) ? Math.floor((cassaNow - Number(lastLevel)) / 2) : 0),
+    firstWithdraw: adaptive && !Number(withdrawn), lastLevel: Number(lastLevel) || null,
     steps: steps.slice(-15).reverse() };
 }
 async function getScalata(pool, { nowMs = Date.now() } = {}) {
@@ -139,12 +142,21 @@ async function getScalata(pool, { nowMs = Date.now() } = {}) {
 }
 
 /** 🪜 la cassa della scalata (dichiarata da Christian) e i ritiri. */
-async function getScalataCassa(pool) { try { const v = await require('./calib').loadState(pool, 'scalata_cassa'); return v && Number(v.cassa) > 0 ? { cassa: Number(v.cassa), withdrawn: Number(v.withdrawn || 0) } : null; } catch (e) { return null; } }
+async function getScalataCassa(pool) { try { const v = await require('./calib').loadState(pool, 'scalata_cassa'); return v && Number(v.cassa) > 0 ? { cassa: Number(v.cassa), withdrawn: Number(v.withdrawn || 0), lastLevel: Number(v.lastLevel || 0) } : null; } catch (e) { return null; } }
+/** Ritiro fatto (21/11): somma il ritirato e fissa il livello da cui misurare il prossimo raddoppio. */
+async function withdrawScalata(pool, amount) {
+  const a = Number(amount); if (!(a > 0)) throw new Error('Importo del ritiro non valido');
+  const cur = await getScalataCassa(pool); if (!cur) throw new Error('Prima scrivi la cassa della scalata');
+  const rows = (await pool.query(`SELECT id, day, commence_time, odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
+  const now = ladder(rows, cur).cassaNow, withdrawn = cur.withdrawn + a, lastLevel = now - a;
+  await require('./calib').saveState(pool, 'scalata_cassa', { cassa: cur.cassa, withdrawn, lastLevel, at: new Date().toISOString() });
+  return { cassa: cur.cassa, withdrawn, lastLevel };
+}
 async function setScalataCassa(pool, { cassa, withdrawn } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool); const cur = (await getScalataCassa(pool)) || { cassa: 0, withdrawn: 0 };
   const next = { cassa: cassa === undefined || cassa === null ? cur.cassa : Number(cassa), withdrawn: withdrawn === undefined || withdrawn === null ? cur.withdrawn : Number(withdrawn) };
   if (!(next.cassa >= 10 && next.cassa <= 1e6) || !(next.withdrawn >= 0)) throw new Error('Cassa non valida (da 10 a 1.000.000 euro)');
-  await C.saveState(pool, 'scalata_cassa', { ...next, at: new Date().toISOString() }); return next;
+  await C.saveState(pool, 'scalata_cassa', { ...next, lastLevel: cur.lastLevel || 0, at: new Date().toISOString() }); return next;
 }
 /** 📈 la cassa per Kelly, dichiarata da Christian (null = usa il saldo del budget). */
 async function getKellyCassa(pool) { try { const v = await require('./calib').loadState(pool, 'kelly_cassa'); return v && Number(v.value) > 0 ? Number(v.value) : null; } catch (e) { return null; } }
@@ -153,4 +165,4 @@ async function setKellyCassa(pool, value) {
   await require('./calib').ensureCalib(pool); await require('./calib').saveState(pool, 'kelly_cassa', { value: v, at: new Date().toISOString() }); return v;
 }
 
-module.exports = { baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };
+module.exports = { withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };
