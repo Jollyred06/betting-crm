@@ -45,3 +45,10 @@ console.log('martingala sui pareggi: ok');
   const a = riskLadder(rr, { bank0: 1250, adaptBase: true }); assert.ok(Math.abs(a.finalBase - 1) < 1e-9, 'partenza = cassa/1250');
   const f = riskLadder(rr, { bank0: 250, strictFrom: 3, strictProb: 0.45 }); assert.strictEqual(f.skipped, 1, 'al gradino 3 salta la partita al 40%');
   console.log('martingala adattiva al rischio: ok'); }
+{ const { recoveryLadder } = require('../services/martingala');
+  const band = [{ match_date: '2021-03-01', ad: 2.5, p: 0.42, hg: 1, ag: 0 }, { match_date: '2021-03-02', ad: 2.5, p: 0.42, hg: 1, ag: 0 }];
+  const low = [{ match_date: '2021-03-02', ad: 1.6, p: 0.65, hg: 1, ag: 1 }];
+  const r = recoveryLadder(band, low, { bank0: 250, adaptBase: false, lowFrom: 2 });
+  // giorno 1: 0,20 persa; giorno 2 gradino 2: quota 1,60 al 65%, puntata (0,20 + 0,28) / 0,6 = 0,80, vinta: +0,48 -> saldo +0,28
+  assert.ok(Math.abs(r.pnl - 0.28) < 1e-9, 'recupero: ' + r.pnl); assert.strictEqual(r.lowBets, 1);
+  console.log('gradini alti con puntata di recupero: ok'); }

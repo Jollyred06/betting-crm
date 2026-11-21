@@ -169,7 +169,33 @@ function riskLadder(rows, { bank0 = 250, adaptBase = false, fixedBase = 0.2, str
   return { bank0, final: bank, pnl: bank - bank0, bets, winPct: bets ? 100 * wins / bets : null, skipped, stops, longest, maxDrawdown: maxDd, minBank, ruined, finalBase: base,
     redSeasons: sv.filter(v => v < 0).length, seasons: sv.length, bySeason: [...seasons.entries()].map(([k2, v]) => ({ season: k2, pnl: v })) };
 }
-const MT_VERSION = 13;
+/** 🎯 21/11 sera (idea di Christian: "arrivare ai gradini alti con partite ad alta probabilita'"): fino al gradino lowFrom-1 raddoppio
+ *  sulla piu' probabile della fascia 2-3,50; da lowFrom in su si sceglie la piu' probabile tra le quote 1,50-3,50 (sempre con
+ *  valore) e la puntata e' quella che RECUPERA tutto il perso del giro + il guadagno di un giro (partenza x 1,4), non il raddoppio. */
+function recoveryLadder(rowsBand, rowsLow, { bank0 = 250, adaptBase = true, lowFrom = 6, stop = 10 } = {}) {
+  const pack = rows => { const m = new Map(); for (const r of rows) { const odd = Number(r.ad); if (!(odd > 1)) continue; const d = String(r.match_date instanceof Date ? r.match_date.toISOString() : r.match_date).slice(0, 10);
+    if (!m.has(d)) m.set(d, []); m.get(d).push({ odd, p: Number(r.p) || 1 / odd, won: Number(r.hg) === Number(r.ag) }); } return m; };
+  const B = pack(rowsBand), L = pack(rowsLow), days = [...new Set([...B.keys(), ...L.keys()])].sort();
+  const baseOf = bank => (adaptBase ? Math.max(0.1, Math.floor(bank / 1250 * 10) / 10) : 0.2);
+  let bank = bank0, base = baseOf(bank), k = 0, lost = 0, stops = 0, bets = 0, wins = 0, peak = bank0, maxDd = 0, minBank = bank0, longest = 0, maxStake = 0, worstStop = 0, ruined = null, lowBets = 0, lowWins = 0; const seasons = new Map();
+  for (const d of days) {
+    const step = k + 1, pool = step >= lowFrom ? [...(B.get(d) || []), ...(L.get(d) || [])] : (B.get(d) || []);
+    if (!pool.length) continue;
+    const x = pool.reduce((a, y) => (y.p > a.p ? y : a));
+    const stake = step >= lowFrom ? (lost + base * 1.4) / (x.odd - 1) : base * 2 ** k;
+    if (stake > bank) { ruined = ruined || d; break; }
+    if (step >= lowFrom) { lowBets++; if (x.won) lowWins++; }
+    maxStake = Math.max(maxStake, stake); bets++;
+    const v = x.won ? stake * (x.odd - 1) : -stake; bank += v; const se = seasonOf(d); seasons.set(se, (seasons.get(se) || 0) + v);
+    if (x.won) { wins++; k = 0; lost = 0; base = baseOf(bank); }
+    else { k++; lost += stake; longest = Math.max(longest, k); if (k >= stop) { stops++; worstStop = Math.max(worstStop, lost); k = 0; lost = 0; base = baseOf(bank); } }
+    peak = Math.max(peak, bank); maxDd = Math.max(maxDd, peak - bank); minBank = Math.min(minBank, bank);
+  }
+  const sv = [...seasons.values()];
+  return { lowFrom, final: bank, pnl: bank - bank0, bets, winPct: bets ? 100 * wins / bets : null, lowBets, lowWinPct: lowBets ? 100 * lowWins / lowBets : null, stops, worstStop, longest, maxStake, maxDrawdown: maxDd, minBank, ruined, finalBase: base,
+    redSeasons: sv.filter(v => v < 0).length, seasons: sv.length };
+}
+const MT_VERSION = 14;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
@@ -202,6 +228,9 @@ async function getMartingala(pool, { force = false } = {}) {
       return { giocate: band.length, sistemi: compareSystems(band), sistemi020: compareSystems(band, { unit: 0.2 }),
         // 21/11 sera (Christian): cassa 500 euro, partenza 0,20; Kelly sulla cassa da 500
         sistemi500: compareSystems(band, { bank0: 500, unit: 0.2 }),
+        // 🎯 gradini alti su quote 1,50-2,00 con puntata di recupero (partenza adattiva, cassa 250)
+        recupero: (() => { const low = [...valueOf(rows, 'home', 0.02, { minOdd: 1.5, maxOdd: 3.5 }), ...valueOf(rows, 'draw', 0.02, { minOdd: 1.5, maxOdd: 3.5 }), ...valueOf(rows, 'away', 0.02, { minOdd: 1.5, maxOdd: 3.5 })];
+          return { da4: recoveryLadder(band, low, { lowFrom: 4 }), da6: recoveryLadder(band, low, { lowFrom: 6 }), da8: recoveryLadder(band, low, { lowFrom: 8 }), mai: recoveryLadder(band, low, { lowFrom: 99 }) }; })(),
         // 🛡️ martingala adattiva al rischio, cassa della scalata 250 euro
         rischio: { attuale: riskLadder(band), partenzaAdattiva: riskLadder(band, { adaptBase: true }), filtro6: riskLadder(band, { strictFrom: 6 }),
           entrambe: riskLadder(band, { adaptBase: true, strictFrom: 6 }), entrambe5: riskLadder(band, { adaptBase: true, strictFrom: 5 }), filtro6p48: riskLadder(band, { strictFrom: 6, strictProb: 0.48 }) },
@@ -218,4 +247,4 @@ async function getMartingala(pool, { force = false } = {}) {
   return val;
 }
 
-module.exports = { riskLadder, adaptiveLadder, compareSystems, masanielloTable, dailyPicks, simulate, parallel, valueDraws, valueOf, flat, getMartingala };
+module.exports = { recoveryLadder, riskLadder, adaptiveLadder, compareSystems, masanielloTable, dailyPicks, simulate, parallel, valueDraws, valueOf, flat, getMartingala };
