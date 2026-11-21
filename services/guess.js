@@ -145,9 +145,15 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
       if (ai.sel !== g.sel) { differ++; differAi += aiHit; differPin += hit; } }
     recent.push({ home: r.home, away: r.away, at: r.commence_time, pick: g.pick, prob: g.prob, ai: ai ? ai.pick : null, aiHit: !!aiHit, score: score.get(ev), hit: !!hit });
   }
+  // 22/11: anche su TUTTE le partite viste (prima squadra), non solo quelle con segnale (le piu' equilibrate): ultima quota letta
+  const seenPin = mk(), seenAi = mk();
+  for (const e of evs) {
+    const ps = SELS.reduce((x, y) => (e.l[y] > e.l[x] ? y : x), 'home'); seenPin.n++; seenPin.hit += ps === e.out ? 1 : 0; seenPin.expected += e.l[ps];
+    const a = model.preds.get(e.id); if (a) { seenAi.n++; seenAi.hit += a.sel === e.out ? 1 : 0; seenAi.expected += a.prob; }
+  }
   const fin = t => ({ ...t, pct: t.n ? 100 * t.hit / t.n : null, expPct: t.n ? 100 * t.expected / t.n : null });
   recent.sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
-  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, withCal: !!cal, extra: evs.filter(e => e.extra).length, weekly: weeklyOf(evs, model.preds), withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, recent: recent.slice(0, 10) };
+  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, withCal: !!cal, extra: evs.filter(e => e.extra).length, weekly: weeklyOf(evs, model.preds), seen: fin(seenAi), withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, seen: fin(seenPin), recent: recent.slice(0, 10) };
 }
 
 let cacheG = null;
