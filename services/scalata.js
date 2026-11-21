@@ -75,7 +75,7 @@ async function record(pool, merged, books, nowMs = Date.now()) {
   // Piu' giocate nello stesso giorno (21/11 sera): appena la precedente ha l'esito (automatico o segnato a mano) si sceglie la
   // prossima, tra le partite che iniziano da 30 minuti a 12 ore da adesso, mai una gia' usata.
   const all = (await pool.query(`SELECT id, day, event_id, selection, commence_time, odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
-  if (all.some(r => r.result !== 'won' && r.result !== 'lost')) return 0;
+  if (all.some(r => !['won', 'lost', 'skip'].includes(r.result))) return 0;
   const stake = ladder(all).nextStake, used = new Set(all.map(r => r.event_id));
   const x = pickScalata(cands, stake).find(c => !used.has(c.event_id) && T(c.commence_time) >= nowMs + 30 * 60000 && T(c.commence_time) <= nowMs + 12 * 3600000);
   if (!x) return 0;
@@ -86,7 +86,8 @@ async function record(pool, merged, books, nowMs = Date.now()) {
 }
 /** Esito segnato a mano da Christian (per non aspettare i risultati automatici): vale subito per il calcolo della scalata. */
 async function setResult(pool, id, result, score = null) {
-  if (!['won', 'lost'].includes(result)) throw new Error('Esito non valido (vinta o persa)');
+  // 'skip' (21/11): non giocata -> non conta nella scalata (stesso gradino, stessa puntata) e se ne propone un'altra
+  if (!['won', 'lost', 'skip'].includes(result)) throw new Error('Esito non valido (vinta, persa o non giocata)');
   await ensure(pool);
   const r = await pool.query(`UPDATE scalata_picks SET result = $2, result_score = $3, manual = TRUE, settled_at = NOW() WHERE id = $1 RETURNING id`, [Number(id), result, score]);
   if (!r.rowCount) throw new Error('Giocata della scalata non trovata');
@@ -108,6 +109,7 @@ function ladder(rows, { base = BASE, stop = STOP } = {}) {
   const list = [...rows].sort((a, b) => key(a).localeCompare(key(b))); let k = 0, lost = 0, pnl = 0, staked = 0, stops = 0, cycles = 0, maxK = 0, waiting = false;
   const steps = [];
   for (const r of list) {
+    if (r.result === 'skip') continue;   // non giocata: non conta
     const stake = base * 2 ** k, odd = Number(r.odd), res = r.result;
     if (res !== 'won' && res !== 'lost') { steps.push({ ...r, step: k + 1, stake, open: true }); waiting = true; continue; }
     staked += stake;
@@ -123,7 +125,7 @@ async function getScalata(pool, { nowMs = Date.now() } = {}) {
   const rows = (await pool.query(`SELECT id, day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, quotes, result, result_score, manual FROM scalata_picks ORDER BY commence_time, id`)).rows
     .map(r => ({ ...r, prob: Number(r.prob), odd: Number(r.odd), edgePct: Number(r.edge_pct), pick: PICK[r.selection], bookKey: r.book, book: BN[r.book] || r.book,
       quotes: Object.entries(r.quotes || {}).map(([k, q]) => ({ key: k, book: BN[k] || k, odd: Number(q), edgePct: (Number(q) * Number(r.prob) - 1) * 100 })).sort((a, b) => b.odd - a.odd) }));
-  const L = ladder(rows), next = rows.find(r => r.result !== 'won' && r.result !== 'lost');   // la giocata in corso (una alla volta)
+  const L = ladder(rows), next = rows.find(r => !['won', 'lost', 'skip'].includes(r.result));   // la giocata in corso (una alla volta)
   return { since: SINCE, rules: { base: BASE, stop: STOP, minOdd: MIN_ODD, maxOdd: MAX_ODD, minEdge: MIN_EDGE }, ...L, next: next || null };
 }
 

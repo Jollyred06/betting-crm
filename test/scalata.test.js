@@ -40,3 +40,5 @@ console.log('scalata e freno: ok');
   assert.strictEqual(L.nextStake, 0.2);
   console.log('piu\' giocate nello stesso giorno: ok');
 }
+{ const L = S.ladder([{ id: 1, commence_time: '2026-11-22T12:00:00Z', odd: 2.4, result: 'lost' }, { id: 2, commence_time: '2026-11-22T15:00:00Z', odd: 2.4, result: 'skip' }, { id: 3, commence_time: '2026-11-22T18:00:00Z', odd: 2.4, result: null }]);
+  assert.strictEqual(L.step, 2, 'la non giocata non conta'); assert.strictEqual(L.steps[0].stake, 0.4, 'la prossima resta a 0,40'); console.log('non giocata: ok'); }
