@@ -9,6 +9,16 @@
 const { seasonOf } = require('./backtest');
 
 /** Parte pura. rows: {match_date, league, home, away, hg, ag, pd, ad}. */
+/** 21/11 (idea di Christian: "giocare le piu' probabili con quote piu' giuste del normale"): solo i pareggi PAGATI PIU' DEL GIUSTO,
+ *  cioe' quota piu' alta tra i bookmaker (md) almeno il 2% sopra la quota giusta di Pinnacle senza margine; si gioca a quella quota. */
+function valueDraws(rows, minEdge = 0.02) {
+  const out = [];
+  for (const r of rows) {
+    const h = Number(r.ph), d = Number(r.pd), a = Number(r.pa), m = Number(r.md); if (!(h > 1 && d > 1 && a > 1 && m > 1)) continue;
+    const fair = (1 / d) / (1 / h + 1 / d + 1 / a); if (m * fair - 1 >= minEdge) out.push({ ...r, ad: m });
+  }
+  return out;
+}
 function simulate(rows, { base = 0.2, cap = Infinity, bank = Infinity, double = true, pick = 0 } = {}) {
   // il pareggio con la quota piu' bassa di ogni giorno (pick = 0), oppure il secondo piu' basso (pick = 1), ecc.: cosi' piu' scalate
   // in parallelo, ognuna con la sua partita del giorno (21/11: "si arriva a 20k giocando su piu' partite")
@@ -52,11 +62,16 @@ function parallel(rows, n, opts = {}) {
     // cassa che sarebbe servita: nel caso peggiore le scalate perdono insieme (somma delle perdite massime di ognuna)
     bankNeeded: sum('maxLost'), seasons: [...seasons.values()].sort((a, b) => a.season.localeCompare(b.season)) };
 }
-const MT_VERSION = 3;
+/** Per confronto: tutti i pareggi di valore a puntata fissa (2 euro), senza scalata. */
+function flat(rows, stake = 2) {
+  let pnl = 0, n = 0, w = 0; for (const r of rows) { const o = Number(r.ad); if (!(o > 1)) continue; n++; if (Number(r.hg) === Number(r.ag)) { w++; pnl += stake * (o - 1); } else pnl -= stake; }
+  return { bets: n, draws: w, pnl, staked: stake * n, roiPct: n ? 100 * pnl / (stake * n) : null };
+}
+const MT_VERSION = 4;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
-  const rows = (await pool.query(`SELECT match_date, league, home, away, hg, ag, pd, ad FROM hist_pin WHERE pd IS NOT NULL OR ad IS NOT NULL ORDER BY match_date`)).rows;
+  const rows = (await pool.query(`SELECT match_date, league, home, away, hg, ag, ph, pd, pa, md, ad FROM hist_pin WHERE pd IS NOT NULL OR ad IS NOT NULL ORDER BY match_date`)).rows;
   const val = {
     version: MT_VERSION, matches: rows.length, updatedAt: new Date().toISOString(),
     // il metodo del video: parte da 0,20 e raddoppia. Scenari: senza limiti (il sogno), banco che accetta al massimo 1.000 euro,
@@ -67,6 +82,8 @@ async function getMartingala(pool, { force = false } = {}) {
     base50: simulate(rows, { base: 50 }),
     // piu' scalate in parallelo: ogni giorno le N partite col pareggio piu' basso, una scalata per ciascuna (0,20 e raddoppio)
     parallele: [3, 5, 10].map(n => parallel(rows, n)),
+    // solo pareggi pagati piu' del giusto (alla quota piu' alta): raddoppio, una e tre scalate, e a puntata fissa per confronto
+    valore: { una: simulate(valueDraws(rows)), tre: parallel(valueDraws(rows), 3), fissa: flat(valueDraws(rows)) },
     // per confronto: la scalata "giusta" che alza solo quanto basta per recuperare (meno aggressiva del raddoppio)
     recupero: simulate(rows, { double: false })
   };
@@ -74,4 +91,4 @@ async function getMartingala(pool, { force = false } = {}) {
   return val;
 }
 
-module.exports = { simulate, parallel, getMartingala };
+module.exports = { simulate, parallel, valueDraws, flat, getMartingala };

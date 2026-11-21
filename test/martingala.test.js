@@ -17,3 +17,8 @@ console.log('martingala sui pareggi: ok');
 { const { parallel } = require('../services/martingala');
   const p2 = parallel(rows, 2); assert.strictEqual(p2.ladders, 2); assert.strictEqual(p2.bets, 20, 'due scalate, una partita ciascuna al giorno');
   console.log('scalate in parallelo: ok'); }
+{ const { valueDraws, flat } = require('../services/martingala');
+  const v = valueDraws([{ ph: 2, pd: 3.4, pa: 4, md: 3.7, hg: 1, ag: 1 }, { ph: 2, pd: 3.4, pa: 4, md: 3.4, hg: 0, ag: 0 }]);
+  assert.strictEqual(v.length, 1, 'solo il pareggio pagato sopra il giusto'); assert.strictEqual(v[0].ad, 3.7);
+  assert.ok(Math.abs(flat(v).pnl - 5.4) < 1e-9);
+  console.log('pareggi di valore: ok'); }
