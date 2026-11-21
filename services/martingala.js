@@ -11,11 +11,16 @@ const { seasonOf } = require('./backtest');
 /** Parte pura. rows: {match_date, league, home, away, hg, ag, pd, ad}. */
 /** 21/11 (idea di Christian: "giocare le piu' probabili con quote piu' giuste del normale"): solo i pareggi PAGATI PIU' DEL GIUSTO,
  *  cioe' quota piu' alta tra i bookmaker (md) almeno il 2% sopra la quota giusta di Pinnacle senza margine; si gioca a quella quota. */
-function valueDraws(rows, minEdge = 0.02) {
-  const out = [];
+function valueDraws(rows, minEdge = 0.02) { return valueOf(rows, 'draw', minEdge); }
+/** 21/11 ("non soffermiamoci solo sui pareggi"): lo stesso per casa, pareggio o trasferta. Ogni riga diventa la giocata su quell'esito,
+ *  con 'ad' = quota piu' alta e hg/ag riscritti in modo che "pareggio" della simulazione = esito vinto (cosi' simulate/flat valgono per tutti). */
+function valueOf(rows, sel, minEdge = 0.02, { minOdd = 1, maxOdd = Infinity } = {}) {
+  const out = [], P = { home: ['ph', 'mh'], draw: ['pd', 'md'], away: ['pa', 'ma'] }[sel];
   for (const r of rows) {
-    const h = Number(r.ph), d = Number(r.pd), a = Number(r.pa), m = Number(r.md); if (!(h > 1 && d > 1 && a > 1 && m > 1)) continue;
-    const fair = (1 / d) / (1 / h + 1 / d + 1 / a); if (m * fair - 1 >= minEdge) out.push({ ...r, ad: m });
+    const h = Number(r.ph), d = Number(r.pd), a = Number(r.pa), m = Number(r[P[1]]); if (!(h > 1 && d > 1 && a > 1 && m > 1) || m < minOdd || m > maxOdd) continue;
+    const fair = (1 / Number(r[P[0]])) / (1 / h + 1 / d + 1 / a); if (m * fair - 1 < minEdge) continue;
+    const res = Number(r.hg) > Number(r.ag) ? 'home' : Number(r.hg) === Number(r.ag) ? 'draw' : 'away', won = res === sel;
+    out.push({ match_date: r.match_date, league: r.league, home: r.home, away: r.away, hg: won ? 1 : 1, ag: won ? 1 : 0, ad: m, pd: m });
   }
   return out;
 }
@@ -71,11 +76,11 @@ function flat(rows, stake = 2) {
   let pnl = 0, n = 0, w = 0; for (const r of rows) { const o = Number(r.ad); if (!(o > 1)) continue; n++; if (Number(r.hg) === Number(r.ag)) { w++; pnl += stake * (o - 1); } else pnl -= stake; }
   return { bets: n, draws: w, pnl, staked: stake * n, roiPct: n ? 100 * pnl / (stake * n) : null };
 }
-const MT_VERSION = 6;
+const MT_VERSION = 7;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
-  const rows = (await pool.query(`SELECT match_date, league, home, away, hg, ag, ph, pd, pa, md, ad FROM hist_pin WHERE pd IS NOT NULL OR ad IS NOT NULL ORDER BY match_date`)).rows;
+  const rows = (await pool.query(`SELECT match_date, league, home, away, hg, ag, ph, pd, pa, mh, md, ma, ad FROM hist_pin WHERE pd IS NOT NULL OR ad IS NOT NULL ORDER BY match_date`)).rows;
   const val = {
     version: MT_VERSION, matches: rows.length, updatedAt: new Date().toISOString(),
     // il metodo del video: parte da 0,20 e raddoppia. Scenari: senza limiti (il sogno), banco che accetta al massimo 1.000 euro,
@@ -88,6 +93,13 @@ async function getMartingala(pool, { force = false } = {}) {
     parallele: [3, 5, 10].map(n => parallel(rows, n)),
     // la scalata con il freno: dopo 6, 8, 10 o 12 pareggi mancati di fila si chiude in perdita e si riparte (tutti i pareggi e solo quelli di valore)
     freno: [6, 8, 10, 12].map(k => ({ passi: k, tutti: simulate(rows, { maxSteps: k }), valore: simulate(valueDraws(rows), { maxSteps: k }) })),
+    // per esito (casa, pareggio, trasferta) e tutti insieme: solo giocate pagate almeno il 2% piu' del giusto alla quota piu' alta;
+    // a puntata fissa, scalata con freno a 6 e 8, e quanto lunga e' stata la serie peggiore (senza limiti, solo per misurarla)
+    perEsito: (() => { const one = l => ({ fissa: flat(l), freno6: simulate(l, { maxSteps: 6 }), freno8: simulate(l, { maxSteps: 8 }), serieMax: simulate(l).longest });
+      const H = valueOf(rows, 'home'), D = valueOf(rows, 'draw'), A = valueOf(rows, 'away');
+      return { casa: one(H), pareggio: one(D), trasferta: one(A), tutti: one([...H, ...D, ...A]),
+        // la fascia delle stelle: quota 2-3,50
+        stelle: one([...valueOf(rows, 'home', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'away', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'draw', 0.02, { minOdd: 2, maxOdd: 3.5 })]) }; })(),
     // solo pareggi pagati piu' del giusto (alla quota piu' alta): raddoppio, una e tre scalate, e a puntata fissa per confronto
     valore: { una: simulate(valueDraws(rows)), tre: parallel(valueDraws(rows), 3), fissa: flat(valueDraws(rows)) },
     // per confronto: la scalata "giusta" che alza solo quanto basta per recuperare (meno aggressiva del raddoppio)
@@ -97,4 +109,4 @@ async function getMartingala(pool, { force = false } = {}) {
   return val;
 }
 
-module.exports = { simulate, parallel, valueDraws, flat, getMartingala };
+module.exports = { simulate, parallel, valueDraws, valueOf, flat, getMartingala };

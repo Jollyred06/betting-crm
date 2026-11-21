@@ -23,3 +23,8 @@ console.log('martingala sui pareggi: ok');
   assert.ok(Math.abs(flat(v).pnl - 5.4) < 1e-9);
   console.log('pareggi di valore: ok'); }
 { const f = simulate(rows, { maxSteps: 3 }); assert.ok(f.busts >= 2 && f.maxStake <= 0.8 + 1e-9, 'col freno a 3 la puntata non supera 0,80: ' + f.maxStake); console.log('freno sulla serie: ok'); }
+{ const { valueOf, flat } = require('../services/martingala');
+  const r = [{ ph: 2, pd: 3.4, pa: 4, mh: 2.2, md: 3.4, ma: 4, hg: 2, ag: 0 }, { ph: 2, pd: 3.4, pa: 4, mh: 2.2, md: 3.4, ma: 4, hg: 0, ag: 1 }];
+  const H = valueOf(r, 'home'); assert.strictEqual(H.length, 2); assert.ok(Math.abs(flat(H).pnl - (2 * 1.2 - 2)) < 1e-9, 'casa: una vinta e una persa');
+  assert.strictEqual(valueOf(r, 'away').length, 0, 'trasferta pagata il giusto: fuori');
+  console.log('valore per esito: ok'); }
