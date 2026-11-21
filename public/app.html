@@ -1295,7 +1295,7 @@
   }
   async function saveKelly(btn) {
     const v = Number(String($('kellyIn').value).replace(',', '.')); if (!(v >= 10)) { alert('Scrivi la cassa in euro, per esempio 500'); return; }
-    const key = await ensureKey(); if (!key) return; btn.disabled = true;
+    if (!(await ensureKey())) return; btn.disabled = true;   // ensureKey dice solo se c'e' la chiave: la chiave e' la variabile 'key'
     try { const r = await fetch('/api/tracker/kelly-cassa', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ cassa: v }) });
       const j = await r.json().catch(() => ({})); if (!r.ok) { alert('Non salvata: ' + (j.error || r.status)); return; } KELLY = j.cassa; memo.clear(); loadScalata(); refreshViews(); }
     finally { btn.disabled = false; }
