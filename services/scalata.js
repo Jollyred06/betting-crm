@@ -76,7 +76,7 @@ async function record(pool, merged, books, nowMs = Date.now()) {
   // prossima, tra le partite che iniziano da 30 minuti a 12 ore da adesso, mai una gia' usata.
   const all = (await pool.query(`SELECT id, day, event_id, selection, commence_time, odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
   if (all.some(r => !['won', 'lost', 'skip'].includes(r.result))) return 0;
-  const stake = ladder(all).nextStake, used = new Set(all.map(r => r.event_id));
+  const C = await getScalataCassa(pool), stake = ladder(all, C || {}).nextStake, used = new Set(all.map(r => r.event_id));
   const x = pickScalata(cands, stake).find(c => !used.has(c.event_id) && T(c.commence_time) >= nowMs + 30 * 60000 && T(c.commence_time) <= nowMs + 12 * 3600000);
   if (!x) return 0;
   const r = await pool.query(`INSERT INTO scalata_picks (day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, score, reasons, quotes)
@@ -104,7 +104,12 @@ async function settle(pool) {
 }
 
 /** Parte pura: la scalata giorno per giorno (raddoppio, freno a 10) e la puntata di oggi. */
-function ladder(rows, { base = BASE, stop = STOP } = {}) {
+/** cassa (21/11 sera, deciso con Christian): la partenza di ogni giro = cassa della scalata / 1.250, arrotondata in giu' a 0,10
+ *  (minimo 0,10). Cassa della scalata = quella dichiarata - i ritiri + il saldo della scalata. Senza cassa: partenza fissa 0,20. */
+const baseFor = c => Math.max(0.1, Math.floor(c / 1250 * 10 + 1e-9) / 10);
+function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0 } = {}) {
+  const adaptive = Number(cassa) > 0, bankAt = p => Number(cassa) - Number(withdrawn || 0) + p;
+  if (adaptive) base = baseFor(bankAt(0));
   const key = r => `${r.commence_time ? new Date(r.commence_time).toISOString() : r.day}|${String(r.id || 0).padStart(9, '0')}`;
   const list = [...rows].sort((a, b) => key(a).localeCompare(key(b))); let k = 0, lost = 0, pnl = 0, staked = 0, stops = 0, cycles = 0, maxK = 0, waiting = false;
   const steps = [];
@@ -113,10 +118,14 @@ function ladder(rows, { base = BASE, stop = STOP } = {}) {
     const stake = base * 2 ** k, odd = Number(r.odd), res = r.result;
     if (res !== 'won' && res !== 'lost') { steps.push({ ...r, step: k + 1, stake, open: true }); waiting = true; continue; }
     staked += stake;
-    if (res === 'won') { const win = stake * (odd - 1); pnl += win; steps.push({ ...r, step: k + 1, stake, pnl: win, cycleEnd: 'vinta' }); cycles++; k = 0; lost = 0; }
-    else { pnl -= stake; lost += stake; k++; maxK = Math.max(maxK, k); steps.push({ ...r, step: k, stake, pnl: -stake }); if (k >= stop) { steps[steps.length - 1].cycleEnd = 'freno'; stops++; k = 0; lost = 0; } }
+    if (res === 'won') { const win = stake * (odd - 1); pnl += win; steps.push({ ...r, step: k + 1, stake, pnl: win, cycleEnd: 'vinta' }); cycles++; k = 0; lost = 0; if (adaptive) base = baseFor(bankAt(pnl)); }
+    else { pnl -= stake; lost += stake; k++; maxK = Math.max(maxK, k); steps.push({ ...r, step: k, stake, pnl: -stake }); if (k >= stop) { steps[steps.length - 1].cycleEnd = 'freno'; stops++; k = 0; lost = 0; if (adaptive) base = baseFor(bankAt(pnl)); } }
   }
+  const cassaNow = adaptive ? bankAt(pnl) : null;
   return { base, stop, maxLoss: base * (2 ** stop - 1), step: k + 1, nextStake: base * 2 ** k, lostInCycle: lost, pnl, staked, cycles, stops, maxStep: maxK, waiting,
+    cassa: adaptive ? Number(cassa) : null, withdrawn: Number(withdrawn || 0), cassaNow,
+    // ritiro del capitale: appena la cassa della scalata raddoppia, si ritira la cassa iniziale (una volta)
+    withdrawAlert: adaptive && !Number(withdrawn) && cassaNow >= 2 * Number(cassa) ? Number(cassa) : 0,
     steps: steps.slice(-15).reverse() };
 }
 async function getScalata(pool, { nowMs = Date.now() } = {}) {
@@ -125,10 +134,18 @@ async function getScalata(pool, { nowMs = Date.now() } = {}) {
   const rows = (await pool.query(`SELECT id, day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, quotes, result, result_score, manual FROM scalata_picks ORDER BY commence_time, id`)).rows
     .map(r => ({ ...r, prob: Number(r.prob), odd: Number(r.odd), edgePct: Number(r.edge_pct), pick: PICK[r.selection], bookKey: r.book, book: BN[r.book] || r.book,
       quotes: Object.entries(r.quotes || {}).map(([k, q]) => ({ key: k, book: BN[k] || k, odd: Number(q), edgePct: (Number(q) * Number(r.prob) - 1) * 100 })).sort((a, b) => b.odd - a.odd) }));
-  const L = ladder(rows), next = rows.find(r => !['won', 'lost', 'skip'].includes(r.result));   // la giocata in corso (una alla volta)
+  const C = await getScalataCassa(pool), L = ladder(rows, C || {}), next = rows.find(r => !['won', 'lost', 'skip'].includes(r.result));   // la giocata in corso (una alla volta)
   return { since: SINCE, rules: { base: BASE, stop: STOP, minOdd: MIN_ODD, maxOdd: MAX_ODD, minEdge: MIN_EDGE }, ...L, next: next || null };
 }
 
+/** 🪜 la cassa della scalata (dichiarata da Christian) e i ritiri. */
+async function getScalataCassa(pool) { try { const v = await require('./calib').loadState(pool, 'scalata_cassa'); return v && Number(v.cassa) > 0 ? { cassa: Number(v.cassa), withdrawn: Number(v.withdrawn || 0) } : null; } catch (e) { return null; } }
+async function setScalataCassa(pool, { cassa, withdrawn } = {}) {
+  const C = require('./calib'); await C.ensureCalib(pool); const cur = (await getScalataCassa(pool)) || { cassa: 0, withdrawn: 0 };
+  const next = { cassa: cassa === undefined || cassa === null ? cur.cassa : Number(cassa), withdrawn: withdrawn === undefined || withdrawn === null ? cur.withdrawn : Number(withdrawn) };
+  if (!(next.cassa >= 10 && next.cassa <= 1e6) || !(next.withdrawn >= 0)) throw new Error('Cassa non valida (da 10 a 1.000.000 euro)');
+  await C.saveState(pool, 'scalata_cassa', { ...next, at: new Date().toISOString() }); return next;
+}
 /** 📈 la cassa per Kelly, dichiarata da Christian (null = usa il saldo del budget). */
 async function getKellyCassa(pool) { try { const v = await require('./calib').loadState(pool, 'kelly_cassa'); return v && Number(v.value) > 0 ? Number(v.value) : null; } catch (e) { return null; } }
 async function setKellyCassa(pool, value) {
@@ -136,4 +153,4 @@ async function setKellyCassa(pool, value) {
   await require('./calib').ensureCalib(pool); await require('./calib').saveState(pool, 'kelly_cassa', { value: v, at: new Date().toISOString() }); return v;
 }
 
-module.exports = { BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };
+module.exports = { baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };

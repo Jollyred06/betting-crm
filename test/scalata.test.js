@@ -42,3 +42,14 @@ console.log('scalata e freno: ok');
 }
 { const L = S.ladder([{ id: 1, commence_time: '2026-11-22T12:00:00Z', odd: 2.4, result: 'lost' }, { id: 2, commence_time: '2026-11-22T15:00:00Z', odd: 2.4, result: 'skip' }, { id: 3, commence_time: '2026-11-22T18:00:00Z', odd: 2.4, result: null }]);
   assert.strictEqual(L.step, 2, 'la non giocata non conta'); assert.strictEqual(L.steps[0].stake, 0.4, 'la prossima resta a 0,40'); console.log('non giocata: ok'); }
+// 21/11 sera: partenza adattiva = cassa / 1.250 e avviso di ritiro al raddoppio
+{
+  assert.strictEqual(S.baseFor(250), 0.2); assert.strictEqual(S.baseFor(625), 0.5); assert.strictEqual(S.baseFor(1250), 1); assert.strictEqual(S.baseFor(50), 0.1);
+  const L = S.ladder([{ id: 1, commence_time: '2026-11-22T12:00:00Z', odd: 2.5, result: 'won' }], { cassa: 625 });
+  assert.ok(Math.abs(L.pnl - 0.75) < 1e-9 && L.nextStake === 0.5 && Math.abs(L.cassaNow - 625.75) < 1e-9);
+  const W = S.ladder([{ id: 1, commence_time: '2026-11-22T12:00:00Z', odd: 2.5, result: 'won' }], { cassa: 250, withdrawn: 0 });
+  assert.strictEqual(W.withdrawAlert, 0);
+  const B = S.ladder([], { cassa: 250 }); assert.strictEqual(B.nextStake, 0.2);
+  const R = S.ladder([], { cassa: 250, withdrawn: 0 }); assert.strictEqual(R.cassaNow, 250);
+  console.log('partenza adattiva e ritiro: ok');
+}
