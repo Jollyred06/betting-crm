@@ -1078,13 +1078,15 @@
   async function approveTeam(hk, on, btn) {
     if (!(await ensureKey())) return;
     if (!confirm(`${heroName(hk)}: confermi ${on ? 'in campo' : 'fuori'}? Per 7 giorni non si potranno fare altri cambi.`)) return;
-    btn.disabled = true;
+    btn.disabled = true; const label = btn.textContent; btn.textContent = 'Salvo…';
     try {
       const r = await fetch('/api/tracker/team/' + hk, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ on, note: 'approvato dalla pagella' }) });
       const d = await r.json().catch(() => ({}));
-      if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova.'); btn.disabled = false; return; }
-      if (!r.ok) { alert(d.error || 'Errore ' + r.status); btn.disabled = false; return; }
-      try { memo.clear(); localStorage.removeItem('swr:/api/tracker/team'); localStorage.removeItem('swr:/api/tracker/italia'); } catch (e) { /* facoltativo */ } loadItalia();
+      if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova.'); btn.disabled = false; btn.textContent = label; return; }
+      if (!r.ok) { alert(d.error || 'Errore ' + r.status); btn.disabled = false; btn.textContent = label; return; }
+      // 21/11: conferma subito sul bottone (prima restava fermo finche' non si ricaricava tutta la pagina, 3-4 secondi)
+      btn.outerHTML = `<b style="color:var(--ok)">✅ ${on ? 'In campo' : 'In panchina'}</b>`;
+      try { memo.clear(); localStorage.removeItem('swr:/api/tracker/team'); localStorage.removeItem('swr:/api/tracker/italia'); } catch (e) { /* facoltativo */ } setTimeout(loadItalia, 50);
     } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
   }
   // la squadra al completo, con il superpotere di ognuno
