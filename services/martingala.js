@@ -150,7 +150,7 @@ function adaptiveLadder(rows, { base = 0.2, stop = 10, switchAt = 4, mode = 'ada
  *  adaptBase: la partenza di ogni giro = cassa della scalata / 1.250 (arrotondata in giu' a 0,10, minimo 0,10): la perdita massima
  *  col freno a 10 (partenza x 1.023) resta sotto l'82% della cassa; sale con le vincite, scende con le perdite.
  *  strictFrom: da quel gradino in su si gioca solo con probabilita' >= strictProb, altrimenti quel giorno si salta. */
-function riskLadder(rows, { bank0 = 250, adaptBase = false, fixedBase = 0.2, strictFrom = 0, strictProb = 0.45, stop = 10 } = {}) {
+function riskLadder(rows, { bank0 = 250, adaptBase = false, fixedBase = 0.2, strictFrom = 0, strictProb = 0.45, stop = 10, pickBy = 'prob' } = {}) {
   const byDay = new Map();
   for (const r of rows) { const odd = Number(r.ad); if (!(odd > 1)) continue; const d = String(r.match_date instanceof Date ? r.match_date.toISOString() : r.match_date).slice(0, 10);
     if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push({ odd, p: Number(r.p) || 1 / odd, won: Number(r.hg) === Number(r.ag) }); }
@@ -158,7 +158,9 @@ function riskLadder(rows, { bank0 = 250, adaptBase = false, fixedBase = 0.2, str
   const baseOf = bank => (adaptBase ? Math.max(0.1, Math.floor(bank / 1250 * 10) / 10) : fixedBase);
   let bank = bank0, base = baseOf(bank), k = 0, stops = 0, bets = 0, wins = 0, skipped = 0, peak = bank0, maxDd = 0, minBank = bank0, longest = 0, ruined = null; const seasons = new Map();
   for (const [d, list] of days) {
-    const step = k + 1, best = list.reduce((a, x) => (x.p > a.p ? x : a));
+    // pickBy 'score' (21/11 sera, dal backup): probabilita' + peso al valore + premio alla quota 2,50-3,00
+    const sc = x => (pickBy === 'score' ? 100 * x.p + Math.min((x.odd * x.p - 1) * 100, 10) * 0.5 + (x.odd >= 2.5 && x.odd < 3 ? 1 : 0) : x.p);
+    const step = k + 1, best = list.reduce((a, x) => (sc(x) > sc(a) ? x : a));
     if (strictFrom && step >= strictFrom && best.p < strictProb) { skipped++; continue; }
     const stake = base * 2 ** k; if (stake > bank) { ruined = ruined || d; break; }
     const v = best.won ? stake * (best.odd - 1) : -stake; bank += v; bets++; const se = seasonOf(d); seasons.set(se, (seasons.get(se) || 0) + v);
@@ -195,7 +197,7 @@ function recoveryLadder(rowsBand, rowsLow, { bank0 = 250, adaptBase = true, lowF
   return { lowFrom, final: bank, pnl: bank - bank0, bets, winPct: bets ? 100 * wins / bets : null, lowBets, lowWinPct: lowBets ? 100 * lowWins / lowBets : null, stops, worstStop, longest, maxStake, maxDrawdown: maxDd, minBank, ruined, finalBase: base,
     redSeasons: sv.filter(v => v < 0).length, seasons: sv.length };
 }
-const MT_VERSION = 14;
+const MT_VERSION = 15;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
@@ -228,6 +230,10 @@ async function getMartingala(pool, { force = false } = {}) {
       return { giocate: band.length, sistemi: compareSystems(band), sistemi020: compareSystems(band, { unit: 0.2 }),
         // 21/11 sera (Christian): cassa 500 euro, partenza 0,20; Kelly sulla cassa da 500
         sistemi500: compareSystems(band, { bank0: 500, unit: 0.2 }),
+        // 🔧 21/11 sera (backup del 21/11): valore minimo 2/3/4% e scelta per probabilita' o per punteggio, partenza adattiva, cassa 250
+        motore: (() => { const bandE = e => [...valueOf(rows, 'home', e, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'draw', e, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'away', e, { minOdd: 2, maxOdd: 3.5 })];
+          const b2 = bandE(0.02), b3 = bandE(0.03), b4 = bandE(0.04), o = { adaptBase: true };
+          return { v2prob: riskLadder(b2, o), v3prob: riskLadder(b3, o), v4prob: riskLadder(b4, o), v2score: riskLadder(b2, { ...o, pickBy: 'score' }), v3score: riskLadder(b3, { ...o, pickBy: 'score' }), v4score: riskLadder(b4, { ...o, pickBy: 'score' }) }; })(),
         // 🎯 gradini alti su quote 1,50-2,00 con puntata di recupero (partenza adattiva, cassa 250)
         recupero: (() => { const low = [...valueOf(rows, 'home', 0.02, { minOdd: 1.5, maxOdd: 3.5 }), ...valueOf(rows, 'draw', 0.02, { minOdd: 1.5, maxOdd: 3.5 }), ...valueOf(rows, 'away', 0.02, { minOdd: 1.5, maxOdd: 3.5 })];
           return { da4: recoveryLadder(band, low, { lowFrom: 4 }), da6: recoveryLadder(band, low, { lowFrom: 6 }), da8: recoveryLadder(band, low, { lowFrom: 8 }), mai: recoveryLadder(band, low, { lowFrom: 99 }) }; })(),
