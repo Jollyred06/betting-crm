@@ -1356,7 +1356,7 @@
     const it = chip.includes('chip it'), live = Date.parse(r.commence_time) > Date.now();
     const guessHtml = `
             ${r.guess ? (() => { const m = String(r.result_score || '').match(/(\d+)\s*-\s*(\d+)/), out = m ? (+m[1] > +m[2] ? '1' : +m[1] === +m[2] ? 'X' : '2') : null, mark = p => out ? (p === out ? ' ✅' : ' ❌') : '';
-              return `<small class="guess">🤖 Pronostico IA: <b>${r.guess.ai ? r.guess.ai.pick : r.guess.pick}</b> (${num(100 * (r.guess.ai ? r.guess.ai.prob : r.guess.prob), 0)}%)${mark(r.guess.ai ? r.guess.ai.pick : r.guess.pick)} · Pinnacle: ${r.guess.pick}${mark(r.guess.pick)}</small>`; })() : ''}`;
+              return `<small class="guess">🤖 Pronostico IA: <b>${r.guess.ai ? r.guess.ai.pick : r.guess.pick}</b> (${num(100 * (r.guess.ai ? r.guess.ai.prob : r.guess.prob), 0)}%)${mark(r.guess.ai ? r.guess.ai.pick : r.guess.pick)} · Pinnacle: ${r.guess.pick}${mark(r.guess.pick)}${(r.guess.ai ? r.guess.ai.pick : r.guess.pick) === r.pick ? ' · <b class="agree">🤝 d\'accordo con la giocata</b>' : ''}</small>`; })() : ''}`;
     const detHtml = `
             <details class="tdet" data-k="t${r.id}"><summary>dettagli</summary>
               <div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
@@ -1410,9 +1410,15 @@
     else if (b.playedToday >= b.maxPerDay) body = `<p class="muted hidnote">Hai già fatto ${b.playedToday} giocate oggi: per oggi basta così. Meno giocate scelte bene, meno errori.</p>`;
     else if (!items.length) body = `<p class="muted hidnote">Niente da giocare adesso: il CRM controlla ${scanTxt()}.</p>`;
     else body = items.map(r => ticket(r, '<span class="chip it">IT</span>')).join('');
-    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una</small></h4>${b.stopped ? line : ''}${body}<details class="tdet"><summary>regole e risultati della lista</summary><p class="muted">Selezione ${d.bestRule === 'consigliate' ? '✅ consigliate' : d.bestOnlySafe ? '🛡️ sicure' : '⚙️ F2+'}, quota fino a ${num(d.bestMaxOdd || 3.5, 2)}, niente coppe${d.bestNoAwayThin ? ', niente 2 nei campionati minori' : ''}, prima le 🟢 solide, massimo ${b.maxPerDay} al giorno.</p>${ckLine}</details></section>`;
+    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una</small></h4>${b.stopped ? line : ''}${body}<details class="tdet"><summary>regole e risultati della lista</summary><p class="muted">Selezione ${d.bestRule === 'consigliate' ? '✅ consigliate' : d.bestOnlySafe ? '🛡️ sicure' : '⚙️ F2+'}, quota fino a ${num(d.bestMaxOdd || 3.5, 2)}, niente coppe${d.bestNoAwayThin ? ', niente 2 nei campionati minori' : ''}, prima le 🟢 solide, massimo ${b.maxPerDay} al giorno.</p>${ckLine}${agreeLine(d)}</details></section>`;
   }
   let showOthers = false;
+  // 🤝 21/11/2026: ⭐ d'accordo con il pronostico (l'esito giocato e' anche il favorito) contro le altre, valore e saldo
+  function agreeLine(d) {
+    const A = d && d.agreeStats; if (!A) return '';
+    const one = (lab, g) => { const c = g.avgClvPct, r = g.results || {}; return `${lab}: ${g.signals} segnali${g.measured ? ` · valore ${pct(c, 1)}` : ''}${r.settled ? ` · vinte ${r.won} su ${r.settled} · saldo ${pct(r.roiPct, 1)}` : ''}`; };
+    return `<p class="muted tnum" style="font-size:13.5px"><b>🤝 Pronostico e quota d'accordo</b> (l'esito giocato è anche il favorito): ${one('⭐ d\'accordo', A.star.yes)} — ${one('⭐ non d\'accordo', A.star.no)}. Su tutti i segnali: ${one('d\'accordo', A.all.yes)} — ${one('non d\'accordo', A.all.no)}. Si decide il 30/11 se puntare di più sulle 🤝.</p>`;
+  }
   function italiaTickets(d, head, chip, tail) {
     if (d && Array.isArray(d.myBooks) && d.myBooks.length) myBookNames = d.myBooks;
     const now = Date.now(), it = chip.includes('chip it');

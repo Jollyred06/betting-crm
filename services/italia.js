@@ -1200,6 +1200,12 @@ function budgetOf(played, c, nowMs = Date.now()) {
 // ------------------------------------------------------------------------------------------- riepilogo per l'app
 
 /** Come stats, piu' le vinte attese su 10 secondo Pinnacle (probabilita' giusta media). */
+/** L'esito giocato e' anche il favorito di Pinnacle (prima lettura)? Il pronostico IA coincide con questo quasi sempre. */
+function agreesWithFav(r) {
+  const o = { home: 1 / Number(r.pin_h), draw: 1 / Number(r.pin_d), away: 1 / Number(r.pin_a) };
+  if (!['home', 'draw', 'away'].every(k => Number.isFinite(o[k]))) return false;
+  return ['home', 'draw', 'away'].reduce((a, b) => (o[b] > o[a] ? b : a), 'home') === r.selection;
+}
 function oddsStats(list) {
   const p = list.map(r => Number(r.fair_prob)).filter(v => v > 0);
   return { ...stats(list), expectedWinsOf10: p.length ? 10 * p.reduce((a, b) => a + b, 0) / p.length : null };
@@ -1473,9 +1479,13 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     const hf = ruleRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd), t0 = T(AWAY_THIN.since);
     const grp = l => { const now = l.filter(r => T(r.created_at) >= t0); return { ...oddsStats(now), results: R.resultStats(now), retro: { ...oddsStats(l), results: R.resultStats(l) } }; };
     out.homeField = { rules: AWAY_THIN, active: bc.noAwayThin, kept: grp(hf.filter(r => !isAwayThin(r))), awayThin: grp(hf.filter(isAwayThin)) };
+    // 🤝 21/11/2026 (idea di Christian): giocata d'accordo con il pronostico (l'esito e' anche il favorito di Pinnacle, come l'IA
+    // quasi sempre) contro le altre. Nel backup del 20/11: d'accordo valore +4,7% (346), le altre +2,9% (243). Solo misura.
+    const ag = l => { const y = l.filter(agreesWithFav), n = l.filter(r => !agreesWithFav(r)); return { yes: { ...oddsStats(y), results: R.resultStats(y) }, no: { ...oddsStats(n), results: R.resultStats(n) } }; };
+    out.agreeStats = { star: ag(liqRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd)), all: ag(primaryRows(all)) };
   }
   TM.totale = Date.now() - T0; out.timing = TM;
   return out;
 }
 
-module.exports = { choosePlan, PLUS_MIN_LEFT, SVAGO, svagoCfg, isSvago, svagoBudget, budgetOf, closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { agreesWithFav, choosePlan, PLUS_MIN_LEFT, SVAGO, svagoCfg, isSvago, svagoBudget, budgetOf, closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
