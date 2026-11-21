@@ -105,13 +105,13 @@ const SYSTEMS = {
     after: (s, won, st, x) => { s.bk += won ? st * (x.odd - 1) : -st; s.n--; if (won) s.w--; if (s.w === 0 || s.w > s.n || s.n === 0 || s.bk <= 0.01) { s.cycles = (s.cycles || 0) + 1; if (s.w > 0) s.stops = (s.stops || 0) + 1; s.n = 10; s.w = 4; s.bk = 20; } } },
   kelly: { label: '¼ Kelly (2% max)', stake: (s, x, bank) => Math.max(0, Math.min(0.02 * bank, bank * ((x.odd * x.p - 1) / (x.odd - 1)) / 4)), after() {} }
 };
-function compareSystems(rows, { bank0 = 100 } = {}) {
+function compareSystems(rows, { bank0 = 100, unit = 1 } = {}) {
   const days = dailyPicks(rows), out = {};
   for (const [key, sys] of Object.entries(SYSTEMS)) {
     const st = {}; if (sys.init) sys.init(st);
     let bank = bank0, peak = bank0, maxDd = 0, staked = 0, maxStake = 0, minBank = bank0, ruined = null; const seasons = new Map();
     for (const x of days) {
-      let s = sys.stake(st, x, bank); if (!(s > 0)) { sys.after(st, x.won, 0, x); continue; }
+      let s = key === 'kelly' || key === 'masaniello' ? sys.stake(st, x, bank) : unit * sys.stake(st, x, bank); if (!(s > 0)) { sys.after(st, x.won, 0, x); continue; }
       if (s > bank) { s = bank; } if (bank <= 0.01) { ruined = ruined || x.d; break; }
       const pnl = x.won ? s * (x.odd - 1) : -s; bank += pnl; staked += s; maxStake = Math.max(maxStake, s); minBank = Math.min(minBank, bank);
       peak = Math.max(peak, bank); maxDd = Math.max(maxDd, peak - bank); const se = seasonOf(x.d); seasons.set(se, (seasons.get(se) || 0) + pnl);
@@ -123,7 +123,7 @@ function compareSystems(rows, { bank0 = 100 } = {}) {
   }
   return { days: days.length, winPct: days.length ? 100 * days.filter(x => x.won).length / days.length : null, avgOdd: days.length ? days.reduce((a, x) => a + x.odd, 0) / days.length : null, systems: out };
 }
-const MT_VERSION = 9;
+const MT_VERSION = 10;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
@@ -152,7 +152,8 @@ async function getMartingala(pool, { force = false } = {}) {
     // stessa giocata del giorno a 0,20 fissi, per vedere quanto aggiunge la scalata
     fascia: (() => { const band = [...valueOf(rows, 'home', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'draw', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'away', 0.02, { minOdd: 2, maxOdd: 3.5 })];
       const daily = simulate(band, { double: true }), fixedDaily = simulate(band, { maxSteps: 0 });
-      return { giocate: band.length, sistemi: compareSystems(band), senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
+      // 21/11: Christian parte da 0,20 (non da 1 euro): stesso confronto con l'unita' da 0,20
+      return { giocate: band.length, sistemi: compareSystems(band), sistemi020: compareSystems(band, { unit: 0.2 }), senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
         parallele2: parallel(band, 2, { maxSteps: 8 }), parallele3: parallel(band, 3, { maxSteps: 8 }), fissaUnaAlGiorno: fixedDaily }; })(),
     // solo pareggi pagati piu' del giusto (alla quota piu' alta): raddoppio, una e tre scalate, e a puntata fissa per confronto
     valore: { una: simulate(valueDraws(rows)), tre: parallel(valueDraws(rows), 3), fissa: flat(valueDraws(rows)) },
