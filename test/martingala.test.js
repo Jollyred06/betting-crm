@@ -14,3 +14,6 @@ const v = simulate(rows);
 assert.ok(Math.abs(v.maxStake - 102.4) < 1e-9, 'raddoppio: ' + v.maxStake);
 assert.ok(Math.abs(v.pnl - (102.4 * 2 - 0.2 * (2 ** 9 - 1))) < 1e-9, 'saldo del raddoppio: ' + v.pnl);
 console.log('martingala sui pareggi: ok');
+{ const { parallel } = require('../services/martingala');
+  const p2 = parallel(rows, 2); assert.strictEqual(p2.ladders, 2); assert.strictEqual(p2.bets, 20, 'due scalate, una partita ciascuna al giorno');
+  console.log('scalate in parallelo: ok'); }
