@@ -42,7 +42,9 @@ const CHECKS = [
   let bad = 0;
   await get('/health');   // sveglia il server, se dormiva: il tempo della prima chiamata non conta
   for (const [path, test] of CHECKS) {
-    const r = await get(path); let v = r.code === 200 ? test(r) : `errore ${r.code || r.err}`;
+    let r = await get(path), v = r.code === 200 ? test(r) : `errore ${r.code || r.err}`;
+    // subito dopo un riavvio l'IA carica storico ed Elo per circa un minuto: un controllo fallito si riprova una volta dopo 45 s
+    if (v !== true) { await new Promise(res => setTimeout(res, 45000)); r = await get(path); v = r.code === 200 ? test(r) : `errore ${r.code || r.err}`; }
     if (v === true && r.s > MAX_S) v = `lenta (${r.s.toFixed(1)} s)`;
     if (v !== true) bad++;
     console.log(`${v === true ? '✅' : '❌'} ${path.padEnd(28)} ${r.s.toFixed(1)} s${v === true ? '' : '  ' + v}`);
