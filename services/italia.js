@@ -574,6 +574,8 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
   try { Object.assign(out, await require('./results').settleSignals(pool, { env, nowMs, http: resultsHttp, sameTeam })); } catch (e) { out.erroreRisultati = e.message; }
   try { Object.assign(out, await require('./highlightly').settleFromHighlightly(pool, { env, nowMs })); } catch (e) { out.erroreHighlightly = e.message; }
   try { await require('./goals').settleGoals(pool); } catch (e) { out.erroreGol = e.message; }
+  // 📋 21/11: le partite viste ancora senza risultato si cercano anche nello storico (football-data, gratis)
+  try { Object.assign(out, await require('./coverage').settleFromHist(pool, { nowMs })); } catch (e) { out.erroreRisultatiStorico = e.message; }
   // ⚽ Over/Under di Pinnacle con i crediti di The Odds API: in sottofondo (legge tanti elenchi gratuiti, non deve rallentare il giro)
   if (!ouBusy) { ouBusy = true; require('./ouPinnacle').tick(pool, { env, nowMs }).catch(() => {}).finally(() => { ouBusy = false; }); }
   try { Object.assign(out, await require('./backup').saveDaily(pool, { nowMs })); } catch (e) { out.erroreCopia = e.message; }

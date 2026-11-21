@@ -139,6 +139,10 @@ router.get('/martingala', async (req, res) => {
   try { res.json(await require('../services/martingala').getMartingala(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 // 🪜 scalata (martingala con il freno a 10, da 0,20) e 📈 cassa per Kelly
+// 📋 quanti risultati mancano (per giorno e campionato)
+router.get('/coverage', async (req, res) => {
+  try { res.json(await require('../services/coverage').getCoverage(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/scalata', async (req, res) => {
   try { const S = require('../services/scalata'), K = await S.getKelly(pool); res.json({ ...(await S.getScalata(pool)), kellyCassa: K ? K.value : null, kelly: K }); } catch (err) { res.status(500).json({ error: err.message }); }
 });
