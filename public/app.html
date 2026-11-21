@@ -1110,7 +1110,7 @@
   // probabilita' di vincere (prezzo giusto di Pinnacle) e guadagno atteso sui 2 euro alla quota che giochi
   // 20/11/2026: quanto puntare. Sotto i 300 euro di cassa 2 euro fissi; sopra, un quarto di Kelly (minimo 2, massimo 2% della cassa)
   // puntata minima per sito (21/11: Eurobet 1 euro, detto da Christian; gli altri quando li sappiamo)
-  const BOOK_MIN = { eurobet: 1, goldbet: 0.1 };   // Goldbet 0,10: 'mi sa', da confermare
+  const BOOK_MIN = { eurobet: 1, goldbet: 0.1, '888sport': 0.01, '888sport_it': 0.01 };   // 21/11 da Christian (Goldbet 0,10 da confermare)
   let BANK = null, KELLY = null;   // KELLY: la cassa dichiarata per Kelly (21/11); se c'e', comanda lei
   function stakeOf(odd, p, bank = BANK) {
     odd = Number(odd); p = Number(p);
