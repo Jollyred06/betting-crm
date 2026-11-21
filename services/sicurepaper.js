@@ -22,6 +22,7 @@ function pickSicure(merged, books, nowMs = Date.now(), { minProb = MIN_PROB, min
   for (const r of merged || []) {
     const start = T(r.commence_time);
     if (!(start > nowMs + minLeadMin * 60000) || start > nowMs + windowHours * 3600000) continue;
+    if (I.isNoise(r)) continue;   // 21/11: giovanili, femminili, riserve, amichevoli
     const bs = r.bookmakers || [], pinB = bs.find(b => b.key === 'pinnacle'), pin = pinB && I.trio(pinB.outcomes);
     if (!pin) continue;
     const over = 1 / pin.home + 1 / pin.draw + 1 / pin.away; if (over < 1 || over > 1.12) continue;

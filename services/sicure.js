@@ -44,7 +44,8 @@ function upcoming(rows, firstOf, ai = null) {
 let cache = null;
 async function getSicure(pool, { nowMs = Date.now() } = {}) {
   if (cache && nowMs - cache.at < 10 * 60000) return cache.val;
-  const past = (await pool.query(`SELECT pin_h, pin_d, pin_a, result_score FROM goal_watch WHERE pin_h IS NOT NULL AND result_score ~ '^[0-9]+-[0-9]+$'`)).rows;
+  const noise = require('./italia').isNoise;
+  const past = (await pool.query(`SELECT league, home, away, pin_h, pin_d, pin_a, result_score FROM goal_watch WHERE pin_h IS NOT NULL AND result_score ~ '^[0-9]+-[0-9]+$'`)).rows.filter(r => !noise(r));
   const next = (await pool.query(`SELECT event_id, league, home, away, commence_time, pin_h, pin_d, pin_a FROM goal_watch
     WHERE pin_h IS NOT NULL AND commence_time > to_timestamp($1::double precision / 1000) AND commence_time < to_timestamp($1::double precision / 1000) + INTERVAL '24 hours'`, [nowMs])).rows;
   const firstOf = new Map();
@@ -60,7 +61,7 @@ async function getSicure(pool, { nowMs = Date.now() } = {}) {
     const cal = await C.getCalRaw(pool, { wait: false }).catch(() => null), E = require('./elo').peekElo(pool), w = { weights: ga.weights, byContext: ga.byContext, own: ga.own };
     ai = (first, last) => GS.aiGuess({ ...first, league: last.league }, last, cal, C.adjust, w, E ? E.of(last.home, last.away) : null);
   } catch (e) { ai = null; }
-  const all = upcoming(next, firstOf, ai);
+  const all = upcoming(next.filter(r => !noise(r)), firstOf, ai);
   const val = { tiers: tierStats(past), settled: past.length, showMin: SHOW_MIN, upcoming: all.length, list: all.filter(x => x.prob >= SHOW_MIN).slice(0, 20), updatedAt: new Date(nowMs).toISOString() };
   cache = { at: nowMs, val };
   return val;

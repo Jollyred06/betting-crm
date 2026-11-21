@@ -128,8 +128,9 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
     if (f && out) evs.push({ id: ev, t: Date.parse(r.commence_time), f, l, out, ctx: contextOf(r), grp: ownGroup(r), elo: eloOf ? eloOf(r.home, r.away) : null });
   }
   const known = new Set(evs.map(e => e.id));
+  const noise = require('./italia').isNoise;
   for (const r of extraRows) {
-    if (known.has(r.event_id)) continue;
+    if (known.has(r.event_id) || noise(r)) continue;   // 21/11: giovanili, femminili, riserve, amichevoli: fuori
     const l = probsOf(r.pin_h, r.pin_d, r.pin_a), f = probsOf(r.f_h, r.f_d, r.f_a) || l, out = outcomeOf(r.result_score);
     if (l && out) { known.add(r.event_id); evs.push({ id: r.event_id, t: Date.parse(r.commence_time), f, l, out, ctx: contextOf(r), grp: ownGroup(r), elo: eloOf ? eloOf(r.home, r.away) : null, extra: true }); }
   }

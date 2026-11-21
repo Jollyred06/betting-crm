@@ -44,11 +44,17 @@ async function getCoverage(pool, { nowMs = Date.now() } = {}) {
     FROM goal_watch WHERE commence_time < to_timestamp($1::double precision / 1000) - INTERVAL '3 hours' AND commence_time > to_timestamp($1::double precision / 1000) - INTERVAL '21 days'
     GROUP BY 1 ORDER BY 1`, [nowMs])).rows;
   const n = rows.reduce((a, r) => a + r.n, 0), done = rows.reduce((a, r) => a + r.done, 0);
+  // senza giovanili, femminili, riserve e amichevoli: le partite che contano davvero
+  const noise = require('./italia').isNoise;
+  const all21 = (await pool.query(`SELECT league, home, away, result_score FROM goal_watch WHERE commence_time < to_timestamp($1::double precision / 1000) - INTERVAL '3 hours'
+    AND commence_time > to_timestamp($1::double precision / 1000) - INTERVAL '21 days'`, [nowMs])).rows.filter(r => !noise(r));
+  const useful = { total: all21.length, done: all21.filter(r => /^[0-9]+-[0-9]+$/.test(r.result_score || '')).length };
+  useful.pct = useful.total ? 100 * useful.done / useful.total : null;
   // i campionati che mancano di piu' (ultimi 7 giorni): dove serve una fonte o un abbinamento migliore
   const leagues = (await pool.query(`SELECT league, COUNT(*)::int AS n, COUNT(*) FILTER (WHERE result_score IS NULL)::int AS missing FROM goal_watch
     WHERE commence_time < to_timestamp($1::double precision / 1000) - INTERVAL '3 hours' AND commence_time > to_timestamp($1::double precision / 1000) - INTERVAL '7 days'
     GROUP BY league ORDER BY missing DESC LIMIT 15`, [nowMs])).rows;
-  return { total: n, done, pct: n ? 100 * done / n : null, days: rows, missingLeagues: leagues };
+  return { total: n, done, pct: n ? 100 * done / n : null, useful, days: rows, missingLeagues: leagues };
 }
 
 module.exports = { matchHist, settleFromHist, getCoverage };

@@ -11,3 +11,16 @@ assert.strictEqual(by.b, '0-0', 'giorno dopo e nome corto');
 assert.ok(!by.a || by.a === '2-1');
 assert.ok(!by.c, 'partita non nello storico');
 console.log('risultati dallo storico: ok', JSON.stringify(by));
+
+// 21/11: giovanili, femminili, riserve e amichevoli fuori da IA e prove sulla carta
+{
+  const { isNoise } = require('../services/italia');
+  const ok = require('assert');
+  ok.strictEqual(isNoise({ league: 'UEFA - U19 Euro Championship Qualifiers', home: 'Italy U19', away: 'Spain U19' }), true);
+  ok.strictEqual(isNoise({ league: 'Spain - Tercera Division', home: 'Atletico Madrid B', away: 'Rayo' }), true);
+  ok.strictEqual(isNoise({ league: 'Club Friendly', home: 'A', away: 'B' }), true);
+  ok.strictEqual(isNoise({ league: 'England - Women Super League', home_team: 'Arsenal', away_team: 'Chelsea' }), true);
+  ok.strictEqual(isNoise({ league: 'Italy - Serie A', home_team: 'Parma', away_team: 'Roma' }), false);
+  ok.strictEqual(isNoise({ league: 'England - Premier League', home: 'Arsenal', away: 'Chelsea' }), false);
+  console.log('isNoise ok');
+}
