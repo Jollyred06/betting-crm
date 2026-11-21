@@ -981,7 +981,10 @@
   function teamCard(T) {
     if (!T || !T.members) return '';
     const g = { green: ['ok', 'in forma'], yellow: ['warn', 'da vedere'], red: ['bad', 'fuori forma'] };
-    const row = m => { const [lv, lab] = g[m.grade] || g.yellow;
+    // 21/11: sotto i segnali minimi non e' "da vedere" ma solo "pochi dati" (grigio): il giallo resta per chi ha i numeri e qualcosa non torna
+    const row = m => { let [lv, lab] = g[m.grade] || g.yellow;
+      if (m.grade === 'yellow' && (m.measured || 0) < T.rules.minN) { lv = 'info'; lab = `pochi dati (${m.measured || 0} su ${T.rules.minN})`; }
+      else if (m.grade === 'yellow') lab = m.won < m.expected ? 'da vedere: vinte sotto le attese' : m.pnlEur < 0 ? 'da vedere: soldi persi' : 'da vedere: valore incerto';
       const nums = m.measured ? `${m.measured} con chiusura · valore ${pct(m.avgClvPct, 1)}${m.clvCi95 ? ` (da ${pct(m.clvCi95[0], 1)} a ${pct(m.clvCi95[1], 1)})` : ''} · ${m.won} vinte su ${m.settled}, attese ${num(m.expected, 1)} · ${signedMoney(m.pnlEur)}` : 'ancora nessun dato';
       const prop = m.proposal ? `<div class="tprop">💡 Proposta: <b>${m.kind === 'filter' ? (m.proposal === 'off' ? 'togliere questo filtro' : 'rimettere questo filtro') : (m.proposal === 'on' ? 'metterla in campo (le sue partite diventano ⭐)' : 'toglierla dalle ⭐')}</b>
         <button class="playbtn" ${T.brakeUntil ? 'disabled' : ''} onclick="approveTeam('${m.key}', ${m.proposal === 'on'}, this)">${T.brakeUntil ? 'freno attivo' : 'Approvo'}</button></div>` : '';
@@ -1346,6 +1349,8 @@
       const j = await r.json().catch(() => ({})); if (!r.ok) { alert('Non salvata: ' + (j.error || r.status)); return; } KELLY = j.cassa; memo.clear(); loadScalata(); refreshViews(); }
     finally { btn.disabled = false; }
   }
+  // 21/11: le prove sulla carta si colorano solo da 30 chiuse (prima: 0 su 1 diventava rosso)
+  const paperDot = (n, pnl) => !(n >= 30) ? 'info' : pnl >= 0 ? 'ok' : 'bad';
   async function loadMigliori() {
     const box = $('miglioriBox'); if (!box) return;
     try {
@@ -1356,8 +1361,8 @@
         .filter(([k]) => I[k] && I[k].si.settled >= 5 && I[k].no.settled >= 5).map(([k, lab]) => `${lab}: ${pct(I[k].si.roiPct, 0)} contro ${pct(I[k].no.roiPct, 0)}`).join(' · ');
       box.innerHTML = `<h3>🏆 Le migliori di oggi <small class="muted">· scelte dall'IA, prova sulla carta</small></h3>
         <p class="muted" style="font-size:14px;margin:4px 0 8px;">Le 5 partite delle prossime 24 ore con il punteggio più alto: sicure almeno al 50%, pagate almeno il giusto su un sito dove puoi giocare, meglio se in casa, in un campionato serio e con la quota ferma. Si registrano da sole a 2 € l'una: se in 2–3 settimane vincono spesso e guadagnano, diventano la lista da giocare.</p>
-        <div class="prow" style="margin:2px 0 8px"><span class="sdot ${!t.settled ? 'info' : t.pnl >= 0 ? 'ok' : 'bad'}"></span><div><b>🧪 Le 5 del giorno</b> <span class="muted tnum">${t.settled ? `vinte ${t.won} su ${t.settled} (${num(100 * t.won / t.settled, 0)}%, attese ${num(100 * t.expected / t.settled, 0)}%) · saldo ${signedMoney(t.pnl)} (${pct(t.roiPct, 1)}) · quota media ${num(t.avgOdd, 2)}` : `parte con le scansioni dal ${liveDay(M.since)}`}</span></div></div>
-        ${M.all && M.all.settled ? `<div class="prow" style="margin:0 0 8px"><span class="sdot ${M.all.pnl >= 0 ? 'ok' : 'bad'}"></span><div><b>📋 Tutte le candidate</b> <span class="muted tnum">vinte ${M.all.won} su ${M.all.settled} (${num(100 * M.all.won / M.all.settled, 0)}%) · saldo ${signedMoney(M.all.pnl)} (${pct(M.all.roiPct, 1)}) · se le 5 rendono di più, l'IA sceglie bene</span></div></div>` : ''}
+        <div class="prow" style="margin:2px 0 8px"><span class="sdot ${paperDot(t.settled, t.pnl)}"></span><div><b>🧪 Le 5 del giorno</b> <span class="muted tnum">${t.settled ? `vinte ${t.won} su ${t.settled} (${num(100 * t.won / t.settled, 0)}%, attese ${num(100 * t.expected / t.settled, 0)}%) · saldo ${signedMoney(t.pnl)} (${pct(t.roiPct, 1)}) · quota media ${num(t.avgOdd, 2)}` : `parte con le scansioni dal ${liveDay(M.since)}`}</span></div></div>
+        ${M.all && M.all.settled ? `<div class="prow" style="margin:0 0 8px"><span class="sdot ${paperDot(M.all.settled, M.all.pnl)}"></span><div><b>📋 Tutte le candidate</b> <span class="muted tnum">vinte ${M.all.won} su ${M.all.settled} (${num(100 * M.all.won / M.all.settled, 0)}%) · saldo ${signedMoney(M.all.pnl)} (${pct(M.all.roiPct, 1)}) · se le 5 rendono di più, l'IA sceglie bene</span></div></div>` : ''}
         ${ing ? `<p class="muted tnum" style="font-size:13px;margin:0 0 8px;"><b>Quale ingrediente aiuta</b> (saldo % con e senza): ${ing}</p>` : ''}
         <div class="list">${rows || '<p class="muted">Nessuna partita sicura e pagata il giusto nelle prossime 24 ore: le cerca a ogni scansione.</p>'}</div>`;
       box.hidden = false;
@@ -1372,7 +1377,7 @@
       const rows = (S.list || []).map(x => `<div class="prow"><span class="sdot ${x.tier === 'top' ? 'ok' : 'info'}"></span><div><b>${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">${x.src === 'ia' ? '🤖' : ''} <b>${x.pick}</b> al ${num(100 * x.prob, 0)}% · quota giusta ${num(x.fair, 2)} · ${hhmm(x.at)} · ${esc(x.league || '')}</span></div></div>`).join('');
       box.innerHTML = `<h3>🔒 Le più sicure <small class="muted">· prossime 24 ore, pronostico IA sopra il 65%</small></h3>
         <p class="muted" style="font-size:14px;margin:4px 0 8px;">Nel nostro database (${num(S.settled, 0)} partite chiuse) il pronostico è stato giusto: <b>sopra il 75% → ${st('top')}</b> · 65–75% → ${st('alta')} · 55–65% → ${st('media')} · 45–55% → ${st('bassa')} · sotto il 45% → ${st('aperta')}. Sono pronostici per indovinare, non giocate di valore: le quote sono basse e di solito pagano meno del giusto. Se ne giochi una, usa lo Svago.</p>
-        ${SP ? `<div class="prow" style="margin:2px 0 8px"><span class="sdot ${!SP.settled ? 'info' : SP.pnl >= 0 ? 'ok' : 'bad'}"></span><div><b>🧪 Prova sulla carta</b> <span class="muted tnum">${SP.count ? `tutte quelle sopra il 70%, 2 € l'una sul sito che paga di più · ${SP.count} registrate${SP.settled ? ` · vinte ${SP.won} su ${SP.settled} (${num(100 * SP.won / SP.settled, 0)}%) · saldo ${signedMoney(SP.pnl)} (${pct(SP.roiPct, 1)})` : ', nessuna ancora finita'}${SP.avgOdd ? ` · quota media ${num(SP.avgOdd, 2)}` : ''}` : `parte con le scansioni dal ${liveDay(SP.since)}: tutte quelle sopra il 70%, 2 € l'una, senza soldi veri`}</span></div></div>` : ''}
+        ${SP ? `<div class="prow" style="margin:2px 0 8px"><span class="sdot ${paperDot(SP.settled, SP.pnl)}"></span><div><b>🧪 Prova sulla carta</b> <span class="muted tnum">${SP.count ? `tutte quelle sopra il 70%, 2 € l'una sul sito che paga di più · ${SP.count} registrate${SP.settled ? ` · vinte ${SP.won} su ${SP.settled} (${num(100 * SP.won / SP.settled, 0)}%) · saldo ${signedMoney(SP.pnl)} (${pct(SP.roiPct, 1)})` : ', nessuna ancora finita'}${SP.avgOdd ? ` · quota media ${num(SP.avgOdd, 2)}` : ''}` : `parte con le scansioni dal ${liveDay(SP.since)}: tutte quelle sopra il 70%, 2 € l'una, senza soldi veri`}</span></div></div>` : ''}
         <div class="list">${rows || '<p class="muted">Nessuna partita sopra il 65% nelle prossime 24 ore.</p>'}</div>`;
       box.hidden = false;
     } catch (e) { box.hidden = true; }
