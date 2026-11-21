@@ -1,5 +1,12 @@
 /**
- * 🪜 SCALATA (martingala con il freno) e 📈 CASSA KELLY (21 novembre 2026, chiesto da Christian).
+ * 🪜 SCALATA e 📈 CASSA KELLY (21 novembre 2026, chiesto da Christian).
+ *
+ * 22/11/2026 (deciso con Christian): la scalata passa dalla MARTINGALA al D'ALEMBERT CON TETTO. Rimescolando 1.000 volte l'ordine
+ * delle stesse 1.750 giocate dello storico, la martingala con freno a 10 e cassa 250 svuotava la cassa nel 44% dei casi (10 perse di
+ * fila capitano ~3 volte in 14 anni: lo storico senza freni era fortuna). D'Alembert: puntata = gradino x n, dopo una persa n+1,
+ * dopo una vinta n-1 (minimo 1), TETTO 30 (con 0,20 al massimo 6 euro). Cassa 250: finita 4 volte su 1.000, utile tipico +776 euro,
+ * 5% peggiore +622. Gradino = cassa / 1.250 (0,20 con 250), ricalcolato quando si torna a 1. Quote 2-3,50 (sotto 2 rende meno).
+ * Sotto e' la descrizione originale (martingala), tenuta per la storia.
  * Obiettivo dichiarato: "perdere pochi soldi e aumentare il profitto".
  *
  * SCALATA — una giocata al giorno, partenza 0,20 euro, raddoppio dopo ogni persa, FRENO A 10 (perdita massima 204,60 euro),
@@ -11,7 +18,7 @@
  *
  * CASSA KELLY — la cassa che Christian dichiara (salvata nel database): la puntata di ogni ⭐ = cassa x 1/4 Kelly, massimo 2%.
  */
-const BASE = 0.2, STOP = 10, MIN_ODD = 2, MAX_ODD = 3.5, MIN_EDGE = 2, SINCE = '2026-11-22T00:00:00Z';
+const BASE = 0.2, STOP = 30, MIN_ODD = 2, MAX_ODD = 3.5, MIN_EDGE = 2, SINCE = '2026-11-22T00:00:00Z';
 const PICK = { home: '1', draw: 'X', away: '2' };
 // puntata minima per sito (21/11, verificati da Christian): sotto 1 euro si puo' giocare solo su 888sport
 const BOOK_MIN = { eurobet: 1, goldbet: 1, '888sport_it': 0.01 };
@@ -103,26 +110,28 @@ async function settle(pool) {
   return rows.length;
 }
 
-/** Parte pura: la scalata giorno per giorno (raddoppio, freno a 10) e la puntata di oggi. */
+/** Parte pura: la scalata giocata per giocata (dal 22/11 D'Alembert con tetto 30) e la puntata di adesso. */
 /** cassa (21/11 sera, deciso con Christian): la partenza di ogni giro = cassa della scalata / 1.250, arrotondata in giu' a 0,10
  *  (minimo 0,10). Cassa della scalata = quella dichiarata - i ritiri + il saldo della scalata. Senza cassa: partenza fissa 0,20. */
 const baseFor = c => Math.max(0.1, Math.floor(c / 1250 * 10 + 1e-9) / 10);
 function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, lastLevel = 0, keepAll = false } = {}) {
+  // 22/11: D'Alembert con tetto. k = numero di gradini (1..stop); stake = gradino x k
   const adaptive = Number(cassa) > 0, bankAt = p => Number(cassa) - Number(withdrawn || 0) + p;
   if (adaptive) base = baseFor(bankAt(0));
   const key = r => `${r.commence_time ? new Date(r.commence_time).toISOString() : r.day}|${String(r.id || 0).padStart(9, '0')}`;
-  const list = [...rows].sort((a, b) => key(a).localeCompare(key(b))); let k = 0, lost = 0, pnl = 0, staked = 0, stops = 0, cycles = 0, maxK = 0, waiting = false;
+  const list = [...rows].sort((a, b) => key(a).localeCompare(key(b))); let k = 1, lost = 0, pnl = 0, staked = 0, stops = 0, cycles = 0, maxK = 1, waiting = false;
   const steps = [];
   for (const r of list) {
     if (r.result === 'skip') continue;   // non giocata: non conta
-    const stake = base * 2 ** k, odd = Number(r.odd), res = r.result;
-    if (res !== 'won' && res !== 'lost') { steps.push({ ...r, step: k + 1, stake, open: true }); waiting = true; continue; }
+    const stake = Math.round(base * k * 100) / 100, odd = Number(r.odd), res = r.result;
+    if (res !== 'won' && res !== 'lost') { steps.push({ ...r, step: k, stake, open: true }); waiting = true; continue; }
     staked += stake;
-    if (res === 'won') { const win = stake * (odd - 1); pnl += win; steps.push({ ...r, step: k + 1, stake, pnl: win, cycleEnd: 'vinta' }); cycles++; k = 0; lost = 0; if (adaptive) base = baseFor(bankAt(pnl)); }
-    else { pnl -= stake; lost += stake; k++; maxK = Math.max(maxK, k); steps.push({ ...r, step: k, stake, pnl: -stake }); if (k >= stop) { steps[steps.length - 1].cycleEnd = 'freno'; stops++; k = 0; lost = 0; if (adaptive) base = baseFor(bankAt(pnl)); } }
+    if (res === 'won') { const win = stake * (odd - 1); pnl += win; lost = Math.max(0, lost - win); steps.push({ ...r, step: k, stake, pnl: win });
+      k = Math.max(1, k - 1); if (k === 1) { steps[steps.length - 1].cycleEnd = 'vinta'; cycles++; lost = 0; if (adaptive) base = baseFor(bankAt(pnl)); } }
+    else { pnl -= stake; lost += stake; steps.push({ ...r, step: k, stake, pnl: -stake }); if (k >= stop) { steps[steps.length - 1].cycleEnd = 'tetto'; stops++; } k = Math.min(stop, k + 1); maxK = Math.max(maxK, k); }
   }
   const cassaNow = adaptive ? bankAt(pnl) : null;
-  return { base, stop, maxLoss: base * (2 ** stop - 1), step: k + 1, nextStake: base * 2 ** k, lostInCycle: lost, pnl, staked, cycles, stops, maxStep: maxK, waiting,
+  return { method: 'dalembert', base, stop, maxStake: Math.round(base * stop * 100) / 100, maxLoss: base * stop * (stop + 1) / 2, step: k, nextStake: Math.round(base * k * 100) / 100, lostInCycle: lost, pnl, staked, cycles, stops, maxStep: maxK, waiting,
     cassa: adaptive ? Number(cassa) : null, withdrawn: Number(withdrawn || 0), cassaNow,
     // ritiro del capitale: appena la cassa della scalata raddoppia, si ritira la cassa iniziale (una volta)
     // 21/11 sera: dopo il primo ritiro, ogni volta che la cassa raddoppia ancora (rispetto a dopo l'ultimo ritiro) si ritira meta' del guadagno

@@ -10,15 +10,19 @@ const c = [
 ];
 assert.deepStrictEqual(S.pickScalata(c).map(x => x.event_id), ['b', 'c']);
 assert.ok(S.reasonsOf({ ...c[1], movedPts: 0.5 }).some(r => /IA d'accordo/.test(r)));
-// scalata: 0,20 0,40 0,80 poi vince a 2,5 -> +1,20; poi riparte da 0,20
+// 22/11: D'Alembert con tetto 30. 0,20 persa, 0,40 persa, 0,60 vinta a 2,5 (+0,90) -> si scende a 0,40
 const day = i => `2026-11-${String(22 + i).padStart(2, '0')}`;
 const L = S.ladder([{ day: day(0), odd: 2.5, result: 'lost' }, { day: day(1), odd: 2.5, result: 'lost' }, { day: day(2), odd: 2.5, result: 'won' }, { day: day(3), odd: 2.5, result: null }]);
-assert.ok(Math.abs(L.pnl - (0.8 * 1.5 - 0.6)) < 1e-9, 'saldo ' + L.pnl); assert.strictEqual(L.step, 1); assert.strictEqual(L.nextStake, 0.2); assert.ok(L.waiting);
-assert.ok(Math.abs(L.maxLoss - 204.6) < 1e-9);
-// freno a 10: dopo 10 perse si riparte
-const ten = Array.from({ length: 11 }, (_, i) => ({ day: `2026-12-${String(1 + i).padStart(2, '0')}`, odd: 2.4, result: 'lost' }));
-const F = S.ladder(ten); assert.strictEqual(F.stops, 1); assert.ok(Math.abs(F.pnl + 204.6 + 0.2) < 1e-9, 'freno: ' + F.pnl); assert.strictEqual(F.step, 2);
-console.log('scalata e freno: ok');
+assert.ok(Math.abs(L.pnl - (0.6 * 1.5 - 0.6)) < 1e-9, 'saldo ' + L.pnl); assert.strictEqual(L.step, 2); assert.strictEqual(L.nextStake, 0.4); assert.ok(L.waiting);
+assert.strictEqual(L.method, 'dalembert'); assert.strictEqual(L.maxStake, 6); assert.ok(Math.abs(L.maxLoss - 93) < 1e-9);
+// tetto: dopo tante perse la puntata non supera 30 gradini (6 euro)
+const many = Array.from({ length: 35 }, (_, i) => ({ id: i + 1, commence_time: new Date(Date.UTC(2026, 11, 1) + i * 86400000).toISOString(), odd: 2.4, result: 'lost' }));
+const F = S.ladder(many); assert.strictEqual(F.step, 30); assert.strictEqual(F.nextStake, 6); assert.ok(F.stops >= 1);
+assert.ok(Math.max(...S.ladder(many, { keepAll: true }).steps.map(x => x.stake)) <= 6 + 1e-9);
+// dopo una vinta si scende di un gradino, mai sotto 1
+const V = S.ladder([{ id: 1, commence_time: '2026-12-01T12:00:00Z', odd: 2.5, result: 'won' }, { id: 2, commence_time: '2026-12-02T12:00:00Z', odd: 2.5, result: 'won' }]);
+assert.strictEqual(V.step, 1); assert.strictEqual(V.nextStake, 0.2);
+console.log('scalata D\'Alembert e tetto: ok');
 // 21/11: sotto 1 euro solo 888sport, con la sua quota e il suo valore
 {
   const cc = [
