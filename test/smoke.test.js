@@ -20,3 +20,6 @@ assert.deepStrictEqual(missing, [], 'indirizzi usati dall\'app che il server non
 // 3. esportazioni
 for (const [f, m] of Object.entries(mods)) for (const [k, v] of Object.entries(m || {})) assert.ok(v !== undefined, `${f}: esporta "${k}" che non esiste`);
 console.log(`prova generale: ok (${Object.keys(mods).length} moduli, ${called.length} indirizzi dell'app tutti presenti)`);
+// 21/11: ensureKey() restituisce vero/falso, non la chiave: usarla come chiave manda "true" al server (errore della cassa Kelly)
+assert.ok(!/=\s*await ensureKey\(\)/.test(html), 'non usare il risultato di ensureKey() come chiave: usa la variabile key');
+console.log('chiave usata bene: ok');
