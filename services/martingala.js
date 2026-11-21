@@ -146,7 +146,30 @@ function adaptiveLadder(rows, { base = 0.2, stop = 10, switchAt = 4, mode = 'ada
   return { mode, switchAt, bets, winPct: bets ? 100 * wins / bets : null, pnl, staked, roiPct: staked ? 100 * pnl / staked : null, stops, longest, maxDrawdown: maxDd,
     redSeasons: sv.filter(v => v < 0).length, seasons: sv.length, reachPct: reach.map(n => (bets ? 100 * n / bets : 0)) };
 }
-const MT_VERSION = 12;
+/** 🛡️ 21/11 sera: martingala ADATTIVA AL RISCHIO (proposta a Christian). Una giocata al giorno, la piu' probabile della fascia.
+ *  adaptBase: la partenza di ogni giro = cassa della scalata / 1.250 (arrotondata in giu' a 0,10, minimo 0,10): la perdita massima
+ *  col freno a 10 (partenza x 1.023) resta sotto l'82% della cassa; sale con le vincite, scende con le perdite.
+ *  strictFrom: da quel gradino in su si gioca solo con probabilita' >= strictProb, altrimenti quel giorno si salta. */
+function riskLadder(rows, { bank0 = 250, adaptBase = false, fixedBase = 0.2, strictFrom = 0, strictProb = 0.45, stop = 10 } = {}) {
+  const byDay = new Map();
+  for (const r of rows) { const odd = Number(r.ad); if (!(odd > 1)) continue; const d = String(r.match_date instanceof Date ? r.match_date.toISOString() : r.match_date).slice(0, 10);
+    if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push({ odd, p: Number(r.p) || 1 / odd, won: Number(r.hg) === Number(r.ag) }); }
+  const days = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const baseOf = bank => (adaptBase ? Math.max(0.1, Math.floor(bank / 1250 * 10) / 10) : fixedBase);
+  let bank = bank0, base = baseOf(bank), k = 0, stops = 0, bets = 0, wins = 0, skipped = 0, peak = bank0, maxDd = 0, minBank = bank0, longest = 0, ruined = null; const seasons = new Map();
+  for (const [d, list] of days) {
+    const step = k + 1, best = list.reduce((a, x) => (x.p > a.p ? x : a));
+    if (strictFrom && step >= strictFrom && best.p < strictProb) { skipped++; continue; }
+    const stake = base * 2 ** k; if (stake > bank) { ruined = ruined || d; break; }
+    const v = best.won ? stake * (best.odd - 1) : -stake; bank += v; bets++; const se = seasonOf(d); seasons.set(se, (seasons.get(se) || 0) + v);
+    if (best.won) { wins++; k = 0; base = baseOf(bank); } else { k++; longest = Math.max(longest, k); if (k >= stop) { stops++; k = 0; base = baseOf(bank); } }
+    peak = Math.max(peak, bank); maxDd = Math.max(maxDd, peak - bank); minBank = Math.min(minBank, bank);
+  }
+  const sv = [...seasons.values()];
+  return { bank0, final: bank, pnl: bank - bank0, bets, winPct: bets ? 100 * wins / bets : null, skipped, stops, longest, maxDrawdown: maxDd, minBank, ruined, finalBase: base,
+    redSeasons: sv.filter(v => v < 0).length, seasons: sv.length, bySeason: [...seasons.entries()].map(([k2, v]) => ({ season: k2, pnl: v })) };
+}
+const MT_VERSION = 13;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
@@ -179,6 +202,9 @@ async function getMartingala(pool, { force = false } = {}) {
       return { giocate: band.length, sistemi: compareSystems(band), sistemi020: compareSystems(band, { unit: 0.2 }),
         // 21/11 sera (Christian): cassa 500 euro, partenza 0,20; Kelly sulla cassa da 500
         sistemi500: compareSystems(band, { bank0: 500, unit: 0.2 }),
+        // 🛡️ martingala adattiva al rischio, cassa della scalata 250 euro
+        rischio: { attuale: riskLadder(band), partenzaAdattiva: riskLadder(band, { adaptBase: true }), filtro6: riskLadder(band, { strictFrom: 6 }),
+          entrambe: riskLadder(band, { adaptBase: true, strictFrom: 6 }), entrambe5: riskLadder(band, { adaptBase: true, strictFrom: 5 }), filtro6p48: riskLadder(band, { strictFrom: 6, strictProb: 0.48 }) },
         // 🎚️ scalata adattiva (valore nei gradini bassi, probabilita' in quelli alti) contro le due pure
         adattiva: { probabile: adaptiveLadder(band, { mode: 'probabile' }), valore: adaptiveLadder(band, { mode: 'valore' }),
           da3: adaptiveLadder(band, { switchAt: 3 }), da4: adaptiveLadder(band, { switchAt: 4 }), da5: adaptiveLadder(band, { switchAt: 5 }), da6: adaptiveLadder(band, { switchAt: 6 }) }, senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
@@ -192,4 +218,4 @@ async function getMartingala(pool, { force = false } = {}) {
   return val;
 }
 
-module.exports = { adaptiveLadder, compareSystems, masanielloTable, dailyPicks, simulate, parallel, valueDraws, valueOf, flat, getMartingala };
+module.exports = { riskLadder, adaptiveLadder, compareSystems, masanielloTable, dailyPicks, simulate, parallel, valueDraws, valueOf, flat, getMartingala };

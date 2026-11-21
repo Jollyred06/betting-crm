@@ -40,3 +40,8 @@ console.log('martingala sui pareggi: ok');
   const a = adaptiveLadder(rows3, { switchAt: 3 }); // gradini 1-2 su A (perde), dal 3 su B: vince al giorno 5 (gradino 5)
   assert.strictEqual(a.bets, 6); assert.ok(Math.abs(a.pnl - (3.2 * 2.1 - 3.2 - (0.2 + 0.4 + 0.8 + 1.6)) - (-0.2)) < 1e-9, 'adattiva: ' + a.pnl);
   console.log('scalata adattiva: ok'); }
+{ const { riskLadder } = require('../services/martingala');
+  const rr = []; for (let i = 0; i < 4; i++) rr.push({ match_date: `2021-02-0${i + 1}`, ad: 2.5, p: i === 2 ? 0.4 : 0.5, hg: 1, ag: i === 3 ? 1 : 0 });
+  const a = riskLadder(rr, { bank0: 1250, adaptBase: true }); assert.ok(Math.abs(a.finalBase - 1) < 1e-9, 'partenza = cassa/1250');
+  const f = riskLadder(rr, { bank0: 250, strictFrom: 3, strictProb: 0.45 }); assert.strictEqual(f.skipped, 1, 'al gradino 3 salta la partita al 40%');
+  console.log('martingala adattiva al rischio: ok'); }
