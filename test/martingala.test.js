@@ -34,3 +34,9 @@ console.log('martingala sui pareggi: ok');
   const c = M.compareSystems(rows2); assert.strictEqual(c.days, 40); assert.ok(Object.keys(c.systems).length === 8);
   assert.ok(Math.abs(c.systems.fissa.pnl - (20 * 1.5 - 20)) < 1e-9, 'fissa: 20 vinte a 2,5 e 20 perse');
   console.log('sistemi a confronto: ok'); }
+{ const { adaptiveLadder } = require('../services/martingala');
+  // ogni giorno due partite: A quota 3,2 al 33% (piu' valore), B quota 2,1 al 50% (piu' probabile)
+  const rows3 = []; for (let i = 0; i < 6; i++) { const d = `2021-01-${String(10 + i).padStart(2, '0')}`; rows3.push({ match_date: d, ad: 3.2, p: 0.33, hg: 1, ag: 0 }, { match_date: d, ad: 2.1, p: 0.5, hg: 1, ag: i === 4 ? 1 : 0 }); }
+  const a = adaptiveLadder(rows3, { switchAt: 3 }); // gradini 1-2 su A (perde), dal 3 su B: vince al giorno 5 (gradino 5)
+  assert.strictEqual(a.bets, 6); assert.ok(Math.abs(a.pnl - (3.2 * 2.1 - 3.2 - (0.2 + 0.4 + 0.8 + 1.6)) - (-0.2)) < 1e-9, 'adattiva: ' + a.pnl);
+  console.log('scalata adattiva: ok'); }

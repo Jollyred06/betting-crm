@@ -124,7 +124,29 @@ function compareSystems(rows, { bank0 = 100, unit = 1 } = {}) {
   }
   return { days: days.length, winPct: days.length ? 100 * days.filter(x => x.won).length / days.length : null, avgOdd: days.length ? days.reduce((a, x) => a + x.odd, 0) / days.length : null, systems: out };
 }
-const MT_VERSION = 11;
+/** 🎚️ 21/11 sera (idea di Christian): scalata che sceglie la partita in base al gradino. Gradini bassi: quella con PIU' VALORE
+ *  (di solito quota piu' alta, vince di piu'); dal gradino `switchAt` in su: la PIU' PROBABILE (si rischia di piu', conta non perdere).
+ *  Una giocata al giorno, raddoppio da `base`, freno a `stop`. Confronto: sempre la piu' probabile (la scalata attuale) e sempre la
+ *  piu' di valore. rows: giocate di valore della fascia con p (probabilita' vera) e ad (quota). */
+function adaptiveLadder(rows, { base = 0.2, stop = 10, switchAt = 4, mode = 'adattiva' } = {}) {
+  const byDay = new Map();
+  for (const r of rows) { const odd = Number(r.ad); if (!(odd > 1)) continue; const d = String(r.match_date instanceof Date ? r.match_date.toISOString() : r.match_date).slice(0, 10);
+    if (!byDay.has(d)) byDay.set(d, []); byDay.get(d).push({ odd, p: Number(r.p) || 1 / odd, won: Number(r.hg) === Number(r.ag) }); }
+  const days = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  let k = 0, pnl = 0, staked = 0, stops = 0, peak = 0, maxDd = 0, longest = 0, wins = 0, bets = 0; const seasons = new Map(), reach = Array(stop + 1).fill(0);
+  for (const [d, list] of days) {
+    const step = k + 1, byValue = list.reduce((a, x) => (x.odd * x.p > a.odd * a.p ? x : a)), byProb = list.reduce((a, x) => (x.p > a.p ? x : a));
+    const x = mode === 'valore' ? byValue : mode === 'probabile' ? byProb : (step < switchAt ? byValue : byProb);
+    const stake = base * 2 ** k; staked += stake; bets++; reach[step]++;
+    const v = x.won ? stake * (x.odd - 1) : -stake; pnl += v; const se = seasonOf(d); seasons.set(se, (seasons.get(se) || 0) + v);
+    if (x.won) { wins++; k = 0; } else { k++; longest = Math.max(longest, k); if (k >= stop) { stops++; k = 0; } }
+    peak = Math.max(peak, pnl); maxDd = Math.max(maxDd, peak - pnl);
+  }
+  const sv = [...seasons.values()];
+  return { mode, switchAt, bets, winPct: bets ? 100 * wins / bets : null, pnl, staked, roiPct: staked ? 100 * pnl / staked : null, stops, longest, maxDrawdown: maxDd,
+    redSeasons: sv.filter(v => v < 0).length, seasons: sv.length, reachPct: reach.map(n => (bets ? 100 * n / bets : 0)) };
+}
+const MT_VERSION = 12;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
@@ -156,7 +178,10 @@ async function getMartingala(pool, { force = false } = {}) {
       // 21/11: Christian parte da 0,20 (non da 1 euro): stesso confronto con l'unita' da 0,20
       return { giocate: band.length, sistemi: compareSystems(band), sistemi020: compareSystems(band, { unit: 0.2 }),
         // 21/11 sera (Christian): cassa 500 euro, partenza 0,20; Kelly sulla cassa da 500
-        sistemi500: compareSystems(band, { bank0: 500, unit: 0.2 }), senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
+        sistemi500: compareSystems(band, { bank0: 500, unit: 0.2 }),
+        // 🎚️ scalata adattiva (valore nei gradini bassi, probabilita' in quelli alti) contro le due pure
+        adattiva: { probabile: adaptiveLadder(band, { mode: 'probabile' }), valore: adaptiveLadder(band, { mode: 'valore' }),
+          da3: adaptiveLadder(band, { switchAt: 3 }), da4: adaptiveLadder(band, { switchAt: 4 }), da5: adaptiveLadder(band, { switchAt: 5 }), da6: adaptiveLadder(band, { switchAt: 6 }) }, senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
         parallele2: parallel(band, 2, { maxSteps: 8 }), parallele3: parallel(band, 3, { maxSteps: 8 }), fissaUnaAlGiorno: fixedDaily }; })(),
     // solo pareggi pagati piu' del giusto (alla quota piu' alta): raddoppio, una e tre scalate, e a puntata fissa per confronto
     valore: { una: simulate(valueDraws(rows)), tre: parallel(valueDraws(rows), 3), fissa: flat(valueDraws(rows)) },
@@ -167,4 +192,4 @@ async function getMartingala(pool, { force = false } = {}) {
   return val;
 }
 
-module.exports = { compareSystems, masanielloTable, dailyPicks, simulate, parallel, valueDraws, valueOf, flat, getMartingala };
+module.exports = { adaptiveLadder, compareSystems, masanielloTable, dailyPicks, simulate, parallel, valueDraws, valueOf, flat, getMartingala };
