@@ -1114,7 +1114,8 @@
   let BANK = null, KELLY = null;   // KELLY: la cassa dichiarata per Kelly (21/11); se c'e', comanda lei
   function stakeOf(odd, p, bank = BANK) {
     odd = Number(odd); p = Number(p);
-    if (KELLY) { const k = (odd * p - 1) / (odd - 1); return k > 0 ? Math.max(0.1, Math.min(KELLY * k / 4, KELLY * 0.02)) : 0; }
+    // 21/11 sera (backup): il valore annunciato al 2-4% alla chiusura vale ~1,8% -> Kelly lo conta al 60%; dal 4% in su all'85%
+    if (KELLY) { const e = odd * p - 1, eCal = e < 0.04 ? e * 0.6 : e * 0.85, k = eCal / (odd - 1); return k > 0 ? Math.max(0.1, Math.min(KELLY * k / 4, KELLY * 0.02)) : 0; }
     if (!(odd > 1 && p > 0 && bank > 0)) return 2;
     if (bank < 300) return 2;
     const k = (odd * p - 1) / (odd - 1); if (!(k > 0)) return 2;
@@ -1274,11 +1275,11 @@
     const kb = $('kellyBox');
     try {
       const [S, d] = await Promise.all([getJson('/api/tracker/scalata'), getJson('/api/tracker/italia').catch(() => null)]);
-      KELLY = S.kellyCassa || null;
+      KELLY = (S.kelly && S.kelly.now > 0 ? S.kelly.now : S.kellyCassa) || null;
       const hhmm = x => new Date(x).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
       if (kb) kb.innerHTML = `<h3>📈 La tua cassa per Kelly</h3>
-        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Su ogni ⭐ il CRM ti dice quanto puntare: un quarto di Kelly sulla cassa, mai più del 2%. Se non la scrivi, valgono 2 € fissi.</p>
-        <div class="prow" style="margin:0 0 8px"><span class="sdot ${KELLY ? 'ok' : 'info'}"></span><div><b>Cassa:</b> <input id="kellyIn" type="number" inputmode="decimal" min="10" step="10" value="${KELLY || ''}" placeholder="es. 500" style="width:100px"> € <button class="chipbtn" onclick="saveKelly(this)">Salva</button></div></div>
+        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Su ogni ⭐ il CRM ti dice quanto puntare: un quarto di Kelly sulla cassa, mai più del 2%, contando il valore che di solito resta alla chiusura. La cassa si aggiorna da sola con le vincite e le perdite. Se non la scrivi, valgono 2 € fissi.</p>
+        <div class="prow" style="margin:0 0 8px"><span class="sdot ${KELLY ? 'ok' : 'info'}"></span><div><b>Cassa:</b> <input id="kellyIn" type="number" inputmode="decimal" min="10" step="10" value="${S.kellyCassa || ''}" placeholder="es. 500" style="width:100px"> € <button class="chipbtn" onclick="saveKelly(this)">Salva</button>${S.kelly ? `<br><small class="muted tnum">adesso ${num(S.kelly.now, 2)} € (${signedMoney(S.kelly.pnl)} su ${S.kelly.n} giocate da quando l'hai scritta)</small>` : ''}</div></div>
         <h3 style="margin-top:14px">🪜 La cassa della scalata</h3>
         <p class="muted" style="font-size:14px;margin:4px 0 8px;">Soldi tenuti da parte solo per la scalata. La partenza di ogni giro è la cassa ÷ 1.250 (con 250 € si parte da 0,20 €): sale quando la scalata vince, scende quando perde. Quando raddoppia, ritira la cassa iniziale.</p>
         <div class="prow" style="margin:0 0 8px"><span class="sdot ${S.cassa ? 'ok' : 'info'}"></span><div><b>Cassa scalata:</b> <input id="scalIn" type="number" inputmode="decimal" min="10" step="10" value="${S.cassa || ''}" placeholder="es. 250" style="width:100px"> € <button class="chipbtn" onclick="saveScalCassa(this)">Salva</button>${S.cassa ? `<br><small class="muted tnum">adesso ${num(S.cassaNow, 2)} € · partenza ${num(S.base, 2)} €${S.withdrawn ? ` · ritirati ${num(S.withdrawn, 0)} €` : ''}</small>` : ''}</div></div>`;

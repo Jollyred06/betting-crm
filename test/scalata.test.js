@@ -59,3 +59,5 @@ console.log('scalata e freno: ok');
   const M = S.ladder(rows, { cassa: 1000, withdrawn: 250, lastLevel: 375 }); // cassaNow = 750 + vincita
   assert.strictEqual(M.withdrawAlert, Math.floor((M.cassaNow - 375) / 2)); assert.ok(!M.firstWithdraw);
   console.log('ritiro a ogni raddoppio: ok'); }
+{ const k = S.kellyNowOf(250, '2026-11-21T22:00:00Z', [{ at: '2026-11-22T10:00:00Z', result: 'won', pnlEur: 3, list: 'stelle' }, { at: '2026-11-22T11:00:00Z', result: 'lost', pnlEur: -1, list: 'svago' }, { at: '2026-11-20T10:00:00Z', result: 'lost', pnlEur: -2, list: 'stelle' }, { at: '2026-11-22T12:00:00Z', result: null, pnlEur: null, list: 'stelle' }]);
+  assert.strictEqual(k.now, 253); assert.strictEqual(k.n, 1); console.log('cassa Kelly che si aggiorna: ok'); }

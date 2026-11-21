@@ -160,9 +160,19 @@ async function setScalataCassa(pool, { cassa, withdrawn } = {}) {
 }
 /** 📈 la cassa per Kelly, dichiarata da Christian (null = usa il saldo del budget). */
 async function getKellyCassa(pool) { try { const v = await require('./calib').loadState(pool, 'kelly_cassa'); return v && Number(v.value) > 0 ? Number(v.value) : null; } catch (e) { return null; } }
+/** 21/11 sera: la cassa Kelly si aggiorna da sola = quella scritta + il saldo delle giocate vere (Svago escluso) segnate dopo. */
+function kellyNowOf(declared, at, items) {
+  const t0 = Date.parse(at || 0) || 0; let pnl = 0, n = 0;
+  for (const x of items || []) { if (x.list === 'svago' || !(x.result === 'won' || x.result === 'lost' || x.result === 'void')) continue; if (Date.parse(x.at) < t0) continue; pnl += Number(x.pnlEur) || 0; n++; }
+  return { value: declared, now: declared + pnl, pnl, n };
+}
+async function getKelly(pool) {
+  try { const v = await require('./calib').loadState(pool, 'kelly_cassa'); if (!(v && Number(v.value) > 0)) return null;
+    const P = await require('./played').getPlayed(pool).catch(() => null); return { ...kellyNowOf(Number(v.value), v.at, P && P.items), at: v.at }; } catch (e) { return null; }
+}
 async function setKellyCassa(pool, value) {
   const v = Number(value); if (!(v >= 10 && v <= 1e6)) throw new Error('Cassa non valida (da 10 a 1.000.000 euro)');
   await require('./calib').ensureCalib(pool); await require('./calib').saveState(pool, 'kelly_cassa', { value: v, at: new Date().toISOString() }); return v;
 }
 
-module.exports = { withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };
+module.exports = { kellyNowOf, getKelly, withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };

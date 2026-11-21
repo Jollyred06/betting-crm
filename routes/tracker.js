@@ -140,7 +140,7 @@ router.get('/martingala', async (req, res) => {
 });
 // 🪜 scalata (martingala con il freno a 10, da 0,20) e 📈 cassa per Kelly
 router.get('/scalata', async (req, res) => {
-  try { const S = require('../services/scalata'); res.json({ ...(await S.getScalata(pool)), kellyCassa: await S.getKellyCassa(pool) }); } catch (err) { res.status(500).json({ error: err.message }); }
+  try { const S = require('../services/scalata'), K = await S.getKelly(pool); res.json({ ...(await S.getScalata(pool)), kellyCassa: K ? K.value : null, kelly: K }); } catch (err) { res.status(500).json({ error: err.message }); }
 });
 router.post('/scalata/:id/result', async (req, res) => {
   if (!require('../services/auth').authorized(req)) return res.status(401).json({ error: 'Chiave non valida o mancante' });
