@@ -519,15 +519,20 @@
     if (typeof r.text === 'function') { raw = await r.text(); d = JSON.parse(raw); } else { d = await r.json(); raw = JSON.stringify(d); }
     if (d && d.error && !Array.isArray(d)) throw new Error(d.error); return { d, raw };
   }
+  // 21/11/2026 ("ha impiegato piu' di 5 secondi dal clic su Salva"): dopo un salvataggio la pagina si ridisegna con i dati gia'
+  // in memoria, anche se hanno piu' di 30 secondi, invece di aspettare il server; quelli nuovi arrivano dopo da soli
+  // ... e mai una richiesta ancora in viaggio (dopo una scansione il server ci mette qualche secondo): l'ultima risposta arrivata
+  let preferStale = false; const lastOk = new Map();
   function getJson(url) {
+    if (preferStale && lastOk.has(url)) return Promise.resolve(lastOk.get(url));
     const hit = memo.get(url);
     if (hit && Date.now() - hit.at < MEMO_MS) return hit.p;
-    const net = fetchRaw(url).then(({ d, raw }) => { swrPut(url, d, raw); return { d, raw }; });
+    const net = fetchRaw(url).then(({ d, raw }) => { swrPut(url, d, raw); lastOk.set(url, d); return { d, raw }; });
     const old = !swrServed.has(url) && /^\/api\/tracker\//.test(url) ? swrGet(url) : null;
     if (old) {
       // prima volta in questa visita: si mostra la copia del telefono, poi quella nuova (ridisegno solo se e' cambiata)
       swrServed.add(url);
-      const p = Promise.resolve(JSON.parse(old.raw)); memo.set(url, { at: Date.now(), p });
+      const od = JSON.parse(old.raw), p = Promise.resolve(od); memo.set(url, { at: Date.now(), p }); if (!lastOk.has(url)) lastOk.set(url, od);
       net.then(({ d, raw }) => { memo.set(url, { at: Date.now(), p: Promise.resolve(d) }); if (raw !== old.raw) redraw(); }).catch(() => {});
       return p;
     }
@@ -1160,7 +1165,7 @@
     const el = $('oggi'); if (!el) return;
     try {
       const [d, P, A, C] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/played').catch(() => null), getJson('/api/tracker/advice').catch(() => null), getJson('/api/tracker/credits').catch(() => null)]);
-      (d.recent || []).forEach(r => { sigById[r.id] = r; });
+      (d.recent || []).forEach(adopt);
       if (Array.isArray(d.scanHours) && d.scanHours.length) SCAN_HOURS = d.scanHours;
       if (Array.isArray(d.myBooks) && d.myBooks.length) myBookNames = d.myBooks;
       const b = d.budget || { start: 100, balance: 100, pnl: 0, stop: 60, playedToday: 0, maxPerDay: 5 }, ck = d.bestCheck;
@@ -1411,7 +1416,7 @@
   function italiaTickets(d, head, chip, tail) {
     if (d && Array.isArray(d.myBooks) && d.myBooks.length) myBookNames = d.myBooks;
     const now = Date.now(), it = chip.includes('chip it');
-    (d && d.recent || []).forEach(r => { sigById[r.id] = r; r.best = false; });
+    (d && d.recent || []).forEach(r => { adopt(r); r.best = false; });
     const top = it ? bestBox(d) : '';
     const bestIds = new Set(it && d && d.best && !(d.budget && d.budget.stopped) ? d.best : []);
     const base = (d && d.recent || []).filter(r => Date.parse(r.commence_time) > now - 2 * 3600000 && !bestIds.has(r.id));
@@ -1453,15 +1458,17 @@
     if (r && r.min_odd && odd < r.min_odd && !confirm(`La quota ${num(odd, 2)} è sotto la minima ${num(r.min_odd, 2)}: il segnale non avrebbe valore. Salvo lo stesso?`)) return;
     if (!(await ensureKey())) return;
     // subito sulla scheda (senza aspettare il server); se il salvataggio non riesce si torna indietro e si avvisa
-    if (r) r.played = { book, odd };
+    const pl = { book, odd }; if (r) r.played = pl;
+    optimistic.set(id, { played: pl });
+    box.innerHTML = `<div class="played">✅ Giocata a <b>${num(odd, 2)}</b> su ${esc(book)}</div>`;   // subito, prima di tutto il resto
     refreshViews();
     try {
       const res = await fetch('/api/tracker/played/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book, odd, stake }) });
       const d = await res.json().catch(() => ({}));
       if (res.status === 401) lock();
-      if (!res.ok) { if (r) r.played = null; refreshViews(); alert(res.status === 401 ? 'La chiave non è più valida: riprova.' : 'Giocata non salvata: ' + (d.error || 'errore ' + res.status)); return; }
+      if (!res.ok) { optimistic.delete(id); if (r) r.played = null; refreshViews(); alert(res.status === 401 ? 'La chiave non è più valida: riprova.' : 'Giocata non salvata: ' + (d.error || 'errore ' + res.status)); return; }
       softRefresh();
-    } catch (e) { if (r) r.played = null; refreshViews(); alert('Giocata non salvata (connessione): ' + e.message); }
+    } catch (e) { optimistic.delete(id); if (r) r.played = null; refreshViews(); alert('Giocata non salvata (connessione): ' + e.message); }
   }
   // 🚫 NON GIOCATA: il motivo serve a sapere quante occasioni si riescono davvero a giocare (senza, i numeri sembrano migliori)
   const SKIP_LABELS = { quota: '📉 Quota scesa', trovata: '🔍 Partita non trovata', tempo: '⏰ Non avevo tempo' };
@@ -1475,23 +1482,32 @@
     if (!(await ensureKey())) return;
     const r = sigById[id];
     if (r) r.skipped = { id: null, reason, label: SKIP_TEXT[reason] || reason };
+    optimistic.set(id, { skipped: r ? r.skipped : { id: null, reason, label: SKIP_TEXT[reason] || reason } });
     refreshViews();   // subito sulla scheda
     try {
       const res = await fetch('/api/tracker/skipped/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
       const d = await res.json().catch(() => ({}));
       if (res.status === 401) lock();
-      if (!res.ok) { if (r) r.skipped = null; refreshViews(); alert('Non salvata: ' + (d.error || 'errore ' + res.status)); return; }
+      if (!res.ok) { optimistic.delete(id); if (r) r.skipped = null; refreshViews(); alert('Non salvata: ' + (d.error || 'errore ' + res.status)); return; }
       if (r && r.skipped) r.skipped.id = d.id;
       softRefresh();
-    } catch (e) { if (r) r.skipped = null; refreshViews(); alert('Non salvata (connessione): ' + e.message); }
+    } catch (e) { optimistic.delete(id); if (r) r.skipped = null; refreshViews(); alert('Non salvata (connessione): ' + e.message); }
   }
   // ridisegna subito la pagina aperta con i dati gia' in memoria (Oggi e Segnali condividono le stesse schede)
-  function refreshViews() { if (curPage === 'home') loadOggi(); else loadSignals(); }
+  // le giocate e le non giocate appena toccate restano segnate anche se i dati in memoria sono di prima (finche' il server le conferma)
+  const optimistic = new Map();
+  function adopt(r) {
+    sigById[r.id] = r; const o = optimistic.get(r.id); if (!o) return;
+    const k = o.played ? 'played' : 'skipped';
+    if (r[k] && r[k] !== o[k]) optimistic.delete(r.id);   // il server l'ha registrata: da qui valgono i suoi dati
+    else r[k] = o[k];
+  }
+  function refreshViews() { preferStale = true; try { if (curPage === 'home') loadOggi(); else loadSignals(); } finally { setTimeout(() => { preferStale = false; }, 0); } }
   // dopo un salvataggio la scheda cambia subito; i numeri completi (lista ⭐, budget) si rinfrescano da soli qualche secondo dopo,
   // quando il server ha gia' ripreparato le pagine
   const SKIP_TEXT = { quota: 'quota scesa', trovata: 'partita non trovata', tempo: 'non avevo tempo' };
   let softTimer = null;
-  function softRefresh() { clearTimeout(softTimer); softTimer = setTimeout(() => { memo.clear(); refreshViews(); }, 6000); }
+  function softRefresh() { clearTimeout(softTimer); softTimer = setTimeout(() => { memo.clear(); if (curPage === 'home') loadOggi(); else loadSignals(); }, 6000); }
   async function undoSkip(sid) {
     if (!sid) { alert('Un attimo: sto ancora salvando.'); return; }
     if (!(await ensureKey())) return;
