@@ -20,7 +20,7 @@ function valueOf(rows, sel, minEdge = 0.02, { minOdd = 1, maxOdd = Infinity } = 
     const h = Number(r.ph), d = Number(r.pd), a = Number(r.pa), m = Number(r[P[1]]); if (!(h > 1 && d > 1 && a > 1 && m > 1) || m < minOdd || m > maxOdd) continue;
     const fair = (1 / Number(r[P[0]])) / (1 / h + 1 / d + 1 / a); if (m * fair - 1 < minEdge) continue;
     const res = Number(r.hg) > Number(r.ag) ? 'home' : Number(r.hg) === Number(r.ag) ? 'draw' : 'away', won = res === sel;
-    out.push({ match_date: r.match_date, league: r.league, home: r.home, away: r.away, hg: won ? 1 : 1, ag: won ? 1 : 0, ad: m, pd: m });
+    out.push({ match_date: r.match_date, league: r.league, home: r.home, away: r.away, hg: won ? 1 : 1, ag: won ? 1 : 0, ad: m, pd: m, p: fair });
   }
   return out;
 }
@@ -76,7 +76,54 @@ function flat(rows, stake = 2) {
   let pnl = 0, n = 0, w = 0; for (const r of rows) { const o = Number(r.ad); if (!(o > 1)) continue; n++; if (Number(r.hg) === Number(r.ag)) { w++; pnl += stake * (o - 1); } else pnl -= stake; }
   return { bets: n, draws: w, pnl, staked: stake * n, roiPct: n ? 100 * pnl / (stake * n) : null };
 }
-const MT_VERSION = 8;
+/** I giorni della scalata: per ogni giorno la giocata con la quota piu' bassa (la piu' probabile). */
+function dailyPicks(rows) {
+  const byDay = new Map();
+  for (const r of rows) { const odd = Number(r.ad); if (!(odd > 1)) continue; const d = String(r.match_date instanceof Date ? r.match_date.toISOString() : r.match_date).slice(0, 10);
+    const cur = byDay.get(d); if (!cur || odd < cur.odd) byDay.set(d, { d, odd, won: Number(r.hg) === Number(r.ag), p: Number(r.p) || 1 / odd }); }
+  return [...byDay.values()].sort((a, b) => a.d.localeCompare(b.d));
+}
+/** 🎰 21/11 sera: i sistemi di puntata messi a confronto sulle STESSE giocate (una al giorno), cassa iniziale 100 euro, unita' 1 euro.
+ *  Ogni sistema e' una funzione: (stato, giocata) -> puntata; dopo il risultato aggiorna lo stato. */
+const FIB = [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233];
+function masanielloTable(N, K, q) {   // M[n][w]: capitale necessario (in unita' dell'obiettivo) con n giocate rimaste e w vittorie da fare
+  const M = Array.from({ length: N + 1 }, () => Array(K + 1).fill(0));
+  for (let n = 0; n <= N; n++) for (let w = 0; w <= K; w++) {
+    if (w === 0) M[n][w] = 1; else if (w > n) M[n][w] = 0; else M[n][w] = (M[n - 1][w - 1] + (q - 1) * M[n - 1][w]) / q;
+  }
+  return M;
+}
+const SYSTEMS = {
+  fissa: { label: 'Puntata fissa 1 €', stake: () => 1, after() {} },
+  martingala8: { label: 'Martingala, freno a 8', init: s => { s.k = 0; }, stake: s => 2 ** s.k, after: (s, won) => { s.k = won ? 0 : s.k + 1; if (s.k >= 8) { s.k = 0; s.stops = (s.stops || 0) + 1; } } },
+  martingala10: { label: 'Martingala, freno a 10', init: s => { s.k = 0; }, stake: s => 2 ** s.k, after: (s, won) => { s.k = won ? 0 : s.k + 1; if (s.k >= 10) { s.k = 0; s.stops = (s.stops || 0) + 1; } } },
+  fibonacci: { label: 'Fibonacci, freno a 10', init: s => { s.i = 0; }, stake: s => FIB[s.i], after: (s, won) => { s.i = won ? Math.max(0, s.i - 2) : s.i + 1; if (s.i >= 10) { s.i = 0; s.stops = (s.stops || 0) + 1; } } },
+  dalembert: { label: "D'Alembert", init: s => { s.u = 1; }, stake: s => s.u, after: (s, won) => { s.u = won ? Math.max(1, s.u - 1) : s.u + 1; } },
+  paroli: { label: 'Paroli (3 vinte)', init: s => { s.k = 0; }, stake: s => 2 ** s.k, after: (s, won) => { s.k = won ? s.k + 1 : 0; if (s.k >= 3) s.k = 0; } },
+  masaniello: { label: 'Masaniello (4 su 10, ciclo da 20 €)', init: s => { s.n = 10; s.w = 4; s.cap = 20; s.M = masanielloTable(10, 4, 2.6); s.goal = 20 / s.M[10][4]; s.bk = 20; },
+    stake: (s, x) => { if (s.w === 0 || s.w > s.n) return 0; const st = s.goal * (s.M[s.n - 1][s.w - 1] - s.M[s.n - 1][s.w]) / x.odd; return Math.max(0, Math.min(st, s.bk)); },
+    after: (s, won, st, x) => { s.bk += won ? st * (x.odd - 1) : -st; s.n--; if (won) s.w--; if (s.w === 0 || s.w > s.n || s.n === 0 || s.bk <= 0.01) { s.cycles = (s.cycles || 0) + 1; if (s.w > 0) s.stops = (s.stops || 0) + 1; s.n = 10; s.w = 4; s.bk = 20; } } },
+  kelly: { label: '¼ Kelly (2% max)', stake: (s, x, bank) => Math.max(0, Math.min(0.02 * bank, bank * ((x.odd * x.p - 1) / (x.odd - 1)) / 4)), after() {} }
+};
+function compareSystems(rows, { bank0 = 100 } = {}) {
+  const days = dailyPicks(rows), out = {};
+  for (const [key, sys] of Object.entries(SYSTEMS)) {
+    const st = {}; if (sys.init) sys.init(st);
+    let bank = bank0, peak = bank0, maxDd = 0, staked = 0, maxStake = 0, minBank = bank0, ruined = null; const seasons = new Map();
+    for (const x of days) {
+      let s = sys.stake(st, x, bank); if (!(s > 0)) { sys.after(st, x.won, 0, x); continue; }
+      if (s > bank) { s = bank; } if (bank <= 0.01) { ruined = ruined || x.d; break; }
+      const pnl = x.won ? s * (x.odd - 1) : -s; bank += pnl; staked += s; maxStake = Math.max(maxStake, s); minBank = Math.min(minBank, bank);
+      peak = Math.max(peak, bank); maxDd = Math.max(maxDd, peak - bank); const se = seasonOf(x.d); seasons.set(se, (seasons.get(se) || 0) + pnl);
+      sys.after(st, x.won, s, x);
+    }
+    const sv = [...seasons.values()];
+    out[key] = { label: sys.label, final: bank, pnl: bank - bank0, staked, roiPct: staked ? 100 * (bank - bank0) / staked : null, maxStake, maxDrawdown: maxDd, minBank, ruined,
+      redSeasons: sv.filter(v => v < 0).length, seasons: sv.length, worstSeason: sv.length ? Math.min(...sv) : null, bestSeason: sv.length ? Math.max(...sv) : null, stops: st.stops || 0 };
+  }
+  return { days: days.length, winPct: days.length ? 100 * days.filter(x => x.won).length / days.length : null, avgOdd: days.length ? days.reduce((a, x) => a + x.odd, 0) / days.length : null, systems: out };
+}
+const MT_VERSION = 9;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
@@ -105,7 +152,7 @@ async function getMartingala(pool, { force = false } = {}) {
     // stessa giocata del giorno a 0,20 fissi, per vedere quanto aggiunge la scalata
     fascia: (() => { const band = [...valueOf(rows, 'home', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'draw', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'away', 0.02, { minOdd: 2, maxOdd: 3.5 })];
       const daily = simulate(band, { double: true }), fixedDaily = simulate(band, { maxSteps: 0 });
-      return { giocate: band.length, senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
+      return { giocate: band.length, sistemi: compareSystems(band), senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
         parallele2: parallel(band, 2, { maxSteps: 8 }), parallele3: parallel(band, 3, { maxSteps: 8 }), fissaUnaAlGiorno: fixedDaily }; })(),
     // solo pareggi pagati piu' del giusto (alla quota piu' alta): raddoppio, una e tre scalate, e a puntata fissa per confronto
     valore: { una: simulate(valueDraws(rows)), tre: parallel(valueDraws(rows), 3), fissa: flat(valueDraws(rows)) },
@@ -116,4 +163,4 @@ async function getMartingala(pool, { force = false } = {}) {
   return val;
 }
 
-module.exports = { simulate, parallel, valueDraws, valueOf, flat, getMartingala };
+module.exports = { compareSystems, masanielloTable, dailyPicks, simulate, parallel, valueDraws, valueOf, flat, getMartingala };

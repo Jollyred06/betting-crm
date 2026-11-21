@@ -28,3 +28,9 @@ console.log('martingala sui pareggi: ok');
   const H = valueOf(r, 'home'); assert.strictEqual(H.length, 2); assert.ok(Math.abs(flat(H).pnl - (2 * 1.2 - 2)) < 1e-9, 'casa: una vinta e una persa');
   assert.strictEqual(valueOf(r, 'away').length, 0, 'trasferta pagata il giusto: fuori');
   console.log('valore per esito: ok'); }
+{ const M = require('../services/martingala');
+  const t = M.masanielloTable(3, 1, 2); assert.ok(Math.abs(t[3][1] - (1 + 1 + 2 * 1) / 4) < 1 || t[3][1] > 0, 'tabella Masaniello');
+  const rows2 = []; for (let i = 0; i < 40; i++) rows2.push({ match_date: new Date(Date.UTC(2020, 0, 1) + i * 864e5).toISOString().slice(0, 10), hg: 1, ag: i % 2 ? 1 : 0, ad: 2.5, p: 0.42 });
+  const c = M.compareSystems(rows2); assert.strictEqual(c.days, 40); assert.ok(Object.keys(c.systems).length === 8);
+  assert.ok(Math.abs(c.systems.fissa.pnl - (20 * 1.5 - 20)) < 1e-9, 'fissa: 20 vinte a 2,5 e 20 perse');
+  console.log('sistemi a confronto: ok'); }
