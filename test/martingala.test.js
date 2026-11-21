@@ -22,3 +22,4 @@ console.log('martingala sui pareggi: ok');
   assert.strictEqual(v.length, 1, 'solo il pareggio pagato sopra il giusto'); assert.strictEqual(v[0].ad, 3.7);
   assert.ok(Math.abs(flat(v).pnl - 5.4) < 1e-9);
   console.log('pareggi di valore: ok'); }
+{ const f = simulate(rows, { maxSteps: 3 }); assert.ok(f.busts >= 2 && f.maxStake <= 0.8 + 1e-9, 'col freno a 3 la puntata non supera 0,80: ' + f.maxStake); console.log('freno sulla serie: ok'); }
