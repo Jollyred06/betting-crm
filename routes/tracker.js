@@ -167,6 +167,9 @@ router.post('/casse-siti', async (req, res) => {
   try { const b = req.body || {}; const v = await require('../services/bookcash').setBookCash(pool, b.book, b.saldo); require('../services/cache').clear(); res.json({ success: true, ...v }); }
   catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
+router.get('/bivio', async (req, res) => {
+  try { res.json(await require('../services/bivio').getBivio(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/migliori', async (req, res) => {
   try { res.json(await require('../services/migliori').getMigliori(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
