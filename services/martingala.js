@@ -9,7 +9,7 @@
 const { seasonOf } = require('./backtest');
 
 /** Parte pura. rows: {match_date, league, home, away, hg, ag, pd, ad}. */
-function simulate(rows, { base = 0.2, cap = Infinity, bank = Infinity } = {}) {
+function simulate(rows, { base = 0.2, cap = Infinity, bank = Infinity, double = true } = {}) {
   // il pareggio con la quota piu' bassa di ogni giorno
   const byDay = new Map();
   for (const r of rows) {
@@ -22,11 +22,12 @@ function simulate(rows, { base = 0.2, cap = Infinity, bank = Infinity } = {}) {
   const seasons = new Map();
   for (const x of days) {
     const target = base * 2;                                       // obiettivo di ogni giro: quanto rende la prima puntata a quota ~3
-    let stake = (lost + target) / (x.odd - 1);
+    // il metodo del video (chiarito da Christian): si raddoppia la puntata dopo ogni pareggio mancato, 0,20 0,40 0,80 1,60...
+    let stake = double ? base * 2 ** lossRun : (lost + target) / (x.odd - 1);
     const S = seasons.get(seasonOf(x.d)) || { season: seasonOf(x.d), bets: 0, draws: 0, pnl: 0, maxStake: 0, longest: 0, busts: 0 };
     seasons.set(S.season, S);
     // salta: il bookmaker non accetta la puntata o la cassa non basta -> si perde tutto il giro e si riparte da capo
-    if (stake > cap || lost + stake > bank) { busts++; S.busts++; lost = 0; lossRun = 0; stake = target / (x.odd - 1); }
+    if (stake > cap || lost + stake > bank) { busts++; S.busts++; lost = 0; lossRun = 0; stake = double ? base : target / (x.odd - 1); }
     bets++; S.bets++; staked += stake; maxStake = Math.max(maxStake, stake); S.maxStake = Math.max(S.maxStake, stake);
     if (x.draw) { const win = stake * (x.odd - 1); pnl += win; S.pnl += win; draws++; S.draws++; cycles++; lost = 0; lossRun = 0; }
     else { pnl -= stake; S.pnl -= stake; lost += stake; lossRun++; longest = Math.max(longest, lossRun); S.longest = Math.max(S.longest, lossRun); maxLost = Math.max(maxLost, lost); }
@@ -38,19 +39,21 @@ function simulate(rows, { base = 0.2, cap = Infinity, bank = Infinity } = {}) {
     seasons: [...seasons.values()].sort((a, b) => a.season.localeCompare(b.season)) };
 }
 
-const MT_VERSION = 1;
+const MT_VERSION = 2;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
   const rows = (await pool.query(`SELECT match_date, league, home, away, hg, ag, pd, ad FROM hist_pin WHERE pd IS NOT NULL OR ad IS NOT NULL ORDER BY match_date`)).rows;
   const val = {
     version: MT_VERSION, matches: rows.length, updatedAt: new Date().toISOString(),
-    // tre scenari: cassa e banco senza limiti (il sogno), banco che accetta al massimo 1.000 euro, cassa da 1.000 euro
+    // il metodo del video: parte da 0,20 e raddoppia. Scenari: senza limiti (il sogno), banco che accetta al massimo 1.000 euro,
+    // cassa da 1.000 euro; e la stessa scalata partendo da 50 euro (quanto servirebbe per avvicinarsi ai 20.000 l'anno)
     senzaLimiti: simulate(rows),
     tetto1000: simulate(rows, { cap: 1000 }),
     cassa1000: simulate(rows, { bank: 1000 }),
-    // per guadagnare 20.000 euro all'anno: obiettivo per giro ~180 euro (base 90)
-    base90: simulate(rows, { base: 90 })
+    base50: simulate(rows, { base: 50 }),
+    // per confronto: la scalata "giusta" che alza solo quanto basta per recuperare (meno aggressiva del raddoppio)
+    recupero: simulate(rows, { double: false })
   };
   if (rows.length && !C.isRunning()) await C.saveState(pool, 'martingala', val);
   return val;
