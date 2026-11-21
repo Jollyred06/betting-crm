@@ -1109,6 +1109,8 @@
   const voteChip = r => { const t = tierOf(r); return t ? `<span class="vote ${t[0]}" title="💎 Top e ⭐ Buona si giocano; 🧪 Prova solo in simulazione; ⚪ Debole no">${t[1]}</span>` : ''; };
   // probabilita' di vincere (prezzo giusto di Pinnacle) e guadagno atteso sui 2 euro alla quota che giochi
   // 20/11/2026: quanto puntare. Sotto i 300 euro di cassa 2 euro fissi; sopra, un quarto di Kelly (minimo 2, massimo 2% della cassa)
+  // puntata minima per sito (21/11: Eurobet 1 euro, detto da Christian; gli altri quando li sappiamo)
+  const BOOK_MIN = { eurobet: 1 };
   let BANK = null, KELLY = null;   // KELLY: la cassa dichiarata per Kelly (21/11); se c'e', comanda lei
   function stakeOf(odd, p, bank = BANK) {
     odd = Number(odd); p = Number(p);
@@ -1120,7 +1122,8 @@
   }
   function stakeLine(r) {
     const odd = r.play ? r.play.odd : r.odd, s = stakeOf(odd, r.fair_prob);
-    if (KELLY) return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(s, 2)} €</b> · ¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${s < 2 ? ' (dove il minimo è 2 €, gioca 2 €)' : ''}</small>`;
+    if (KELLY) { const bk = String(r.play ? r.play.book : r.book || ''), mn = BOOK_MIN[bk.toLowerCase()];
+      return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(mn && s < mn ? mn : s, 2)} €</b> · ¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${mn && s < mn ? ` (Kelly dice ${num(s, 2)} €, su ${esc(bk)} il minimo è ${num(mn, 0)} €)` : ''}</small>`; }
     return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(Math.round(s * 2) / 2, s % 1 ? 2 : 0)} €</b> · ${BANK && BANK >= 300 ? '¼ Kelly sulla cassa di ' + num(BANK, 0) + ' €, massimo 2%' : '2 € fissi finché la cassa è sotto i 300 €' + (BANK ? ' (ora ' + num(BANK, 0) + ' €)' : '')}</small>`;
   }
   function probLine(r) {
