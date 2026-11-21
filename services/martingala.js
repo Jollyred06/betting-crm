@@ -100,15 +100,15 @@ const SYSTEMS = {
   fibonacci: { label: 'Fibonacci, freno a 10', init: s => { s.i = 0; }, stake: s => FIB[s.i], after: (s, won) => { s.i = won ? Math.max(0, s.i - 2) : s.i + 1; if (s.i >= 10) { s.i = 0; s.stops = (s.stops || 0) + 1; } } },
   dalembert: { label: "D'Alembert", init: s => { s.u = 1; }, stake: s => s.u, after: (s, won) => { s.u = won ? Math.max(1, s.u - 1) : s.u + 1; } },
   paroli: { label: 'Paroli (3 vinte)', init: s => { s.k = 0; }, stake: s => 2 ** s.k, after: (s, won) => { s.k = won ? s.k + 1 : 0; if (s.k >= 3) s.k = 0; } },
-  masaniello: { label: 'Masaniello (4 su 10, ciclo da 20 €)', init: s => { s.n = 10; s.w = 4; s.cap = 20; s.M = masanielloTable(10, 4, 2.6); s.goal = 20 / s.M[10][4]; s.bk = 20; },
+  masaniello: { label: 'Masaniello (4 su 10, ciclo da 20 unità)', init: (s, unit = 1) => { s.n = 10; s.w = 4; s.cap = 20 * unit; s.M = masanielloTable(10, 4, 2.6); s.goal = s.cap / s.M[10][4]; s.bk = s.cap; },
     stake: (s, x) => { if (s.w === 0 || s.w > s.n) return 0; const st = s.goal * (s.M[s.n - 1][s.w - 1] - s.M[s.n - 1][s.w]) / x.odd; return Math.max(0, Math.min(st, s.bk)); },
-    after: (s, won, st, x) => { s.bk += won ? st * (x.odd - 1) : -st; s.n--; if (won) s.w--; if (s.w === 0 || s.w > s.n || s.n === 0 || s.bk <= 0.01) { s.cycles = (s.cycles || 0) + 1; if (s.w > 0) s.stops = (s.stops || 0) + 1; s.n = 10; s.w = 4; s.bk = 20; } } },
+    after: (s, won, st, x) => { s.bk += won ? st * (x.odd - 1) : -st; s.n--; if (won) s.w--; if (s.w === 0 || s.w > s.n || s.n === 0 || s.bk <= 0.01) { s.cycles = (s.cycles || 0) + 1; if (s.w > 0) s.stops = (s.stops || 0) + 1; s.n = 10; s.w = 4; s.bk = s.cap; } } },
   kelly: { label: '¼ Kelly (2% max)', stake: (s, x, bank) => Math.max(0, Math.min(0.02 * bank, bank * ((x.odd * x.p - 1) / (x.odd - 1)) / 4)), after() {} }
 };
 function compareSystems(rows, { bank0 = 100, unit = 1 } = {}) {
   const days = dailyPicks(rows), out = {};
   for (const [key, sys] of Object.entries(SYSTEMS)) {
-    const st = {}; if (sys.init) sys.init(st);
+    const st = {}; if (sys.init) sys.init(st, unit);
     let bank = bank0, peak = bank0, maxDd = 0, staked = 0, maxStake = 0, minBank = bank0, ruined = null; const seasons = new Map();
     for (const x of days) {
       let s = key === 'kelly' || key === 'masaniello' ? sys.stake(st, x, bank) : unit * sys.stake(st, x, bank); if (!(s > 0)) { sys.after(st, x.won, 0, x); continue; }
@@ -119,11 +119,12 @@ function compareSystems(rows, { bank0 = 100, unit = 1 } = {}) {
     }
     const sv = [...seasons.values()];
     out[key] = { label: sys.label, final: bank, pnl: bank - bank0, staked, roiPct: staked ? 100 * (bank - bank0) / staked : null, maxStake, maxDrawdown: maxDd, minBank, ruined,
+      gainRisk: maxDd > 0 ? (bank - bank0) / maxDd : null, maxDrawdownPct: 100 * maxDd / bank0,
       redSeasons: sv.filter(v => v < 0).length, seasons: sv.length, worstSeason: sv.length ? Math.min(...sv) : null, bestSeason: sv.length ? Math.max(...sv) : null, stops: st.stops || 0 };
   }
   return { days: days.length, winPct: days.length ? 100 * days.filter(x => x.won).length / days.length : null, avgOdd: days.length ? days.reduce((a, x) => a + x.odd, 0) / days.length : null, systems: out };
 }
-const MT_VERSION = 10;
+const MT_VERSION = 11;
 async function getMartingala(pool, { force = false } = {}) {
   const C = require('./calib'); await C.ensureCalib(pool);
   if (!force) { const sv = await C.loadState(pool, 'martingala').catch(() => null); if (sv && sv.version === MT_VERSION && !C.isRunning()) return sv; }
@@ -153,7 +154,9 @@ async function getMartingala(pool, { force = false } = {}) {
     fascia: (() => { const band = [...valueOf(rows, 'home', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'draw', 0.02, { minOdd: 2, maxOdd: 3.5 }), ...valueOf(rows, 'away', 0.02, { minOdd: 2, maxOdd: 3.5 })];
       const daily = simulate(band, { double: true }), fixedDaily = simulate(band, { maxSteps: 0 });
       // 21/11: Christian parte da 0,20 (non da 1 euro): stesso confronto con l'unita' da 0,20
-      return { giocate: band.length, sistemi: compareSystems(band), sistemi020: compareSystems(band, { unit: 0.2 }), senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
+      return { giocate: band.length, sistemi: compareSystems(band), sistemi020: compareSystems(band, { unit: 0.2 }),
+        // 21/11 sera (Christian): cassa 500 euro, partenza 0,20; Kelly sulla cassa da 500
+        sistemi500: compareSystems(band, { bank0: 500, unit: 0.2 }), senzaFreno: daily, freno6: simulate(band, { maxSteps: 6 }), freno8: simulate(band, { maxSteps: 8 }), freno10: simulate(band, { maxSteps: 10 }),
         parallele2: parallel(band, 2, { maxSteps: 8 }), parallele3: parallel(band, 3, { maxSteps: 8 }), fissaUnaAlGiorno: fixedDaily }; })(),
     // solo pareggi pagati piu' del giusto (alla quota piu' alta): raddoppio, una e tre scalate, e a puntata fissa per confronto
     valore: { una: simulate(valueDraws(rows)), tre: parallel(valueDraws(rows), 3), fissa: flat(valueDraws(rows)) },
