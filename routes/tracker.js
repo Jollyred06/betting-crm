@@ -134,6 +134,10 @@ router.post('/market-check', async (req, res) => {
 router.get('/sicure', async (req, res) => {
   try { res.json(await require('../services/sicure').getSicure(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
+// 🎢 prova della martingala sui pareggi sullo storico (solo misura)
+router.get('/martingala', async (req, res) => {
+  try { res.json(await require('../services/martingala').getMartingala(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/migliori', async (req, res) => {
   try { res.json(await require('../services/migliori').getMigliori(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });
