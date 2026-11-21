@@ -315,8 +315,8 @@
     <section class="block migliori" id="miglioriBox" hidden></section>
     <section class="block sicure" id="sicureBox" hidden></section>
     </details>
-    <details class="fold quiet"><summary><span>Strategia A e scartate</span><small>il test di ottobre e le idee che non battevano il mercato</small></summary>
-    <details class="fold"><summary><span>Strategia A · in archivio dal 1° novembre</span><small>verdetto, numeri, tappe, bankroll di carta</small></summary>
+    <details class="fold quiet"><summary><span>Idee scartate</span><small>quelle che non battevano il mercato</small></summary>
+    <div hidden><details class="fold"><summary><span>Strategia A · in archivio dal 1° novembre</span><small>verdetto, numeri, tappe, bankroll di carta</small></summary>
     <section class="block"><div id="bankMini"></div></section>
     <section id="verdict" class="hero"><div class="sk l1"></div><div class="sk l2"></div><div class="sk l3"></div><div class="sk box"></div></section>
     <div class="upd" id="updLine"></div>
@@ -331,7 +331,7 @@
     </section>
     <section class="block"><h3>Tappe</h3><div id="milestones"></div></section>
     <section class="block"><h3>Prossime partite</h3><div id="schedule"></div></section>
-    </details>
+    </details></div>
 <div id="strategies"></div><h4>Provate e scartate</h4><div id="discarded"></div></details>
   </main>
 
@@ -343,7 +343,8 @@
       <p class="muted sub">Le partite che hai giocato davvero, con la quota presa. Il valore dice se le tue quote battono quelle di chiusura.</p>
       <div id="playedBox"><div class="sk box"></div></div>
     </section>
-    <details class="fold quiet"><summary><span>Allenamento e strumenti</span><small>bankroll di allenamento, strategia A, gestione del saldo di carta</small></summary>
+    <!-- 21/11: tolti dalla vista (Christian): allenamento, bankroll di carta della strategia A e la sua gestione. Dati in archivio. -->
+    <div hidden><details class="fold quiet"><summary><span>Allenamento e strumenti</span><small>bankroll di allenamento, strategia A, gestione del saldo di carta</small></summary>
     <section class="block train">
       <h3>🏋️ Bankroll di allenamento</h3>
       <p class="muted sub">Sulla carta, nessun soldo vero. Tre casse da 500 € per ogni selezione, con tre modi di puntare sugli stessi segnali. Si ferma da sola se perde il 25%.</p>
@@ -371,7 +372,7 @@
       </div>
       <p class="muted">Sono soldi di carta: il saldo si muove da solo di 2€ per ogni segnale che si chiude. Qui puoi solo ripartire da un altro importo.</p>
     </section>
-    </details>
+    </details></div>
   </main>
 
   <!-- ALTRO -->
@@ -658,7 +659,7 @@
     try { trainData = await getJson('/api/tracker/training'); renderTrain(); } catch (e) { $('trainBox').innerHTML = '<div class="empty">Allenamento non disponibile: ' + esc(e.message) + '</div>'; }
   }
   async function loadBankroll() {
-    loadTraining(); loadPlayed();
+    loadPlayed(); return;   // 21/11: allenamento e bankroll di carta della strategia A non si mostrano piu'
     try { bankData = await getJson('/api/tracker/bankroll'); renderBankFull(bankData); } catch (e) { $('bankFull').innerHTML = '<div class="empty">Non riesco a caricare il bankroll: ' + esc(e.message) + '</div>'; }
   }
   function setBankMode(el) {
@@ -904,7 +905,7 @@
       const seg = `<div class="seg" role="tablist">${[['a', 'Riepilogo'], ['m', 'Misure'], ['r', 'Archivio']].map(([k, t]) => `<button class="tab${anView === k ? ' on' : ''}" data-an="${k}" onclick="anTab(this)">${t}</button>`).join('')}</div>`;
       $('italia').innerHTML = seg
         + pane('a', ruleCard(i) + teamCard(TM) + autoCard(AU))
-        + pane('m', guessCard(GU) + dcCard(DC) + brainCard(BR) + storicoCard(CA) + formaCard(FT) + parereCard(OP) + booksCard(BK) + paperCard(i))
+        + pane('m', guessCard(GU) + dcCard(DC) + brainCard(BR) + storicoCard(CA) + parereCard(OP) + booksCard(BK) + paperCard(i))
         + pane('r', heroTeam() + `<p class="muted" style="font-size:14px;margin:4px 0 2px;">⚽ Over/Under spento il 16 novembre: i siti italiani lo pagano in media il 9% meno del giusto (13 partite con valore su 665, saldo −11,6%). I dati restano qui sotto.</p>` + goalsCard(GL) + `<details class="fold quiet"><summary><span>Archivio strategie</span><small>F, F2, F3, F2+, sicure, I, B, modello che impara: si misurano, non si giocano</small></summary>`
           + final6Card(i) + final4Card(i) + final5Card(i) + finalCard(i) + final2Card(i) + final3Card(i) + learnCard(L) + oddsCard(i) + (b && b.strategy === 'B' ? oddsCard(b) : '') + `</details>`);
     } catch (e) { $('italia').innerHTML = '<div class="empty">Non riesco a caricare le strategie I e B: ' + esc(e.message) + '</div>'; }
@@ -1944,10 +1945,7 @@
         item(b.stopped ? 'bad' : 'ok', 'I freni', `Ti fermi dopo ${sr.dayLosses || 3} perse in un giorno, ${money(sr.weekLossEur || 15)} persi in una settimana (da lunedì) o con il budget sotto ${money(b.stop || 60)}${b.balance !== undefined ? ` · ora ${money(b.balance)}` : ''}`),
         item('info', 'Lettura delle quote', `Dalle 9 alle 22, più volte al giorno, e la chiusura di Pinnacle poco prima del calcio d'inizio${i && i.quotaRemaining !== undefined && i.quotaRemaining !== null ? ` · crediti rimasti ${i.quotaRemaining} (si ricaricano il 12)` : ''}`),
         item(tg ? 'ok' : 'warn', 'Messaggi su Telegram', [c.notify.telegram && 'Telegram', c.notify.email && 'email', c.notify.whatsapp && 'WhatsApp'].filter(Boolean).join(', ') || 'Non collegato: per ora tutto si legge qui nell\'app.'),
-        `<details class="fold"><summary><span>🗂️ Strategia A (in archivio)</span><small>non gira più</small></summary>
-          ${item('info', `Campionati seguiti (${c.competitions.length})`, c.competitions.map(x => esc(x.name)).join(', '))}
-          ${item('info', 'Vantaggio', `dal ${num(c.minEdgePct, 1)}% al ${c.maxEdgePct}%`)}
-          ${item('info', 'Massimo segnali al giorno', c.maxDailySignals)}</details>`
+        ''
       ].join('');
     } catch (e) { $('config').innerHTML = '<div class="empty">Non riesco a caricare le impostazioni: ' + esc(e.message) + '</div>'; }
   }

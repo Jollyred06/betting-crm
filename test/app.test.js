@@ -111,7 +111,7 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
   assert.ok(/Migliore quota contro Pinnacle/.test(els.strategies.innerHTML) && /In prova dal vivo/.test(els.strategies.innerHTML) && /Da 2% a 3%/.test(els.strategies.innerHTML) && /Serie minori/.test(els.strategies.innerHTML));
   assert.ok(/Sempre la favorita/.test(els.discarded.innerHTML) && /Machine learning/.test(els.discarded.innerHTML) && /Valore delle rose/.test(els.discarded.innerHTML));
   vm.runInContext("show('bankroll')", ctx); await tick();
-  assert.ok(/114,40 €/.test(els.bankFull.innerHTML) && /Ultimi movimenti/.test(els.bankFull.innerHTML) && /Deposito di prova/.test(els.bankFull.innerHTML) && /Calo massimo dal picco/.test(els.bankFull.innerHTML) && /\+6,40 €/.test(els.bankFull.innerHTML));
+  assert.ok(!els.bankFull || !/114,40 €/.test(els.bankFull.innerHTML || ''), '21/11: il bankroll di carta della strategia A non si carica piu\'');
   assert.ok(/Quota vicina a questa offerta da 3 bookmaker/.test(els.signals.innerHTML));                                       // quota ottenibile
   assert.ok(/class="avail lone">Un solo bookmaker offre questa quota/.test(els.signals.innerHTML));                              // quota da sola: avviso
   console.log('Segnali, Strategie, Bankroll: ok');
@@ -119,7 +119,7 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
   // ALTRO: log e info
   vm.runInContext("show('more')", ctx); await tick();
   moreOn = 'logs'; vm.runInContext("moreTab({ dataset: { t: 'logs' }, classList: { add() {} } })", ctx); await tick(); assert.ok(/class="saving"/.test(els.runs.innerHTML));
-  moreOn = 'info'; vm.runInContext("moreTab({ dataset: { t: 'info' }, classList: { add() {} } })", ctx); await tick(); assert.ok(/Super Lig/.test(els.config.innerHTML) && /Non collegato/.test(els.config.innerHTML));
+  moreOn = 'info'; vm.runInContext("moreTab({ dataset: { t: 'info' }, classList: { add() {} } })", ctx); await tick(); assert.ok(!/Strategia A/.test(els.config.innerHTML) && /Non collegato/.test(els.config.innerHTML));
   console.log('Altro (log, info): ok');
 
   // CHIAVE su richiesta: nessuna chiamata protetta senza chiave, la finestra si apre e la chiave sbagliata non si salva
