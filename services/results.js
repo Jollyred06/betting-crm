@@ -96,6 +96,16 @@ async function ensureResults(pool) {
   await pool.query(`CREATE TABLE IF NOT EXISTS results_requests (
     id SERIAL PRIMARY KEY, at TIMESTAMPTZ NOT NULL DEFAULT NOW(), day TEXT, ok BOOLEAN, fixtures INT, note TEXT)`);
   await pool.query(`ALTER TABLE results_requests ADD COLUMN IF NOT EXISTS src TEXT DEFAULT 'af'`);
+  // 22/11/2026, una volta sola: Pachuca-Toluca (21/11) era stata segnata "rinviata" dalla riga con l'orario sbagliato del feed (15:15)
+  // e l'annullamento era passato anche alle giocate delle 22:50 (partita giocata). Si riaprono tutte, con l'orario giusto.
+  try {
+    const C = require('./calib'); await C.ensureCalib(pool);
+    if (!(await C.loadState(pool, 'fix_pachuca_2211'))) {
+      await pool.query(`UPDATE italia_signals SET result = NULL, result_score = NULL, settled_at = NULL, result_src = NULL, verify = NULL, commence_time = '2026-11-21T22:50:00Z'
+        WHERE event_id = '130f74b56ba018d6' AND (result = 'void' OR result IS NULL)`);
+      await C.saveState(pool, 'fix_pachuca_2211', { at: new Date().toISOString() });
+    }
+  } catch (e) { /* facoltativo */ }
   ready = true;
 }
 
@@ -212,10 +222,11 @@ async function settleItaliaManual(pool, id, homeGoals, awayGoals, { voided = fal
   const s = (await pool.query(`SELECT id, event_id, commence_time FROM italia_signals WHERE id = $1`, [id])).rows[0];
   if (!s) { const e = new Error('Segnale non trovato.'); e.status = 404; throw e; }
   if (Date.parse(s.commence_time) > Date.now()) { const e = new Error('La partita non è ancora iniziata.'); e.status = 400; throw e; }
-  const rows = (await pool.query(`SELECT id, selection FROM italia_signals WHERE event_id = $1`, [s.event_id])).rows;
+  const rows = (await pool.query(`SELECT id, selection, commence_time FROM italia_signals WHERE event_id = $1`, [s.event_id])).rows;
   // partita rinviata o annullata: la giocata viene rimborsata dal bookmaker, quindi non conta (ne' vinta ne' persa)
   if (voided) {
-    for (const r of rows) await pool.query(`UPDATE italia_signals SET result = 'void', result_score = 'rinviata', settled_at = NOW(), result_src = 'mano', verify = NULL WHERE id = $1`, [r.id]);
+    // 22/11: solo le righe con lo stesso orario (entro 12 ore): se la partita e' stata spostata, le giocate sul nuovo orario restano aperte
+    for (const r of rows.filter(x => Math.abs(Date.parse(x.commence_time) - Date.parse(s.commence_time)) < 12 * 3600000)) await pool.query(`UPDATE italia_signals SET result = 'void', result_score = 'rinviata', settled_at = NOW(), result_src = 'mano', verify = NULL WHERE id = $1`, [r.id]);
     return { updated: rows.length, result: 'void', score: 'rinviata' };
   }
   const h = Number(homeGoals), a = Number(awayGoals);

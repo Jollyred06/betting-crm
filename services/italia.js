@@ -395,6 +395,13 @@ function choosePlan(mk, c, { weekendDays = 0, isWeekend = false } = {}) {
   return { ...base, plus: false, fallback: `con ${c.scanHoursPlus.length} scansioni al giorno alla ricarica resterebbero ${plus.leftAtReset} richieste (riserva ${Math.max(PLUS_MIN_LEFT, plus.reserve)}): restano ${c.scanHours.length}` };
 }
 
+async function fixKickoffs(pool, records) {
+  const m = new Map(); for (const r of records || []) if (r.event_id && r.commence_time) m.set(r.event_id, new Date(r.commence_time).toISOString());
+  if (!m.size) return 0;
+  const r = await pool.query(`UPDATE italia_signals s SET commence_time = v.ct FROM (SELECT unnest($1::text[]) AS id, unnest($2::timestamptz[]) AS ct) v
+    WHERE s.event_id = v.id AND s.result IS NULL AND s.commence_time <> v.ct AND ABS(EXTRACT(EPOCH FROM (s.commence_time - v.ct))) < 172800`, [[...m.keys()], [...m.values()]]);
+  return r.rowCount || 0;
+}
 async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   const h = romeHour(nowMs);
   if (h < c.fromHour || h >= c.toHour) return { scan: 'fuori orario' };
@@ -426,6 +433,9 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   if (!pinBoardDropped) { pinBoardDropped = true; try { await pool.query('DROP TABLE IF EXISTS pin_board'); } catch (e) { /* facoltativo */ } }   // quote maggiorate tolte il 1° novembre
   // ⚽ gol: prezzo 1X2 di Pinnacle di tutte le partite viste (gratis) e, se accese, le quote Over/Under (una richiesta in piu')
   let golOut = {};
+  // 22/11: se il feed sposta l'orario di una partita (stessa partita, entro 48 ore) si corregge anche sulle righe gia' salvate e ancora aperte.
+  // Prima Pachuca-Toluca era rimasta alle 15:15 (orario sbagliato) mentre si giocava alle 22:50: sembrava da chiudere e finiva "rinviata"
+  try { golOut.orariCorretti = await fixKickoffs(pool, records); } catch (e) { golOut.erroreOrari = e.message; }
   try { const merged = mergeWithPinnacle(records), G = require('./goals'); golOut.partiteGol = await G.watch(pool, merged, trio, nowMs);
     try { Object.assign(golOut, await G.scanTotals(pool, c, { nowMs, http, merged, trio })); } catch (e) { golOut.erroreGol = e.message; }
     try { Object.assign(golOut, await G.valangaOdds(pool, c, { nowMs, http })); } catch (e) { golOut.erroreThor = e.message; } } catch (e) { /* facoltativo */ }
