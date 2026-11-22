@@ -87,16 +87,21 @@ function calibration(rows) {
   return { ...total, ok: total.n >= 20 ? Math.abs(total.won - total.expected) <= 2 * total.sd : null, buckets };
 }
 
+let heavy = null;
 /** Riepilogo per l'app: cosa ha imparato, come se la cava, e la stima per i segnali in arrivo. */
 function buildLearning(rows, nowMs = Date.now()) {
   const measured = rows.filter(r => num(r.clv_pct) !== null);
   if (measured.length < MIN_TRAIN) return { ready: false, measured: measured.length, minTrain: MIN_TRAIN };
-  const model = fit(measured);
+  // 22/11/2026: il calcolo pesante (fit + prova a rotazione) si rifa' solo se i segnali misurati sono cambiati: /learning e /advice
+  // lo chiedevano entrambi ogni volta (3-5 secondi sul server gratuito)
+  const key = `${measured.length}|${measured.reduce((a, r) => a + Number(r.id || 0), 0)}|${measured.reduce((a, r) => a + num(r.clv_pct), 0).toFixed(3)}`;
+  if (!heavy || heavy.key !== key) heavy = { key, model: fit(measured), wf: walkForward(measured) };
+  const model = heavy.model;
   const learned = Object.entries(FEATURES).map(([f, def]) => ({
     key: f, label: def.label,
     levels: Object.entries(model.effects[f]).map(([k, e]) => ({ level: k, n: e.n, effect: e.shrunk, raw: e.raw })).sort((a, b) => b.effect - a.effect)
   }));
-  const wf = walkForward(measured);
+  const wf = heavy.wf;
   const upcoming = rows.filter(r => (r.strategy || 'I') === 'I' && Date.parse(r.commence_time) > nowMs)
     .map(r => ({ id: r.id, pred: predict(model, r), pick: predict(model, r) >= model.mu + PICK_MARGIN }));
   return { ready: true, measured: measured.length, mu: model.mu, margin: PICK_MARGIN, learned, test: wf, upcoming, calibration: calibration(rows), updatedAt: new Date(nowMs).toISOString() };

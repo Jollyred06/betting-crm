@@ -91,8 +91,11 @@ const okRun = { run_at: '2026-10-05T09:00:00Z', success: true, value_bets_found:
 
   // HOME
   assert.ok(/Tutto in ordine/.test(els.todo.innerHTML) && /todo ok/.test(els.todo.className), els.todo.innerHTML);
-  assert.ok(/Troppo presto/.test(els.verdict.innerHTML)); assert.ok(/1 su 300/.test(els.barText.textContent) || /0 su 300/.test(els.barText.textContent));
-  assert.ok(/Giro automatico/.test(els.checks.innerHTML) && /Super Lig/.test(els.schedule.innerHTML));
+  assert.ok(/Giro automatico/.test(els.checks.innerHTML));
+  // 22/11: la strategia A (nascosta) non si carica all'apertura; si disegna solo chiamando loadArchiveA
+  assert.ok(!/Troppo presto/.test((els.verdict || {}).innerHTML || ''), 'strategia A non caricata all\'apertura');
+  vm.runInContext('loadArchiveA()', ctx); await tick();
+  assert.ok(/Troppo presto/.test(els.verdict.innerHTML));
   assert.ok(/Tappa 100/.test(els.milestones.innerHTML) && /34 su 100 segnali chiusi/.test(els.milestones.innerHTML) && /La regola della decisione/.test(els.milestones.innerHTML));
   assert.ok(/114,40 €/.test(els.bankMini.innerHTML) && /\+4,40 € dai segnali/.test(els.bankMini.innerHTML) && /depositi e prelievi \+10,00 €/.test(els.bankMini.innerHTML) && /polyline/.test(els.bankMini.innerHTML), els.bankMini.innerHTML);   // saldo, guadagno dai segnali e depositi separati
   const snap = ms.buildSnapshot(Array.from({ length: 300 }, (_, i) => ({ id: i, odd: 4 + (i % 3), status: i % 5 ? 'lost' : 'won', edge_pct: 2 + (i % 8), clv_pct: ((i % 11) - 4) * 1.1, est_prob: 0.2, league_code: i % 2 ? 'SA' : 'SP2', selection: 'home', sharp_source: 'pinnacle' })), { pendingNow: 3 });

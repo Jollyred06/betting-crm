@@ -179,11 +179,11 @@ const SCAN_KINDS = { scan: 'Scansione quote', scan_ou: 'Over/Under', close: 'Chi
 async function getScans(pool, limit = 40) {
   const n = Math.max(1, Math.min(200, Number(limit) || 40));
   const { rows } = await pool.query(
-    `SELECT r.at, r.kind, r.ok, r.records, r.quota_remaining, r.note,
+    `SELECT r.at, r.kind, r.ok, r.records, r.quota_remaining, r.note, r.info -> 'errori' AS errori,
        CASE WHEN r.kind = 'scan' THEN (SELECT COUNT(*)::int FROM italia_signals s WHERE s.strategy = 'I' AND s.created_at BETWEEN r.at - interval '3 minutes' AND r.at + interval '1 minute') END AS new_signals
      FROM italia_requests r WHERE r.kind IN ('scan', 'scan_ou', 'close', 'ou_valanga') ORDER BY r.id DESC LIMIT $1`, [n]);
   return rows.map(r => ({ at: r.at, kind: r.kind, label: SCAN_KINDS[r.kind] || r.kind, ok: r.ok !== false, records: r.records === null ? null : Number(r.records),
-    newSignals: r.new_signals === null || r.new_signals === undefined ? null : Number(r.new_signals), credits: r.quota_remaining === null ? null : Number(r.quota_remaining), note: r.note || null }));
+    newSignals: r.new_signals === null || r.new_signals === undefined ? null : Number(r.new_signals), credits: r.quota_remaining === null ? null : Number(r.quota_remaining), note: r.note || null, ...(r.errori ? { errori: r.errori } : {}) }));
 }
 
 function getConfig(env = process.env) {

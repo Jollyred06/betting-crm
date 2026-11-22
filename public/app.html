@@ -519,10 +519,18 @@
     keepOpen($('pane-' + curPage));
     redrawTimer = setTimeout(() => { if (curPage === 'home') loadHome(); else if (curPage === 'signals') loadSignals(); else if (curPage === 'strategies') loadStrategies(); else if (curPage === 'bankroll') loadBankroll(); }, 150);
   }
+  // 22/11: se il server manda una copia vecchia (X-Stale) la sta gia' rifacendo: dopo qualche secondo si richiede e, se e' cambiata, si ridisegna
+  const staleTry = new Map();
   async function fetchRaw(url) {
     const r = await fetch(url); let raw, d;
     if (typeof r.text === 'function') { raw = await r.text(); d = JSON.parse(raw); } else { d = await r.json(); raw = JSON.stringify(d); }
-    if (d && d.error && !Array.isArray(d)) throw new Error(d.error); return { d, raw };
+    if (d && d.error && !Array.isArray(d)) throw new Error(d.error);
+    const stale = r.headers && typeof r.headers.get === 'function' && r.headers.get('X-Stale') === '1';
+    if (stale && (staleTry.get(url) || 0) < 3) {
+      staleTry.set(url, (staleTry.get(url) || 0) + 1);
+      setTimeout(() => fetchRaw(url).then(x => { if (x.raw !== raw) { swrPut(url, x.d, x.raw); lastOk.set(url, x.d); memo.set(url, { at: Date.now(), p: Promise.resolve(x.d) }); redraw(); } }).catch(() => {}), 5000);
+    } else if (!stale) staleTry.delete(url);
+    return { d, raw };
   }
   // 21/11/2026 ("ha impiegato piu' di 5 secondi dal clic su Salva"): dopo un salvataggio la pagina si ridisegna con i dati gia'
   // in memoria, anche se hanno piu' di 30 secondi, invece di aspettare il server; quelli nuovi arrivano dopo da soli
@@ -901,7 +909,7 @@
   }
   async function loadItalia() {
     try {
-      const [i, b, L, BK, GL, TM, BR, AU, CA, OP, GU, DC, FT] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null), getJson('/api/tracker/calibration').catch(() => null), getJson('/api/tracker/opinion').catch(() => null), getJson('/api/tracker/guess').catch(() => null), getJson('/api/tracker/dc-paper').catch(() => null), getJson('/api/tracker/forma-test').catch(() => null)]);
+      const [i, b, L, BK, GL, TM, BR, AU, CA, OP, GU, DC, FT] = await Promise.all([getJson('/api/tracker/italia'), getJson('/api/tracker/italia?s=B').catch(() => null), getJson('/api/tracker/learning').catch(() => null), getJson('/api/tracker/books').catch(() => null), getJson('/api/tracker/goals').catch(() => null), getJson('/api/tracker/team').catch(() => null), getJson('/api/tracker/brain').catch(() => null), getJson('/api/tracker/auto-played').catch(() => null), getJson('/api/tracker/calibration').catch(() => null), getJson('/api/tracker/opinion').catch(() => null), getJson('/api/tracker/guess').catch(() => null), getJson('/api/tracker/dc-paper').catch(() => null), null]);   // 22/11: la forma (bocciata) non si chiede piu'
       const pane = (k, html) => `<div data-anv="${k}"${anView === k ? '' : ' hidden'}>${html}</div>`;
       const seg = `<div class="seg" role="tablist">${[['a', 'Riepilogo'], ['m', 'Misure'], ['r', 'Archivio']].map(([k, t]) => `<button class="tab${anView === k ? ' on' : ''}" data-an="${k}" onclick="anTab(this)">${t}</button>`).join('')}</div>`;
       $('italia').innerHTML = seg
@@ -1401,39 +1409,27 @@
   }
   async function loadHome() {
     loadOggi(); loadContano(); loadScalata(); loadBivio(); loadMigliori(); loadSicure(); loadAdvice(); loadToday(); loadCredits();
+    // 22/11: niente piu' richieste per la strategia A (verdetto, tappe, bankroll di carta: nascosti dal 21/11) -> 3 richieste in meno all'apertura
     try {
-      const [o, h, m, b] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/health'), getJson('/api/tracker/milestones').catch(() => null), getJson('/api/tracker/bankroll').catch(() => null)]);
-      bankData = b; renderMilestones(m); renderBankMini(b);
+      const h = await getJson('/api/tracker/health');
       const lv = h.todo.level;
       $('todo').className = 'todo ' + lv;
       $('todo').innerHTML = `${marker(lv)}<div><b>${esc(h.todo.title)}</b><span>${esc(h.todo.text)}</span></div>`;
       lastLoad = Date.now(); $('updLine').textContent = 'Aggiornato alle ' + dt(new Date(), { hour: '2-digit', minute: '2-digit' });
-      $('verdict').className = 'hero ' + o.verdict.level;
-      $('verdict').innerHTML = `<h2>${esc(o.verdict.title)}</h2><p>${esc(o.verdict.text)}</p>${gauge(o.total)}`;
-      const t = o.total;
-      $('stats').innerHTML = `
-        <div class="board">
-          <div class="cell"><b class="num">${t.signals}</b><span>segnali</span></div>
-          <div class="cell"><b class="num">${t.settled}</b><span>chiusi, ${t.pending} in attesa</span></div>
-          <div class="cell"><b class="num">${o.week.signals}</b><span>ultimi 7 giorni</span></div>
-        </div>
-        <dl class="facts">
-          <div><dt>ROI a puntata fissa</dt><dd class="${t.settled >= 10 ? cls(t.roiFlatPct) : ''}">${t.settled >= 10 ? pct(t.roiFlatPct, 1) : 'pochi dati'}</dd></div>
-          <div><dt>Vinte sui chiusi</dt><dd>${t.settled >= 10 && t.hitRatePct !== null ? num(t.hitRatePct, 0) + '%' : 'pochi dati'}</dd></div>
-        </dl>`;
-      $('bar').style.width = o.progress.pct + '%';
-      $('barText').textContent = `${o.progress.settled} su ${o.progress.target} segnali chiusi per una lettura solida (${o.progress.pct}%)`;
-      $('strongLine').textContent = o.strong && o.strong.signals && o.strong.signals !== t.signals
-        ? `Solo con vantaggio di almeno 3%: ${o.strong.signals} segnali, valore rispetto alla chiusura ${pct(o.strong.avgClvPct, 2)}` : '';
       $('checks').innerHTML = h.items.map(i => `<div>${marker(i.level)}<div><b>${esc(i.title)}</b><span class="muted">${esc(i.text)}</span></div></div>`).join('');
-      const soon = o.schedule.filter(s => s.nextStart && new Date(s.nextStart) > new Date()).slice(0, 8);
-      $('schedule').innerHTML = soon.length ? soon.map(s => `<div class="fx"><div class="date"><b>${dt(s.nextStart, { day: 'numeric' })}</b><span>${dt(s.nextStart, { weekday: 'short' })}</span></div><div><div class="what">${esc(s.name)}</div><div class="when">${dt(s.nextStart, { hour: '2-digit', minute: '2-digit' })}, prima partita</div></div></div>`).join('')
-        : '<div class="empty">Nessuna partita in programma trovata: compare dopo il primo giro.</div>';
     } catch (e) {
       $('todo').className = 'todo bad';
       $('todo').innerHTML = `${marker('bad')}<div><b>Non riesco a caricare i dati</b><span>${esc(e.message)}. Se il server era fermo, riprova tra un minuto.</span><div><button class="primary retry" onclick="loadHome()">Riprova</button></div></div>`;
-      $('verdict').innerHTML = '';
     }
+  }
+  /** Strategia A (in archivio): si disegna solo se un giorno si rimostra la sezione. */
+  async function loadArchiveA() {
+    try {
+      const [o, m, b] = await Promise.all([getJson('/api/tracker/overview'), getJson('/api/tracker/milestones').catch(() => null), getJson('/api/tracker/bankroll').catch(() => null)]);
+      bankData = b; renderMilestones(m); renderBankMini(b);
+      $('verdict').className = 'hero ' + o.verdict.level;
+      $('verdict').innerHTML = `<h2>${esc(o.verdict.title)}</h2><p>${esc(o.verdict.text)}</p>${gauge(o.total)}`;
+    } catch (e) { $('verdict').innerHTML = ''; }
   }
 
   // ------------------------------------------------------------------ SEGNALI

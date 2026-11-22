@@ -461,7 +461,9 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
     try { await notify(`<b>Quote italiane – prova senza soldi</b>\n\n${fresh.map(x => signalText(x, c.minEdge)).join('\n\n')}\n\n<i>La quota cambia in fretta: controlla sul sito prima di giocare.</i>`); } catch (e) { /* avviso facoltativo */ }
   }
   const partite = new Set(mainRecords(records).map(r => r.event_id)).size;
-  await noteRequest(pool, 'scan', { righe: records.length, partite, candidatiI: found.length, nuoviI: fresh.length, candidatiB: foundB.length, nuoviB, candidatiT: foundT.length });
+  // 22/11: gli errori dei passi facoltativi (gol, sicure, migliori, bivio, scalata...) si salvano con la scansione: prima si vedevano solo nei log di Render
+  const errori = Object.fromEntries(Object.entries(golOut).filter(([k]) => /^errore/.test(k)).map(([k, v]) => [k, String(v).slice(0, 200)]));
+  await noteRequest(pool, 'scan', { righe: records.length, partite, candidatiI: found.length, nuoviI: fresh.length, candidatiB: foundB.length, nuoviB, candidatiT: foundT.length, ...(Object.keys(errori).length ? { errori } : {}) });
   return { scan: 'fatta', righe: records.length, partite, candidati: found.length, nuovi: fresh.length, nuoviB, candidatiT: foundT.length, ...golOut };
 }
 
@@ -1430,6 +1432,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     }))
   };
   if (strategy === 'I') {
+    TM.schede = Date.now() - T0;   // 22/11: tempi piu' fini per trovare il punto lento
     const playedSum = await pre.playedSum;
     // 16/11/2026: le giocate fatte dalla lista Svago (dal suo avvio) si riconoscono dal segnale e hanno un budget a parte
     try {
@@ -1458,6 +1461,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     const svSet = new Set(out.svagoList);
     for (const r of out.recent) if (svSet.has(r.id)) r.verdict = { play: 'svago', text: `🎈 Svago: è il risultato più probabile, ma non è una giocata di valore (in media si perde circa il 7%). Giocala solo per divertimento, ${r.play.book} a ${Number(r.play.odd).toFixed(2).replace('.', ',')}` };
     // vinte contro attese della lista da giocare (stesse regole: selezione, niente coppe, quota fino al massimo)
+    TM.budget = Date.now() - T0;
     const ruleRows0 = bc.rule === 'consigliate' ? fin6Rows : bc.rule === 'sicure' ? fin5Rows : fin4Rows;
     let ruleRows = [...ruleRows0, ...liqRows.filter(r => !ruleRows0.includes(r))];   // con le 💧 liquide dal 2 novembre
     // dal 5 novembre: se in campo ci sono 🌊 Gli Oceani, il controllo della lista guarda le loro partite (da quando c'e' la regola)

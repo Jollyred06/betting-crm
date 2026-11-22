@@ -12,22 +12,36 @@ let hits = 0, misses = 0;
 const clear = () => store.clear();
 /** Butta solo le pagine toccate da un salvataggio (es. una giocata cambia segnali e giocate, non le strategie). */
 const clearMatching = re => { for (const k of [...store.keys()]) if (re.test(k)) store.delete(k); };
-const stats = () => ({ voci: store.size, hits, misses, ripreparate: warmed });
+const stats = () => ({ voci: store.size, hits, misses, ripreparate: warmed, vecchieMandate: staleServed });
 const wantsGzip = req => /\bgzip\b/.test(req.headers['accept-encoding'] || '');
 
-function send(req, res, entry) {
+function send(req, res, entry, stale = false) {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  if (stale) res.setHeader('X-Stale', '1');
   res.setHeader('Vary', 'Accept-Encoding');
   res.setHeader('Cache-Control', 'no-cache');
   if (wantsGzip(req) && entry.gz) { res.setHeader('Content-Encoding', 'gzip'); return res.end(entry.gz); }
   return res.end(entry.body);
 }
 
+/** 22/11/2026: dopo i 5 minuti la copia non si butta subito: per un'ora si manda SUBITO la copia vecchia e intanto il server la
+ *  rifa' in sottofondo (prima il primo che apriva dopo 5 minuti aspettava 3-6 secondi: /italia, /advice, /learning). Con l'intestazione
+ *  X-Stale l'app sa che e' vecchia e la richiede da sola dopo qualche secondo. I salvataggi
+ *  e le scansioni continuano a cancellare le copie (dati sempre freschi dopo un cambiamento). */
+const STALE_MS = 6 * 3600000;   // la notte non ci sono scansioni: al mattino si vede subito la copia della sera, poi la nuova (l'app la richiede da sola)
+let staleServed = 0;
+function refreshInBackground(key) {
+  if (pending.has(key)) return;
+  const http = require('http');
+  const r = http.get({ host: '127.0.0.1', port: process.env.PORT || 3000, path: key, headers: { 'accept-encoding': 'gzip', 'x-refresh': '1' }, timeout: 60000 }, res => { res.resume(); });
+  r.on('error', () => {}); r.on('timeout', () => r.destroy());
+}
 function middleware(ttlMs = 5 * 60000) {
   return (req, res, next) => {
     if (req.method !== 'GET' || /backup/.test(req.path)) return next();
-    const key = req.originalUrl, hit = store.get(key);
-    if (hit && Date.now() - hit.at < ttlMs) { hits++; return send(req, res, hit); }
+    const key = req.originalUrl, hit = store.get(key), refresh = req.headers['x-refresh'] === '1';
+    if (!refresh && hit && Date.now() - hit.at < ttlMs) { hits++; return send(req, res, hit); }
+    if (!refresh && hit && Date.now() - hit.at < STALE_MS) { hits++; staleServed++; refreshInBackground(key); return send(req, res, hit, true); }
     // 3 novembre 2026: se la stessa pagina e' gia' in preparazione (es. la ripreparazione dopo un tocco), si aspetta quella
     // invece di ricalcolarla una seconda volta: sul server gratuito due calcoli insieme raddoppiano l'attesa
     const busy = pending.get(key);
@@ -66,8 +80,11 @@ function staticGzip(file) {
  * Ripreparazione in background delle pagine principali (31 ottobre 2026). Si chiama dopo ogni clear:
  * aspetta qualche secondo (piu' salvataggi di fila = una sola ripreparazione) e chiede le pagine al server stesso, una alla volta.
  */
-const WARM_PATHS = ['/api/tracker/italia', '/api/tracker/team', '/api/tracker/goals', '/api/tracker/overview', '/api/tracker/health', '/api/tracker/advice', '/api/tracker/milestones', '/api/tracker/bankroll',
-  '/api/tracker/played', '/api/tracker/learning', '/api/tracker/italia?s=B', '/api/tracker/training', '/api/tracker/archive?days=7', '/api/tracker/strategies', '/api/tracker/books', '/api/tracker/credits'];
+// 22/11/2026: prima le pagine che si aprono davvero (Oggi, poi Analisi e Giocate); tolte quelle della strategia A, nascoste dal 21/11
+const WARM_PATHS = ['/api/tracker/italia', '/api/tracker/played', '/api/tracker/advice', '/api/tracker/credits', '/api/tracker/scalata', '/api/tracker/casse-siti',
+  '/api/tracker/health', '/api/tracker/bivio', '/api/tracker/migliori', '/api/tracker/sicure', '/api/tracker/sicure-paper', '/api/tracker/team', '/api/tracker/goals',
+  '/api/tracker/learning', '/api/tracker/italia?s=B', '/api/tracker/books', '/api/tracker/brain', '/api/tracker/auto-played', '/api/tracker/calibration',
+  '/api/tracker/opinion', '/api/tracker/guess', '/api/tracker/dc-paper', '/api/tracker/archive?days=7'];
 let warmTimer = null, warming = false, warmed = 0;
 function warm({ port = process.env.PORT || 3000, delayMs = 3000, paths = WARM_PATHS, get = null } = {}) {
   if (warmTimer) clearTimeout(warmTimer);
