@@ -109,7 +109,7 @@ function buildLearning(rows, nowMs = Date.now()) {
 
 async function getLearning(pool, nowMs = Date.now()) {
   const I = require('./italia');
-  const { rows } = await pool.query(`SELECT id, event_id, phase, strategy, created_at, commence_time, selection, odd, edge_pct, clv_pct, fair_prob, result FROM italia_signals`);
+  const rows = await require('./sigstore').all(pool);
   return buildLearning(I.primaryRows(rows), nowMs);
 }
 

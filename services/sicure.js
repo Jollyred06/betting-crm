@@ -45,7 +45,7 @@ let cache = null;
 async function getSicure(pool, { nowMs = Date.now() } = {}) {
   if (cache && nowMs - cache.at < 10 * 60000) return cache.val;
   const noise = require('./italia').isNoise;
-  const past = (await pool.query(`SELECT league, home, away, pin_h, pin_d, pin_a, result_score FROM goal_watch WHERE pin_h IS NOT NULL AND result_score ~ '^[0-9]+-[0-9]+$'`)).rows.filter(r => !noise(r));
+  const past = (await require('./sigstore').watch.all(pool)).filter(r => r.pin_h !== null && r.pin_h !== undefined && /^[0-9]+-[0-9]+$/.test(r.result_score || '') && !noise(r));   // 22/11: copia in memoria
   const next = (await pool.query(`SELECT event_id, league, home, away, commence_time, pin_h, pin_d, pin_a FROM goal_watch
     WHERE pin_h IS NOT NULL AND commence_time > to_timestamp($1::double precision / 1000) AND commence_time < to_timestamp($1::double precision / 1000) + INTERVAL '24 hours'`, [nowMs])).rows;
   const firstOf = new Map();

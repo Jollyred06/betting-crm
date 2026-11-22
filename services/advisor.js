@@ -96,7 +96,7 @@ async function getAdvice(pool) {
     a = (await pool.query(`SELECT clv_pct, COALESCE(presa_book, bookmaker_name) AS book FROM value_bets WHERE strategy = 'A_sharp' AND status IN ('won','lost') AND clv_pct IS NOT NULL`)).rows;
   } catch (e) { /* tabella o colonne mancanti: niente consigli su A */ }
   try {
-    it = (await pool.query(`SELECT id, event_id, phase, created_at, commence_time, close_captured_at, edge_pct, strategy, book, odd, selection, clv_pct, netwin_clv_pct FROM italia_signals`)).rows;
+    it = (await require('./sigstore').all(pool));
   } catch (e) { /* strategia I non ancora attiva */ }
   // nomi leggibili dei libri della I (stessi dell'app) e selezione F
   const { BOOK_NAMES: names, markFinal, markFinal2, markFinal3, markFinal4, markFinal5, markFinal6, primaryRows } = require('./italia');

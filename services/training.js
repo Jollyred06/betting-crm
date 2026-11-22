@@ -72,7 +72,7 @@ function trainSelection(signals, start = START) {
 
 async function getTraining(pool) {
   const I = require('./italia');
-  const { rows } = await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY created_at`);
+  const rows = await require('./sigstore').rows(pool, { strategy: 'I' });
   const prim = I.primaryRows(rows);   // F e F3 sulla prima uscita, F2 anche sulle riletture vicino al calcio d'inizio
   const pick = (mark, list = prim) => { const m = mark(list); return list.filter(r => m.get(r.id) && m.get(r.id).final); };
   // 8 novembre 2026: in testa le due che si giocano davvero (regole applicate anche all'indietro, prima lettura valida)

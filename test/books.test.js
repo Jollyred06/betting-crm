@@ -477,15 +477,25 @@ console.log('books.test.js: tutti i controlli passati');
   console.log('Over/Under: vantaggi salvati ok');
 }
 
-// 14 novembre 2026: le statistiche della pagina leggono TUTTI i segnali della strategia, non solo gli ultimi 600
+// 14 novembre 2026: le statistiche leggono TUTTI i segnali della strategia (nessun tetto). 22/11: dalla copia in memoria (sigstore),
+// letta intera una volta e poi solo le righe cambiate
 (async () => {
-  const seen = [];
-  const pool = { query: async (q) => { seen.push(String(q)); return { rows: [] }; } };
-  try { await require('../services/italia').getItalia(pool, {}, 'I'); } catch (e) { /* senza database vero: conta solo la richiesta */ }
-  const sel = seen.filter(q => /FROM italia_signals WHERE strategy = \$1 ORDER BY commence_time DESC/.test(q));
-  assert.ok(sel.length >= 1, 'la lettura dei segnali deve partire');
-  assert.ok(sel.every(q => !/LIMIT\s+600/.test(q)), 'nessun tetto di 600 segnali');
-  console.log('statistiche su tutti i segnali: ok');
+  const SS = require('../services/sigstore'); SS.reset();
+  const seen = [], mk = (id, st, c, k, u) => ({ id, strategy: st, created_at: c, commence_time: k, updated_at: u });
+  let data = Array.from({ length: 700 }, (_, i) => mk(i + 1, i % 2 ? 'I' : 'T', new Date(Date.UTC(2026, 10, 1) + i * 60000).toISOString(), new Date(Date.UTC(2026, 10, 2) + (700 - i) * 60000).toISOString(), '2026-11-20T10:00:00Z'));
+  const pool = { query: async (q, p) => { seen.push(String(q)); if (/SELECT \* FROM italia_signals\s*$/.test(String(q).trim())) return { rows: data }; if (/WHERE updated_at >/.test(q)) return { rows: data.filter(r => r.updated_at > p[0]) }; return { rows: [] }; } };
+  const I1 = await SS.rows(pool, { strategy: 'I', order: 'startDesc' });
+  assert.strictEqual(I1.length, 350, 'tutti i segnali della strategia, nessun tetto');
+  assert.ok(new Date(I1[0].commence_time) >= new Date(I1[1].commence_time), 'dal piu\' recente');
+  I1[0].strategy = 'X'; assert.strictEqual((await SS.rows(pool, { strategy: 'I' })).length, 350, 'le pagine ricevono copie');
+  await new Promise(r => setTimeout(r, 1600));
+  data = [...data, mk(701, 'I', '2026-11-22T10:00:00Z', '2026-11-22T20:00:00Z', '2026-11-22T10:00:00Z')];
+  const I2 = await SS.rows(pool, { strategy: 'I' });
+  assert.strictEqual(I2.length, 351, 'la riga nuova arriva');
+  assert.strictEqual(seen.filter(q => /SELECT \* FROM italia_signals\s*$/.test(q.trim())).length, 1, 'tabella intera letta una volta sola');
+  assert.ok(seen.some(q => /WHERE updated_at >/.test(q)), 'poi solo le righe cambiate');
+  SS.reset();
+  console.log('statistiche su tutti i segnali, dalla copia in memoria: ok');
 })();
 
 // 14 novembre 2026: risposta piena al tetto -> avviso nel registro (le ultime quote potrebbero mancare)

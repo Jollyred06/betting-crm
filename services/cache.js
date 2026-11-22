@@ -42,7 +42,7 @@ function refreshInBackground(key) {
 }
 function middleware(ttlMs = 5 * 60000) {
   return (req, res, next) => {
-    if (req.method !== 'GET' || /backup/.test(req.path)) return next();
+    if (req.method !== 'GET' || /backup|db-traffic/.test(req.path)) return next();
     const key = req.originalUrl, hit = store.get(key), refresh = req.headers['x-refresh'] === '1';
     if (!refresh && hit && Date.now() - hit.at < ttlMs) { hits++; return send(req, res, hit); }
     if (!refresh && hit && Date.now() - hit.at < STALE_MS) { hits++; staleServed++; refreshInBackground(key); return send(req, res, hit, true); }
@@ -85,10 +85,9 @@ function staticGzip(file) {
  * aspetta qualche secondo (piu' salvataggi di fila = una sola ripreparazione) e chiede le pagine al server stesso, una alla volta.
  */
 // 22/11/2026: prima le pagine che si aprono davvero (Oggi, poi Analisi e Giocate); tolte quelle della strategia A, nascoste dal 21/11
-const WARM_PATHS = ['/api/tracker/italia', '/api/tracker/played', '/api/tracker/advice', '/api/tracker/credits', '/api/tracker/scalata', '/api/tracker/casse-siti',
-  '/api/tracker/health', '/api/tracker/bivio', '/api/tracker/migliori', '/api/tracker/sicure', '/api/tracker/sicure-paper', '/api/tracker/team', '/api/tracker/goals',
-  '/api/tracker/learning', '/api/tracker/italia?s=B', '/api/tracker/books', '/api/tracker/brain', '/api/tracker/auto-played', '/api/tracker/calibration',
-  '/api/tracker/opinion', '/api/tracker/guess', '/api/tracker/dc-paper', '/api/tracker/archive?days=7'];
+// 22/11/2026 (Supabase gratuito: 5 GB al mese di dati letti, a novembre 13): dopo una scansione si ripreparano solo le pagine di Oggi;
+// le altre si calcolano quando si aprono (e grazie alla copia vecchia si vedono subito lo stesso)
+const WARM_PATHS = ['/api/tracker/italia', '/api/tracker/played', '/api/tracker/scalata', '/api/tracker/health'];
 let warmTimer = null, warming = false, warmed = 0;
 function warm({ port = process.env.PORT || 3000, delayMs = 3000, paths = WARM_PATHS, get = null } = {}) {
   if (warmTimer) clearTimeout(warmTimer);

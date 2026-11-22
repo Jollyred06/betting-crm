@@ -167,6 +167,8 @@ router.post('/casse-siti', async (req, res) => {
   try { const b = req.body || {}; const v = await require('../services/bookcash').setBookCash(pool, b.book, b.saldo); require('../services/cache').clear(); res.json({ success: true, ...v }); }
   catch (err) { res.status(err.status || 500).json({ error: err.message }); }
 });
+// 📶 traffico verso Supabase dall'ultimo avvio (22/11): chi legge quanti dati
+router.get('/db-traffic', (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ ...pool.traffic(), copie: require('../services/sigstore').stats() }); });
 router.get('/bivio', async (req, res) => {
   try { res.json(await require('../services/bivio').getBivio(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });

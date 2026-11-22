@@ -156,8 +156,8 @@ const DAY = 24 * 3600000;
 // (poche centinaia di KB) e si ricalcolano dalle 120.000 partite solo dopo l'aggiornamento dello storico (una volta al giorno).
 async function loadState(pool, key) { const r = (await pool.query(`SELECT val FROM calib_state WHERE key = $1`, [key])).rows[0]; return r ? JSON.parse(r.val) : null; }
 async function saveState(pool, key, obj) { await pool.query(`INSERT INTO calib_state (key, val) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET val = EXCLUDED.val`, [key, JSON.stringify(obj)]); }
-async function buildCal(pool) {
-  const rows = (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin WHERE ph IS NOT NULL`)).rows;
+async function buildCal(pool, all = null) {
+  const rows = all ? all.filter(r => r.ph !== null && r.ph !== undefined) : (await pool.query(`SELECT league, hg, ag, ph, pd, pa FROM hist_pin WHERE ph IS NOT NULL`)).rows;
   const cal = rows.length ? calibrate(rows) : null;
   if (cal) await saveState(pool, 'model_cal', cal);
   return cal;
@@ -185,10 +185,11 @@ async function getCalRaw(pool, { wait = true } = {}) { return wait ? rawModel.ge
 async function rebuildModels(pool) {
   rawModel.invalidate(); cache = null;
   try { require('./opinion').invalidate(); } catch (e) { /* facoltativo */ }
-  await buildCal(pool);
-  try { await require('./elo').rebuild(pool); } catch (e) { /* facoltativo */ }
-  try { await require('./backtest').getBacktest(pool, { force: true }); } catch (e) { /* facoltativo */ }
-  try { await require('./forma').getFormaTest(pool, { force: true }); } catch (e) { /* facoltativo */ }
+  // 22/11/2026 (traffico Supabase): lo storico (127.000 partite) si legge UNA volta per taratura ed Elo insieme (prima 4 letture al
+  // giorno: anche prova storica e forma, che l'app non mostra piu' e si calcolano solo se qualcuno le chiede)
+  const all = (await pool.query(`SELECT league, match_date, home, away, hg, ag, ph, pd, pa FROM hist_pin`)).rows;
+  await buildCal(pool, all);
+  try { await require('./elo').rebuild(pool, all); } catch (e) { /* facoltativo */ }
 }
 
 module.exports = { rebuildModels, loadState, saveState, getCalRaw, BANDS, BAND_LABELS, K_LEAGUE, rowsToPin, urlsFor, refreshHistory, maybeRefresh, startRefresh, isRunning, calibrate, adjust, report, getCalibration, ensureCalib };

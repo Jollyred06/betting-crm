@@ -113,7 +113,7 @@ function buildBrain(rows, I, { nowMs = Date.now() } = {}) {
 
 async function getBrain(pool, { nowMs = Date.now() } = {}) {
   const I = require('./italia');
-  const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY created_at`)).rows;
+  const all = (await require('./sigstore').rows(pool, { strategy: 'I' }));
   return buildBrain(I.primaryRows(all), I, { nowMs });
 }
 

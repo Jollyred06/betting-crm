@@ -308,7 +308,8 @@ async function getGoals(pool, env = process.env) {
   await ensureGoals(pool);
   try { await settleGoals(pool); } catch (e) { /* facoltativo */ }
   const c = require('./italia').cfg(env);
-  const w = (await pool.query(`SELECT event_id, league, home, away, commence_time, exp_goals, valanga, draw_prob, margin_pct, goals, result_score FROM goal_watch WHERE first_seen >= $1 ORDER BY commence_time DESC`, [RULES.since])).rows;
+  // 22/11: dalla copia in memoria di goal_watch (traffico Supabase)
+  const w = (await require('./sigstore').watch.all(pool)).filter(r => new Date(r.first_seen).getTime() >= new Date(RULES.since).getTime()).sort((a, b) => new Date(b.commence_time) - new Date(a.commence_time));
   const done = w.filter(r => r.goals !== null);
   const band = (lo, hi) => { const s = done.filter(r => r.exp_goals !== null && Number(r.exp_goals) >= lo && Number(r.exp_goals) < hi); return { lo, hi, ...overStats(s.map(r => r.goals)) }; };
   const val = w.filter(r => r.valanga);

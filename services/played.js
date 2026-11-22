@@ -121,7 +121,7 @@ async function getPlayed(pool) {
     const mean = n ? m.reduce((a, x) => a + x.clvPct, 0) / n : null;
     const sd = n > 1 ? Math.sqrt(m.reduce((a, x) => a + (x.clvPct - mean) ** 2, 0) / (n - 1)) : null;
     const ci = n >= 5 && sd !== null ? [mean - 1.96 * sd / Math.sqrt(n), mean + 1.96 * sd / Math.sqrt(n)] : null;
-    const jlIds = new Set(); { const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I'`)).rows, mo = I.markOceani(all), key = r => r.event_id + '|' + r.selection;
+    const jlIds = new Set(); { const all = (await require('./sigstore').rows(pool, { strategy: 'I' })), mo = I.markOceani(all), key = r => r.event_id + '|' + r.selection;
       const jlKeys = new Set(all.filter(r => (mo.get(r.id) || {}).final).map(key)); for (const r of rows) if (jlKeys.has(r.event_id + '|' + r.selection)) jlIds.add(r.id); }
     const part = list => { const k = list.filter(x => x.clvPct !== null); return { measured: k.length, avgClvPct: k.length ? k.reduce((a, x) => a + x.clvPct, 0) / k.length : null }; };
     const verdict = n < 20 ? 'wait' : ci && ci[0] > 0 ? 'good' : mean < 0 ? 'bad' : 'wait';
@@ -133,7 +133,7 @@ async function getPlayed(pool) {
   // 18/11/2026: dove hai giocato. ⭐ = Justice League, Prova o Coppe; 🎈 Svago; ⚠️ fuori lista (nei dati perdono circa il 9%)
   try {
     const I = require('./italia');
-    const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I'`)).rows, mo = I.markOceani(all), key = r => r.event_id + '|' + r.selection;
+    const all = (await require('./sigstore').rows(pool, { strategy: 'I' })), mo = I.markOceani(all), key = r => r.event_id + '|' + r.selection;
     const jlKeys = new Set(all.filter(r => (mo.get(r.id) || {}).final).map(key));
     const byId = new Map(rows.map(r => [Number(r.id), r]));
     const groupOf = x => { const r = byId.get(Number(x.id)); if (!r) return 'fuori';

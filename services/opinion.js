@@ -53,7 +53,7 @@ async function getOpinions(pool, { nowMs = Date.now(), force = false } = {}) {
   const cal = await C.getCalRaw(pool);
   if (!cal) return { ready: false };
   const idx = await teams24.get(pool), lc = new Map();
-  const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY created_at`)).rows;
+  const all = (await require('./sigstore').rows(pool, { strategy: 'I' }));
   const rows = I.primaryRows(all).filter(r => r.result !== 'void');
   const feats = rows.map(r => { const f = B.featuresOf(r, I); const lg = leagueOf(idx, r.home, r.away, I.sameTeam, lc); f.op = opinionOf(cal, lg, r); f.homeName = r.home; f.awayName = r.away; f.start = r.commence_time; f.sel = r.selection; f.book = r.book; return f; });
   const jl = feats.filter(f => f.jl);

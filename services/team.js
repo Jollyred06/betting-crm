@@ -70,10 +70,10 @@ async function stateOf(pool) {
 async function getTeam(pool, { nowMs = Date.now() } = {}) {
   const I = require('./italia'), R = require('./results');
   const st = await stateOf(pool);
-  const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY created_at`)).rows;
+  const all = (await require('./sigstore').rows(pool, { strategy: 'I' }));
   // quote degli altri siti (strategia T, stessa lettura) per il consenso
   const tq = new Map();
-  for (const t of (await pool.query(`SELECT event_id, quotes FROM italia_signals WHERE strategy = 'T' AND quotes IS NOT NULL ORDER BY created_at`)).rows) {
+  for (const t of (await require('./sigstore').rows(pool, { strategy: 'T' })).filter(r => r.quotes !== null && r.quotes !== undefined)) {
     let q = t.quotes; try { if (typeof q === 'string') q = JSON.parse(q); } catch (e) { q = null; }
     if (q) tq.set(t.event_id, { ...(tq.get(t.event_id) || {}), ...q });
   }
@@ -83,7 +83,8 @@ async function getTeam(pool, { nowMs = Date.now() } = {}) {
   const mk = (f, o) => { const m = f(all, o); return r => !!(m.get(r.id) || {}).final; };
   const f6 = mk(I.markFinal6, { ignoreSince: true }), f4 = mk(I.markFinal4, { ignoreSince: true }), lq = mk(I.markLiquid, { ignoreSince: true });
   const f8 = mk(I.markFinal8, { ignoreSince: true }), f9 = mk(I.markFinal9, { ignoreSince: true });
-  const qsMap = I.markQuick(all, await I.pinHistory(pool)), qs = r => !!(qsMap.get(r.id) || {}).final;
+  const qsMap = I.markQuick(all, await I.pinHistory(pool, [...new Set(all.map(r => r.event_id))])),   // 22/11: solo le partite dei segnali, non tutto pin_history
+    qs = r => !!(qsMap.get(r.id) || {}).final;
   const oc = mk(I.markOceani), fl = mk(I.markLiquidEarly), dr = mk(I.markDraw), fF = (() => { const m = I.markFinal(I.primaryRows(all)); return r => !!(m.get(r.id) || {}).final; })();
   const pv = I.markProva(all);
   const sets = {

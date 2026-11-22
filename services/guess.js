@@ -170,16 +170,19 @@ function peekGuess(pool, { nowMs = Date.now() } = {}) {
   return cacheG ? cacheG.val : null;
 }
 async function getGuess(pool) {
-  const rows = (await pool.query(`SELECT event_id, created_at, commence_time, home, away, pin_h, pin_d, pin_a, result, result_score FROM italia_signals WHERE strategy = 'I'`)).rows;
+  const rows = (await require('./sigstore').rows(pool, { strategy: 'I' }));
   // 16/11/2026: non aspetta i calcoli pesanti; se non sono ancora pronti si va avanti senza (e si preparano in sottofondo)
   // 20/11/2026: dopo un riavvio storico ed Elo non erano ancora pronti e l'IA imparava senza (forza nota per 0): ora li aspetta
   // fino a 20 secondi (sono salvati nel database, di solito bastano pochi secondi); se non arrivano, va avanti e riprova fra 1 minuto
   const within = (pr, ms) => Promise.race([pr, new Promise(r => setTimeout(() => r(null), ms))]);
   const C = require('./calib'); let cal = null; try { cal = await within(C.getCalRaw(pool, { wait: true }), 20000); } catch (e) { /* senza storico: solo movimento */ }
   let eloOf = null; try { const E = await within(require('./elo').getEloCached(pool), 20000); eloOf = E ? E.of : null; } catch (e) { /* senza storico */ }
-  let ownRows = []; try { ownRows = (await pool.query(`SELECT g.event_id, g.league, g.home, g.away, g.commence_time, g.pin_h, g.pin_d, g.pin_a, g.result_score, f.pin_h AS f_h, f.pin_d AS f_d, f.pin_a AS f_a
-    FROM goal_watch g LEFT JOIN LATERAL (SELECT pin_h, pin_d, pin_a FROM pin_history p WHERE p.event_id = g.event_id ORDER BY p.at LIMIT 1) f ON true
-    WHERE g.pin_h IS NOT NULL AND g.result_score ~ '^[0-9]+-[0-9]+$'`)).rows; } catch (e) { /* facoltativo */ }
+  // 22/11: dalla copia in memoria di goal_watch e delle prime quote (prima: 6.000 righe + la prima quota di ognuna a ogni calcolo)
+  let ownRows = []; try {
+    const SS = require('./sigstore'), w = (await SS.watch.all(pool)).filter(g => g.pin_h !== null && g.pin_h !== undefined && /^[0-9]+-[0-9]+$/.test(g.result_score || ''));
+    const fp = await SS.firstPinOf(pool, w.map(g => g.event_id));
+    ownRows = w.map(g => { const f = fp.get(g.event_id) || {}; return { event_id: g.event_id, league: g.league, home: g.home, away: g.away, commence_time: g.commence_time, pin_h: g.pin_h, pin_d: g.pin_d, pin_a: g.pin_a, result_score: g.result_score, f_h: f.pin_h ?? null, f_d: f.pin_d ?? null, f_a: f.pin_a ?? null }; });
+  } catch (e) { /* facoltativo */ }
   return guessStats(rows, { cal, adjust: C.adjust, eloOf, ownRows, extraRows: ownRows });
 }
 

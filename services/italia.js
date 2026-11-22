@@ -1016,7 +1016,7 @@ function flagsOf(r, f4, f5, f6, c, nowMs = Date.now()) {
 
 /** Timbra i segnali I appena usciti (flags ancora vuoto). Le regole guardano lo storico, quindi si caricano gli ultimi 600. */
 async function stampFlags(pool, c, nowMs = Date.now()) {
-  const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY commence_time DESC, id DESC LIMIT 600`)).rows;
+  const all = (await require('./sigstore').rows(pool, { strategy: 'I', order: 'startDesc', limit: 600 }));
   const todo = all.filter(r => r.flags == null && T(r.commence_time) > nowMs - 6 * 3600000);
   if (!todo.length) return 0;
   const f4 = markFinal4(all), f5 = markFinal5(all), f6 = markFinal6(all);
@@ -1253,7 +1253,7 @@ function stats(list) {
 async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } = {}) {
   await ensureTables(pool);
   try { await require('./results').ensureResults(pool); } catch (e) { /* risultati facoltativi */ }
-  const all = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' ORDER BY commence_time DESC, id DESC`)).rows;
+  const all = (await require('./sigstore').rows(pool, { strategy: 'I', order: 'startDesc' }));
   const prim = primaryRows(all), fin = markFinal(prim), fin3 = markFinal3(prim), fin2 = markFinal2(all), fin4 = markFinal4(all), fin5 = markFinal5(all), fin6 = markFinal6(all);
   const firstOf = new Map(prim.map(r => [sigKey(r), r.id]));
   // 7 novembre 2026: per ogni partita si segna se e' una Justice League (e se 💎 Top), guardando la sua prima lettura valida
@@ -1293,7 +1293,7 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   // 3 novembre 2026 (velocita'): le letture indipendenti partono insieme invece che una dopo l'altra
   const [resultsStatus, allRes, used, lastRes] = await Promise.all([
     R.resultsStatus(pool, env).catch(() => null),
-    pool.query(`SELECT * FROM italia_signals WHERE strategy = $1 ORDER BY commence_time DESC, id DESC`, [strategy]),
+    require('./sigstore').rows(pool, { strategy, order: 'startDesc' }).then(rows => ({ rows })),
     usedThisMonth(pool),
     pool.query(`SELECT at, ok, kind, records, quota_remaining, note FROM italia_requests ORDER BY id DESC LIMIT 1`)]);
   const all = allRes.rows;

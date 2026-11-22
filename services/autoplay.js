@@ -29,7 +29,7 @@ async function runAutoplay(pool, { env = process.env, nowMs = Date.now() } = {})
   let st = (await pool.query(`SELECT val FROM auto_state WHERE key = 'start'`)).rows[0];
   if (!st) { await pool.query(`INSERT INTO auto_state (key, val) VALUES ('start', $1) ON CONFLICT DO NOTHING`, [new Date(nowMs).toISOString()]); st = { val: new Date(nowMs).toISOString() }; }
   const sinceMs = Date.parse(st.val);
-  const rows = (await pool.query(`SELECT * FROM italia_signals WHERE strategy = 'I' AND created_at >= $1 ORDER BY created_at`, [new Date(sinceMs).toISOString()])).rows;
+  const rows = (await require('./sigstore').rows(pool, { strategy: 'I', since: new Date(sinceMs).toISOString() }));
   const ex = (await pool.query(`SELECT signal_id, event_id, selection FROM auto_bets`)).rows;
   const taken = { ids: ex.map(r => Number(r.signal_id)), keys: ex.map(r => r.event_id + '|' + r.selection) };
   const fresh = pickNew(rows, { sinceMs, nowMs, taken, isOceani: I.isOceani, isCoppe: I.isCoppe, primaryRows: I.primaryRows });

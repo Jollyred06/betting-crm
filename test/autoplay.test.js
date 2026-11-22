@@ -29,17 +29,17 @@ const fake = { isOceani: r => r.jl === true, primaryRows: rows => rows };
     if (/CREATE/.test(sql)) return { rows: [] };
     if (/FROM auto_state/.test(sql)) return { rows: state.start ? [{ val: state.start }] : [] };
     if (/INSERT INTO auto_state/.test(sql)) { state.start = p[0]; return { rowCount: 1 }; }
-    if (/FROM italia_signals/.test(sql)) return { rows: signals.filter(r => Date.parse(r.created_at) >= Date.parse(p[0])) };
+    if (/FROM italia_signals/.test(sql)) return { rows: p ? signals.filter(r => Date.parse(r.created_at) >= Date.parse(p[0])) : signals };
     if (/FROM auto_bets/.test(sql)) return { rows: bets };
     if (/INSERT INTO auto_bets/.test(sql)) { bets.push({ signal_id: p[0], event_id: p[1], selection: p[2] }); return { rowCount: 1 }; }
     return { rows: [] }; } };
   const I = require('../services/italia'), origO = I.isOceani; I.isOceani = r => r.jl === true;
   signals.push(sig(10, 'old', 'home', '2026-11-14T09:00:00Z', '2026-11-14T18:00:00Z'));
-  assert.deepStrictEqual(await A.runAutoplay(pool, { nowMs: NOW }), { nuoveSimulate: 0 }, 'il primo giro non gioca lo storico');
+  assert.deepStrictEqual(await (require('../services/sigstore').reset(), A).runAutoplay(pool, { nowMs: NOW }), { nuoveSimulate: 0 }, 'il primo giro non gioca lo storico');
   assert.ok(state.start);
   signals.push(sig(11, 'new', 'away', '2026-11-14T12:10:00Z', '2026-11-14T20:00:00Z'));
-  assert.deepStrictEqual(await A.runAutoplay(pool, { nowMs: NOW + 15 * 60000 }), { nuoveSimulate: 1 });
-  assert.deepStrictEqual(await A.runAutoplay(pool, { nowMs: NOW + 20 * 60000 }), { nuoveSimulate: 0 }, 'nessun doppione');
+  assert.deepStrictEqual(await (require('../services/sigstore').reset(), A).runAutoplay(pool, { nowMs: NOW + 15 * 60000 }), { nuoveSimulate: 1 });
+  assert.deepStrictEqual(await (require('../services/sigstore').reset(), A).runAutoplay(pool, { nowMs: NOW + 20 * 60000 }), { nuoveSimulate: 0 }, 'nessun doppione');
   I.isOceani = origO;
   console.log('giocate simulate: ok');
 })().catch(e => { console.error(e); process.exit(1); });

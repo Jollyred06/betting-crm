@@ -70,8 +70,8 @@ function buildBooks(rows, { my = ['888sport_it', 'snai'], names = {}, nowMs = Da
 
 async function getBooks(pool, env = process.env, nowMs = Date.now()) {
   const I = require('./italia'), c = I.cfg(env);
-  const { rows } = await pool.query(`SELECT id, event_id, phase, strategy, created_at, commence_time, selection, book, odd, fair_prob, edge_pct, clv_pct, result, quotes
-    FROM italia_signals WHERE strategy IN ('I', 'T') AND created_at > NOW() - INTERVAL '120 days'`);
+  const from = Date.now() - 120 * 86400000;   // 22/11: dalla copia in memoria (meno dati letti da Supabase)
+  const rows = (await require('./sigstore').all(pool)).filter(r => (r.strategy === 'I' || r.strategy === 'T') && new Date(r.created_at).getTime() > from);
   return buildBooks(rows, { my: c.myBooks, names: I.BOOK_NAMES, nowMs });
 }
 

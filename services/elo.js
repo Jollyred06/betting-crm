@@ -57,8 +57,8 @@ function fromSaved(sv) {
   return { model, idx, of: (home, away) => eloProbs(model, idx, home, away, { leagueOf: O.leagueOf, sameTeam: I.sameTeam, cache: lc }) };
 }
 /** Dalle 120.000 partite al riassunto (solo dopo l'aggiornamento dello storico), salvato in calib_state. */
-async function rebuild(pool) {
-  const rows = (await pool.query(`SELECT league, match_date, home, away, hg, ag FROM hist_pin`)).rows;
+async function rebuild(pool, all = null) {
+  const rows = all || (await pool.query(`SELECT league, match_date, home, away, hg, ag FROM hist_pin`)).rows;
   if (!rows.length) return null;
   const m = buildElo(rows), teams = new Map();
   for (const r of rows) { teams.set(r.league + '|' + r.home, { league: r.league, team: r.home }); teams.set(r.league + '|' + r.away, { league: r.league, team: r.away }); }
