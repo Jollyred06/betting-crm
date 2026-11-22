@@ -47,8 +47,20 @@ function coverage(matches, signals, sameTeam) {
   });
   const missingLeagues = {};
   for (const r of rows.filter(x => !x.found)) missingLeagues[r.league] = (missingLeagues[r.league] || 0) + 1;
+  // 22/11: per le partite non trovate, quelle di Highlightly alla stessa ora con un pezzo di nome in comune (per capire se e' un
+  // problema di nomi scritti diversamente o se Highlightly proprio non ha quel campionato)
+  const words = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length >= 4 && !['club', 'futbol', 'football', 'sport', 'united', 'city', 'deportivo', 'athletic', 'atletico', 'real', 'sporting'].includes(w));
+  const forse = [];
+  for (const s of [...events.values()]) {
+    if (findMatch(s, matches, sameTeam)) continue;
+    const t = Date.parse(s.commence_time), ws = new Set([...words(s.home), ...words(s.away)]);
+    const c = matches.filter(x => { const d = Date.parse(x.date || x.startDate || ''); return Number.isFinite(d) && Math.abs(d - t) <= 20 * 60000; })
+      .filter(x => [...words(nameOf(x.homeTeam)), ...words(nameOf(x.awayTeam))].some(w => ws.has(w)));
+    forse.push({ league: s.league, nostra: `${s.home} – ${s.away}`, simili: c.slice(0, 3).map(x => `${nameOf(x.homeTeam)} – ${nameOf(x.awayTeam)} (${(x.league && x.league.name) || ''})`) });
+  }
   return { partiteHighlightly: matches.length, nostrePartite: rows.length, trovate: rows.filter(r => r.found).length, conRisultato: rows.filter(r => r.score).length,
-    campionatiMancanti: Object.entries(missingLeagues).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([l, n]) => `${l} (${n})`), esempi: rows.slice(0, 8) };
+    campionatiMancanti: Object.entries(missingLeagues).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([l, n]) => `${l} (${n})`), esempi: rows.slice(0, 8),
+    nonTrovate: { conSimili: forse.filter(f => f.simili.length).length, senzaSimili: forse.filter(f => !f.simili.length).length, elenco: forse.slice(0, 60) } };
 }
 
 async function check(pool, { env = process.env, http = axios, nowMs = Date.now(), day = null } = {}) {
@@ -62,7 +74,9 @@ async function check(pool, { env = process.env, http = axios, nowMs = Date.now()
   catch (e) { errors.push(String((e.response && e.response.status) || e.message)); }
   if (!matches) { const out = { ok: false, giorno: d, motivo: 'Highlightly non risponde con questa chiave', errori: errors }; last = { at: nowMs, out }; return out; }
   const I = require('./italia');
-  const { rows } = await pool.query(`SELECT event_id, league, home, away, commence_time FROM italia_signals WHERE commence_time >= $1::date AND commence_time < $1::date + INTERVAL '1 day'`, [d]);
+  // 22/11: tutte le partite viste quel giorno (goal_watch), prima squadra, non solo quelle con segnale
+  const { rows: all } = await pool.query(`SELECT event_id, league, home, away, commence_time FROM goal_watch WHERE commence_time >= $1::date AND commence_time < $1::date + INTERVAL '1 day'`, [d]);
+  const rows = all.filter(r => !I.isNoise(r));
   const out = { ok: true, giorno: d, fonte: base, ...coverage(matches, rows, I.sameTeam) };
   last = { at: nowMs, out };
   return out;
