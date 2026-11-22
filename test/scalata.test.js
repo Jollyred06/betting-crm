@@ -6,7 +6,7 @@ const c = [
   { event_id: 'b', odd: 2.3, edgePct: 3, prob: 0.46, isFav: true, isHome: true, isMajor: true, movedPts: 0.5 },
   { event_id: 'c', odd: 2.6, edgePct: 6, prob: 0.40, isFav: false, isHome: false },
   { event_id: 'd', odd: 3.0, edgePct: 1, prob: 0.337 },
-  { event_id: 'e', odd: 4.0, edgePct: 9, prob: 0.27 }
+  { event_id: 'e', odd: 4.2, edgePct: 9, prob: 0.26 }   // 22/11: tetto a 4: sopra resta fuori
 ];
 assert.deepStrictEqual(S.pickScalata(c).map(x => x.event_id), ['b', 'c']);
 assert.ok(S.reasonsOf({ ...c[1], movedPts: 0.5 }).some(r => /IA d'accordo/.test(r)));

@@ -21,7 +21,8 @@
  * CASSA KELLY — la cassa che Christian dichiara (salvata nel database): la puntata di ogni ⭐ = cassa x 1/4 Kelly, massimo 2%.
  */
 // 22/11 (Christian: anche 888sport ha il minimo di 1 €): si parte da 1 € e si sale di 0,20 € (STEP = 20% della partenza) fino a 5 € (21 gradini)
-const BASE = 1, STEP = 0.2, STOP = 21, MIN_ODD = 2, MAX_ODD = 3.5, MIN_EDGE = 2, SINCE = '2026-11-22T00:00:00Z';
+const BASE = 1, STEP = 0.2, STOP = 21, MIN_ODD = 2, MAX_ODD = 4,   // 22/11 sera: da 3,50 a 4 (+12% di partite, stesso guadagno sullo storico)
+    MIN_EDGE = 2, SINCE = '2026-11-22T00:00:00Z';
 const PICK = { home: '1', draw: 'X', away: '2' };
 // puntata minima per sito (21/11, verificati da Christian): sotto 1 euro si puo' giocare solo su 888sport
 const BOOK_MIN = { eurobet: 1, goldbet: 1, '888sport_it': 1 };   // 22/11: anche 888sport da 1 €
