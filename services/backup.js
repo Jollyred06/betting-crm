@@ -37,6 +37,14 @@ async function summary(pool) {
       metodi: s.methods.map(m => ({ key: m.key, atteso: Math.round(m.expected.balance * 100) / 100, reale: Math.round(m.real.balance * 100) / 100, fermata: m.expected.stopped || m.real.stopped })) })) };
   });
   await safe('calibrazione', async () => (await require('./learner').getLearning(pool)).calibration || null);
+  // 22/11/2026: le casse (Kelly, scalata, saldi per sito) e le prove sulla carta nuove (Bivio, Sicure, Migliori)
+  await safe('casse', async () => {
+    const S = require('./scalata'), sc = await S.getScalata(pool);
+    return { kelly: await S.getKelly(pool), scalata: { cassa: sc.cassa, cassaNow: sc.cassaNow, base: sc.base, gradino: sc.step, tetto: sc.stop, prossimaPuntata: sc.nextStake, saldo: sc.pnl, ritirati: sc.withdrawn, metodo: sc.method },
+      siti: await require('./bookcash').getBookCash(pool) };
+  });
+  await safe('bivio', async () => { const b = await require('./bivio').getBivio(pool); return { since: b.since, regole: b.rules, tutte: b.all, probabilita: b.prob, quota: b.quota }; });
+  await safe('sicureCarta', async () => { const x = await require('./sicurepaper').getSicurePaper(pool); delete x.items; return x; });
   return out;
 }
 
@@ -48,6 +56,11 @@ async function buildBackup(pool, now = new Date(), { withSummary = true } = {}) 
     try { const { rows } = await pool.query(`SELECT * FROM "${t}" ORDER BY 1`); out.tabelle[t] = rows; out.righe[t] = rows.length; }
     catch (e) { out.tabelle[t] = null; out.righe[t] = null; out.errori.push(`${t}: ${e.message}`); }
   }
+  // 22/11/2026: le impostazioni piccole di calib_state (casse Kelly e scalata, saldi per sito, formazione, Svago...): la tabella resta
+  // fuori perche' contiene anche i modelli pesanti (storico, Elo), ma le voci sotto i 20 KB si salvano
+  try { const { rows } = await pool.query(`SELECT key, val FROM calib_state WHERE length(val) < 20000 ORDER BY key`);
+    out.tabelle.calib_state_impostazioni = rows.map(r => { let v = r.val; try { v = JSON.parse(r.val); } catch (e) { /* testo */ } return { key: r.key, val: v }; });
+    out.righe.calib_state_impostazioni = rows.length; } catch (e) { out.errori.push(`impostazioni: ${e.message}`); }
   try {
     const p = await require('./played').getPlayed(pool), c = require('./italia').budgetCfg();
     out.movimenti = movements(p.items, c.start);
