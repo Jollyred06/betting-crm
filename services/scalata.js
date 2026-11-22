@@ -44,6 +44,7 @@ async function ensure(pool) {
   // 22/11: la quota a cui Christian ha giocato davvero (puo' essere diversa da quella proposta): il saldo si calcola con questa
   await pool.query(`ALTER TABLE scalata_picks ADD COLUMN IF NOT EXISTS played_odd NUMERIC(8,3)`);
   await pool.query(`ALTER TABLE scalata_picks ADD COLUMN IF NOT EXISTS played_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE scalata_picks ADD COLUMN IF NOT EXISTS auto_skip BOOLEAN NOT NULL DEFAULT FALSE`);
   ready = true;
 }
 
@@ -99,12 +100,27 @@ async function record(pool, merged, books, nowMs = Date.now()) {
     [dayOf(x.commence_time), x.event_id, x.selection, x.league, x.home, x.away, x.commence_time, x.prob, x.book, x.odd, x.edgePct, x.score, JSON.stringify(reasonsOf(x)), JSON.stringify(x.quotes || {})]);
   return r.rowCount;
 }
+/**
+ * 22/11 (Christian: "spesso non riesco a guardarle"): UN'ORA dopo l'inizio, la partita della scalata che non hai segnato con
+ * "Ho giocato a quota" diventa da sola NON GIOCATA (non conta: stesso gradino) e si passa alla prossima. Prima il risultato
+ * arrivava lo stesso e contava come giocata. Se l'avevi giocata, scrivi la quota fino a fine giornata: torna in gioco.
+ */
+const AUTO_SKIP_MS = 3600000;
+async function autoSkip(pool, nowMs = Date.now()) {
+  await ensure(pool);
+  const r = await pool.query(`UPDATE scalata_picks SET result = 'skip', auto_skip = TRUE, settled_at = NOW()
+    WHERE result IS NULL AND played_odd IS NULL AND commence_time < to_timestamp($1::double precision / 1000) RETURNING id`, [nowMs - AUTO_SKIP_MS]);
+  if (r.rowCount && lastRead && nowMs - lastRead.at < 3 * 3600000) { try { await record(pool, lastRead.merged, lastRead.books, nowMs); } catch (e) { /* alla prossima scansione */ } }
+  return r.rowCount;
+}
 /** 22/11: "l'ho giocata a 1,96": quota vera della giocata (serve al saldo della scalata). */
 async function setPlayed(pool, id, odd) {
   const o = Number(String(odd).replace(',', '.'));
   if (!(o > 1 && o < 50)) { const e = new Error('Scrivi la quota a cui hai giocato, per esempio 1,96'); e.status = 400; throw e; }
   await ensure(pool);
-  const r = await pool.query(`UPDATE scalata_picks SET played_odd = $2, played_at = NOW() WHERE id = $1 RETURNING id`, [Number(id), o]);
+  // se era stata segnata da sola come non giocata, torna in gioco (il risultato lo prende dai risultati automatici o lo segni tu)
+  const r = await pool.query(`UPDATE scalata_picks SET played_odd = $2, played_at = NOW(), result = CASE WHEN auto_skip THEN NULL ELSE result END,
+    result_score = CASE WHEN auto_skip THEN NULL ELSE result_score END, settled_at = CASE WHEN auto_skip THEN NULL ELSE settled_at END, auto_skip = FALSE WHERE id = $1 RETURNING id`, [Number(id), o]);
   if (!r.rowCount) { const e = new Error('Giocata della scalata non trovata'); e.status = 404; throw e; }
   return { played_odd: o };
 }
@@ -113,7 +129,9 @@ async function setResult(pool, id, result, score = null) {
   // 'skip' (21/11): non giocata -> non conta nella scalata (stesso gradino, stessa puntata) e se ne propone un'altra
   if (!['won', 'lost', 'skip'].includes(result)) throw new Error('Esito non valido (vinta, persa o non giocata)');
   await ensure(pool);
-  const r = await pool.query(`UPDATE scalata_picks SET result = $2, result_score = $3, manual = TRUE, settled_at = NOW() WHERE id = $1 RETURNING id`, [Number(id), result, score]);
+  // vinta o persa segnata a mano = giocata (alla quota proposta se non hai scritto la tua)
+  const r = await pool.query(`UPDATE scalata_picks SET result = $2, result_score = $3, manual = TRUE, auto_skip = FALSE, settled_at = NOW(),
+    played_odd = CASE WHEN $2 IN ('won', 'lost') THEN COALESCE(played_odd, odd) ELSE played_odd END WHERE id = $1 RETURNING id`, [Number(id), result, score]);
   if (!r.rowCount) throw new Error('Giocata della scalata non trovata');
   // la prossima subito, con le quote dell'ultima scansione (se non piu' vecchie di 3 ore); altrimenti alla scansione successiva
   if (lastRead && Date.now() - lastRead.at < 3 * 3600000) { try { await record(pool, lastRead.merged, lastRead.books); } catch (e) { /* alla prossima scansione */ } }
@@ -122,7 +140,9 @@ async function setResult(pool, id, result, score = null) {
 async function settle(pool) {
   await ensure(pool);
   const M = require('./migliori');
-  const rows = (await pool.query(`SELECT s.id, s.selection, g.result_score FROM scalata_picks s JOIN goal_watch g ON g.event_id = s.event_id WHERE s.result IS NULL AND g.result_score ~ '^[0-9]+-[0-9]+$'`)).rows;
+  await autoSkip(pool);
+  // 22/11: si chiudono da sole solo le giocate segnate come giocate (le altre diventano "non giocate" un'ora dopo l'inizio)
+  const rows = (await pool.query(`SELECT s.id, s.selection, g.result_score FROM scalata_picks s JOIN goal_watch g ON g.event_id = s.event_id WHERE s.result IS NULL AND s.played_odd IS NOT NULL AND g.result_score ~ '^[0-9]+-[0-9]+$'`)).rows;
   for (const r of rows) await pool.query(`UPDATE scalata_picks SET result = $2, result_score = $3, settled_at = NOW() WHERE id = $1`, [r.id, M.resultOf(r.selection, r.result_score), r.result_score]);
   return rows.length;
 }
@@ -161,12 +181,16 @@ function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, l
 }
 async function getScalata(pool, { nowMs = Date.now() } = {}) {
   await ensure(pool);
+  try { await autoSkip(pool, nowMs); } catch (e) { /* facoltativo */ }
   const BN = require('./italia').BOOK_NAMES || {};
-  const rows = (await pool.query(`SELECT id, day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, quotes, result, result_score, manual, played_odd, played_at FROM scalata_picks ORDER BY commence_time, id`)).rows
+  const rows = (await pool.query(`SELECT id, day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, quotes, result, result_score, manual, played_odd, played_at, auto_skip FROM scalata_picks ORDER BY commence_time, id`)).rows
     .map(r => ({ ...r, prob: Number(r.prob), odd: Number(r.odd), edgePct: Number(r.edge_pct), pick: PICK[r.selection], bookKey: r.book, book: BN[r.book] || r.book,
       quotes: Object.entries(r.quotes || {}).map(([k, q]) => ({ key: k, book: BN[k] || k, odd: Number(q), edgePct: (Number(q) * Number(r.prob) - 1) * 100 })).sort((a, b) => b.odd - a.odd) }));
   const C = await getScalataCassa(pool), L = ladder(rows, C || {}), next = rows.find(r => !['won', 'lost', 'skip'].includes(r.result));   // la giocata in corso (una alla volta)
-  return { since: SINCE, rules: { base: BASE, stop: STOP, minOdd: MIN_ODD, maxOdd: MAX_ODD, minEdge: MIN_EDGE }, ...L, next: next || null };
+  // 22/11: le partite segnate da sole come non giocate oggi (per scrivere la quota se invece l'avevi giocata)
+  const dayR = ms => new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Europe/Rome' }), today = dayR(nowMs);
+  const autoSkipped = rows.filter(r => r.auto_skip && r.result === 'skip' && dayR(T(r.commence_time)) === today).map(r => ({ id: r.id, home: r.home, away: r.away, pick: r.pick, odd: r.odd, commence_time: r.commence_time }));
+  return { since: SINCE, rules: { base: BASE, stop: STOP, minOdd: MIN_ODD, maxOdd: MAX_ODD, minEdge: MIN_EDGE }, ...L, next: next || null, autoSkipped, autoSkipMin: AUTO_SKIP_MS / 60000 };
 }
 
 /** 🪜 la cassa della scalata (dichiarata da Christian) e i ritiri. */
@@ -203,4 +227,4 @@ async function setKellyCassa(pool, value) {
   await require('./calib').ensureCalib(pool); await require('./calib').saveState(pool, 'kelly_cassa', { value: v, at: new Date().toISOString() }); return v;
 }
 
-module.exports = { setPlayed, kellyNowOf, getKelly, withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STEP, STOP, SINCE, stakeAt };
+module.exports = { autoSkip, setPlayed, kellyNowOf, getKelly, withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STEP, STOP, SINCE, stakeAt };
