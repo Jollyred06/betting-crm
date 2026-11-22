@@ -1472,11 +1472,15 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     const team = ((await pre.team) || {}).on || null;
     if (team) bc.noAwayThin = bc.noAwayThin && team.muro !== false;
     out.team = team;
-    out.best = pickBest(out.recent, { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd, noAwayThin: bc.noAwayThin, team });
+    // 22/11: una partita gia' scelta dalla scalata (non ancora finita) non va anche nelle ⭐: ogni partita in un solo metodo
+    let scalEv = new Set(); try { scalEv = new Set((await pool.query(`SELECT event_id FROM scalata_picks WHERE result IS NULL OR result NOT IN ('won', 'lost', 'skip')`)).rows.map(r => r.event_id)); } catch (e) { /* facoltativo */ }
+    for (const r of out.recent) if (scalEv.has(r.event_id)) r.inScalata = true;
+    out.best = pickBest(out.recent.filter(r => !scalEv.has(r.event_id) || r.played), { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd, noAwayThin: bc.noAwayThin, team });
     out.bestMaxOdd = bc.maxOdd; out.bestNoAwayThin = bc.noAwayThin;
     // 1° novembre 2026: su ogni scheda un verdetto chiaro, GIOCALA o NON GIOCARE con il motivo (solo partite non ancora iniziate)
     const bestSet = new Set(out.best), nowV = Date.now();
     for (const r of out.recent) r.verdict = verdictOf(r, { best: bestSet, budget, bc, nowMs: nowV, toHour: c.toHour });
+    for (const r of out.recent) if (r.inScalata && !r.played) r.verdict = { play: 'no', text: '🪜 È già la partita della scalata: giocala lì, non anche con Kelly (ogni partita in un solo metodo).' };
     // 🎈 Svago: le prossime partite (al massimo 5 in lista), solo se giocabili sui tuoi siti e non gia' nelle ⭐
     const svagoOk = r => r.svago && !bestSet.has(r.id) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowV && !(r.market && r.market.dir === 'contro') && !budget.stopped;
     // 22/11/2026 (Christian: "lo Svago sembra instabile"): una partita entrata nella lista ci RESTA finche' non la giochi, la scarti o

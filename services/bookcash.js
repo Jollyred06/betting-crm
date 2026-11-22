@@ -34,9 +34,9 @@ async function betsOf(pool) {
     for (const x of P.items || []) out.push({ book: norm(x.book), stake: x.stake, odd: x.odd, result: x.result, placedAt: x.at, kickoff: x.commence_time, kind: 'giocata' });
   } catch (e) { /* facoltativo */ }
   try {
-    const S = require('./scalata'), rows = (await pool.query(`SELECT id, day, commence_time, book, odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
+    const S = require('./scalata'), rows = (await pool.query(`SELECT id, day, commence_time, book, odd, played_odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
     const C = await S.getScalataCassa(pool), L = S.ladder(rows, { ...(C || {}), keepAll: true });
-    for (const x of L.steps || []) out.push({ book: norm(x.book), stake: x.stake, odd: x.odd, result: x.open ? null : x.result, placedAt: T(x.commence_time) - 30 * 60000, kickoff: x.commence_time, kind: 'scalata' });
+    for (const x of L.steps || []) out.push({ book: norm(x.book), stake: x.stake, odd: Number(x.played_odd) > 1 ? x.played_odd : x.odd, result: x.open ? null : x.result, placedAt: T(x.commence_time) - 30 * 60000, kickoff: x.commence_time, kind: 'scalata' });
   } catch (e) { /* facoltativo */ }
   return out;
 }

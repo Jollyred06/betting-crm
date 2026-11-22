@@ -25,6 +25,9 @@ assert.strictEqual(V.step, 1); assert.strictEqual(V.nextStake, 1);
 // partenza dalla cassa: 250 -> 1 €, 500 -> 2 € (tetto 10 €), mai sotto 1 €
 assert.strictEqual(S.baseFor(250), 1); assert.strictEqual(S.baseFor(500), 2); assert.strictEqual(S.baseFor(100), 1);
 assert.strictEqual(S.ladder([], { cassa: 500 }).maxStake, 10);
+// 22/11: la quota giocata davvero (1,96 invece di 2,12) e' quella del saldo
+{ const P = S.ladder([{ id: 1, commence_time: '2026-12-01T12:00:00Z', odd: 2.12, played_odd: '1.960', result: 'won' }]);
+  assert.ok(Math.abs(P.pnl - 0.96) < 1e-9, 'vinta a 1,96 con 1 €: +0,96 ' + P.pnl); }
 console.log('scalata D\'Alembert e tetto: ok');
 // 21/11: sotto 1 euro solo 888sport, con la sua quota e il suo valore
 {

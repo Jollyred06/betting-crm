@@ -41,6 +41,9 @@ async function ensure(pool) {
   await pool.query(`ALTER TABLE scalata_picks DROP CONSTRAINT IF EXISTS scalata_picks_day_key`);
   await pool.query(`ALTER TABLE scalata_picks ADD COLUMN IF NOT EXISTS manual BOOLEAN NOT NULL DEFAULT FALSE`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS scalata_picks_ev_sel ON scalata_picks (event_id, selection)`);
+  // 22/11: la quota a cui Christian ha giocato davvero (puo' essere diversa da quella proposta): il saldo si calcola con questa
+  await pool.query(`ALTER TABLE scalata_picks ADD COLUMN IF NOT EXISTS played_odd NUMERIC(8,3)`);
+  await pool.query(`ALTER TABLE scalata_picks ADD COLUMN IF NOT EXISTS played_at TIMESTAMPTZ`);
   ready = true;
 }
 
@@ -84,15 +87,26 @@ async function record(pool, merged, books, nowMs = Date.now()) {
   // la scalata va in ordine: finche' la giocata precedente non ha il risultato non si sceglie la prossima (la puntata dipende da li')
   // Piu' giocate nello stesso giorno (21/11 sera): appena la precedente ha l'esito (automatico o segnato a mano) si sceglie la
   // prossima, tra le partite che iniziano da 30 minuti a 12 ore da adesso, mai una gia' usata.
-  const all = (await pool.query(`SELECT id, day, event_id, selection, commence_time, odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
+  const all = (await pool.query(`SELECT id, day, event_id, selection, commence_time, odd, played_odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
   if (all.some(r => !['won', 'lost', 'skip'].includes(r.result))) return 0;
   const C = await getScalataCassa(pool), stake = ladder(all, C || {}).nextStake, used = new Set(all.map(r => r.event_id));
-  const x = pickScalata(cands, stake).find(c => !used.has(c.event_id) && T(c.commence_time) >= nowMs + 30 * 60000 && T(c.commence_time) <= nowMs + 12 * 3600000);
+  // 22/11: mai una partita che e' gia' nelle ⭐ (Kelly): ogni partita in un solo metodo
+  let stars = new Set(); try { const I = require('./italia'); stars = new Set((await require('./sigstore').rows(pool, { strategy: 'I' })).filter(r => I.isOceani(r)).map(r => r.event_id)); } catch (e) { /* facoltativo */ }
+  const x = pickScalata(cands, stake).find(c => !used.has(c.event_id) && !stars.has(c.event_id) && T(c.commence_time) >= nowMs + 30 * 60000 && T(c.commence_time) <= nowMs + 12 * 3600000);
   if (!x) return 0;
   const r = await pool.query(`INSERT INTO scalata_picks (day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, score, reasons, quotes)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (event_id, selection) DO NOTHING`,
     [dayOf(x.commence_time), x.event_id, x.selection, x.league, x.home, x.away, x.commence_time, x.prob, x.book, x.odd, x.edgePct, x.score, JSON.stringify(reasonsOf(x)), JSON.stringify(x.quotes || {})]);
   return r.rowCount;
+}
+/** 22/11: "l'ho giocata a 1,96": quota vera della giocata (serve al saldo della scalata). */
+async function setPlayed(pool, id, odd) {
+  const o = Number(String(odd).replace(',', '.'));
+  if (!(o > 1 && o < 50)) { const e = new Error('Scrivi la quota a cui hai giocato, per esempio 1,96'); e.status = 400; throw e; }
+  await ensure(pool);
+  const r = await pool.query(`UPDATE scalata_picks SET played_odd = $2, played_at = NOW() WHERE id = $1 RETURNING id`, [Number(id), o]);
+  if (!r.rowCount) { const e = new Error('Giocata della scalata non trovata'); e.status = 404; throw e; }
+  return { played_odd: o };
 }
 /** Esito segnato a mano da Christian (per non aspettare i risultati automatici): vale subito per il calcolo della scalata. */
 async function setResult(pool, id, result, score = null) {
@@ -128,7 +142,7 @@ function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, l
   const steps = [];
   for (const r of list) {
     if (r.result === 'skip') continue;   // non giocata: non conta
-    const stake = stakeAt(base, k), odd = Number(r.odd), res = r.result;
+    const stake = stakeAt(base, k), odd = Number(r.played_odd) > 1 ? Number(r.played_odd) : Number(r.odd), res = r.result;   // 22/11: la quota giocata davvero
     if (res !== 'won' && res !== 'lost') { steps.push({ ...r, step: k, stake, open: true }); waiting = true; continue; }
     staked += stake;
     if (res === 'won') { const win = stake * (odd - 1); pnl += win; lost = Math.max(0, lost - win); steps.push({ ...r, step: k, stake, pnl: win });
@@ -148,7 +162,7 @@ function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, l
 async function getScalata(pool, { nowMs = Date.now() } = {}) {
   await ensure(pool);
   const BN = require('./italia').BOOK_NAMES || {};
-  const rows = (await pool.query(`SELECT id, day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, quotes, result, result_score, manual FROM scalata_picks ORDER BY commence_time, id`)).rows
+  const rows = (await pool.query(`SELECT id, day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, reasons, quotes, result, result_score, manual, played_odd, played_at FROM scalata_picks ORDER BY commence_time, id`)).rows
     .map(r => ({ ...r, prob: Number(r.prob), odd: Number(r.odd), edgePct: Number(r.edge_pct), pick: PICK[r.selection], bookKey: r.book, book: BN[r.book] || r.book,
       quotes: Object.entries(r.quotes || {}).map(([k, q]) => ({ key: k, book: BN[k] || k, odd: Number(q), edgePct: (Number(q) * Number(r.prob) - 1) * 100 })).sort((a, b) => b.odd - a.odd) }));
   const C = await getScalataCassa(pool), L = ladder(rows, C || {}), next = rows.find(r => !['won', 'lost', 'skip'].includes(r.result));   // la giocata in corso (una alla volta)
@@ -161,7 +175,7 @@ async function getScalataCassa(pool) { try { const v = await require('./calib').
 async function withdrawScalata(pool, amount) {
   const a = Number(amount); if (!(a > 0)) throw new Error('Importo del ritiro non valido');
   const cur = await getScalataCassa(pool); if (!cur) throw new Error('Prima scrivi la cassa della scalata');
-  const rows = (await pool.query(`SELECT id, day, commence_time, odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
+  const rows = (await pool.query(`SELECT id, day, commence_time, odd, played_odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
   const now = ladder(rows, cur).cassaNow, withdrawn = cur.withdrawn + a, lastLevel = now - a;
   await require('./calib').saveState(pool, 'scalata_cassa', { cassa: cur.cassa, withdrawn, lastLevel, at: new Date().toISOString() });
   return { cassa: cur.cassa, withdrawn, lastLevel };
@@ -189,4 +203,4 @@ async function setKellyCassa(pool, value) {
   await require('./calib').ensureCalib(pool); await require('./calib').saveState(pool, 'kelly_cassa', { value: v, at: new Date().toISOString() }); return v;
 }
 
-module.exports = { kellyNowOf, getKelly, withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STEP, STOP, SINCE, stakeAt };
+module.exports = { setPlayed, kellyNowOf, getKelly, withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STEP, STOP, SINCE, stakeAt };
