@@ -4,7 +4,9 @@
  * 22/11/2026 (deciso con Christian): la scalata passa dalla MARTINGALA al D'ALEMBERT CON TETTO. Rimescolando 1.000 volte l'ordine
  * delle stesse 1.750 giocate dello storico, la martingala con freno a 10 e cassa 250 svuotava la cassa nel 44% dei casi (10 perse di
  * fila capitano ~3 volte in 14 anni: lo storico senza freni era fortuna). D'Alembert: puntata = gradino x n, dopo una persa n+1,
- * dopo una vinta n-1 (minimo 1), TETTO 30 (con 0,20 al massimo 6 euro). Cassa 250: finita 4 volte su 1.000, utile tipico +776 euro,
+ * dopo una vinta n-1 (minimo 1), TETTO 30 (con 0,20 al massimo 6 euro). Cassa 250: finita 1-4 volte su 1.000, utile tipico +776 euro,
+ * ATTENZIONE (22/11): con ~42% di vinte la puntata sale piano e resta il 92% del tempo tra i gradini 20 e 30 (al tetto il 26%): in pratica
+ * e' una salita fino a 4-6 euro fissi. Se le quote vere fossero piu' basse del 4%: cassa finita 2,4%, dell'8%: 25,6% (da sorvegliare),
  * 5% peggiore +622. Gradino = cassa / 1.250 (0,20 con 250), ricalcolato quando si torna a 1. Quote 2-3,50 (sotto 2 rende meno).
  * Sotto e' la descrizione originale (martingala), tenuta per la storia.
  * Obiettivo dichiarato: "perdere pochi soldi e aumentare il profitto".
