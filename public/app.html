@@ -1182,7 +1182,7 @@
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.coppe ? 'coppe' : r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.svago && !r.oceani && !r.prova && !r.coppe ? '🎈 Svago' : r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}</span>${voteChip(r)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>
         <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${r.played || r.skipped || r.svago ? '' : stakeLine(r)}${probLine(r)}
-        ${drawLine(r)}
+        ${drawLine(r)}${guessLine(r)}
         <div class="ochips">${isoChip(r)}</div>
         ${r.played || r.skipped ? '' : bookLink(r)}
         ${playActions(r)}</div>
@@ -1461,6 +1461,12 @@
   const liveLink = (h, a) => `<a class="live" data-q="${esc(h + ' - ' + a)}" href="${liveUrl(h, a)}" rel="noopener" onclick="rememberSpot()">🔎 Partita su Google</a>`;
   // ⏱️ il momento giusto: mancano meno di 3 ore e la quota sui tuoi siti e' ancora almeno la minima (dai dati: piu' vicino, piu' valore)
   const isNow = r => { const t = Date.parse(r.commence_time) - Date.now(); return !!r.play && !r.played && t > 0 && t <= 3 * 3600000; };
+  // 22/11: la riga del pronostico (IA e Pinnacle) anche nelle schede di Oggi, non solo in Segnali
+  function guessLine(r) {
+    if (!r.guess) return '';
+    const ai = r.guess.ai ? r.guess.ai.pick : r.guess.pick, ap = r.guess.ai ? r.guess.ai.prob : r.guess.prob;
+    return `<small class="guess" style="display:block;margin-top:4px">🤖 Pronostico IA: <b>${ai}</b> (${num(100 * ap, 0)}%) · Pinnacle: ${r.guess.pick}${ai === r.pick ? ' · <b class="agree">🤝 d\'accordo con la giocata</b>' : ''}</small>`;
+  }
   function ticket(r, chip) {
     const it = chip.includes('chip it'), live = Date.parse(r.commence_time) > Date.now();
     const guessHtml = `
