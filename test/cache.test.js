@@ -16,6 +16,12 @@ const server = app.listen(0, async () => {
     assert.strictEqual(calls, 2, 'intanto rifatta in sottofondo');
     const d = await get(); assert.strictEqual(d.d.v, 2, 'la nuova'); 
     cache.clear(); const e = await get(); assert.strictEqual(e.d.v, 3); assert.ok(e.ms >= 290, 'dopo un salvataggio si ricalcola');
+    // un calcolo partito prima di un salvataggio non deve rimettere i dati vecchi
+    cache.clear(); const slow = get();            // parte il calcolo (300 ms), v = 4
+    await new Promise(r => setTimeout(r, 100)); cache.clear();   // intanto arriva un salvataggio
+    const f = await get();                        // non aspetta il calcolo vecchio: ne fa uno nuovo
+    await slow; assert.strictEqual(f.d.v, 5, 'dopo il salvataggio un calcolo nuovo, non quello di prima');
+    const g2 = await get(); assert.strictEqual(g2.d.v, 5, 'tenuta la copia nuova, non la vecchia');
     console.log('cache: copia vecchia subito e ricalcolo in sottofondo ok', cache.stats());
   } catch (err) { console.error(err); process.exitCode = 1; }
   server.close(); setTimeout(() => process.exit(process.exitCode || 0), 50);

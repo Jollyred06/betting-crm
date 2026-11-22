@@ -9,9 +9,13 @@ const zlib = require('zlib');
 const store = new Map(), pending = new Map();
 let hits = 0, misses = 0;
 
-const clear = () => store.clear();
+// 22/11/2026: "generazione" dei dati. Ogni salvataggio la fa salire: un calcolo partito PRIMA del salvataggio (es. la ricopia in
+// sottofondo) non si salva come copia pronta e chi arriva dopo non lo aspetta. Prima poteva rimettere i dati vecchi dopo un tocco
+// (es. "Risultati da ricontrollare": il risultato si salvava ma la riga ricompariva).
+let gen = 0;
+const clear = () => { gen++; store.clear(); };
 /** Butta solo le pagine toccate da un salvataggio (es. una giocata cambia segnali e giocate, non le strategie). */
-const clearMatching = re => { for (const k of [...store.keys()]) if (re.test(k)) store.delete(k); };
+const clearMatching = re => { gen++; for (const k of [...store.keys()]) if (re.test(k)) store.delete(k); };
 const stats = () => ({ voci: store.size, hits, misses, ripreparate: warmed, vecchieMandate: staleServed });
 const wantsGzip = req => /\bgzip\b/.test(req.headers['accept-encoding'] || '');
 
@@ -45,17 +49,17 @@ function middleware(ttlMs = 5 * 60000) {
     // 3 novembre 2026: se la stessa pagina e' gia' in preparazione (es. la ripreparazione dopo un tocco), si aspetta quella
     // invece di ricalcolarla una seconda volta: sul server gratuito due calcoli insieme raddoppiano l'attesa
     const busy = pending.get(key);
-    if (busy) return busy.then(() => { const h = store.get(key); if (h && Date.now() - h.at < ttlMs) { hits++; send(req, res, h); } else next(); });
+    if (busy && busy.gen === gen) return busy.p.then(() => { const h = store.get(key); if (h && Date.now() - h.at < ttlMs) { hits++; send(req, res, h); } else next(); });
     misses++;
-    let done; pending.set(key, new Promise(r => { done = r; }));
-    const finish = () => { if (pending.get(key)) { pending.delete(key); done(); } };
+    const g = gen; let done; const mine = { gen: g, p: new Promise(r => { done = r; }) }; pending.set(key, mine);
+    const finish = () => { if (pending.get(key) === mine) pending.delete(key); done(); };
     res.on('finish', finish); res.on('close', finish);
     const json = res.json.bind(res);
     res.json = data => {
       if (res.statusCode !== 200) return json(data);
       const body = Buffer.from(JSON.stringify(data));
       const entry = { at: Date.now(), body, gz: body.length > 1024 ? zlib.gzipSync(body) : null };
-      store.set(key, entry);
+      if (g === gen) store.set(key, entry);   // calcolato prima di un salvataggio: si manda ma non si tiene
       return send(req, res, entry);
     };
     next();

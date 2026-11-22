@@ -491,6 +491,8 @@
   // Fluidita' (31 ottobre 2026): la stessa richiesta fatta da piu' pagine (Home, Segnali, Strategie) parte una volta sola
   // e si riusa per 30 secondi; qualsiasi salvataggio (POST/DELETE) butta la copia, cosi' si vede subito il dato nuovo.
   const memo = new Map(), MEMO_MS = 30000;
+  // 22/11: i "risultati da ricontrollare" gia' decisi non ricompaiono mentre la pagina si aggiorna (prima tornavano con la copia vecchia)
+  const checksDone = new Set();
   if (typeof window !== 'undefined' && typeof window.fetch === 'function' && !window.__memoFetch) {
     const rawFetch = window.fetch.bind(window); window.__memoFetch = true;
     // le giocate e le non giocate si aggiornano sulla scheda subito (senza riscaricare): la copia resta, poi si rinfresca da sola
@@ -1238,7 +1240,7 @@
         ${mine.filter(x => x.result !== 'won' && x.result !== 'lost').length ? `<section class="block"><h3>🎯 Le tue giocate <small class="muted">· in corso e prossime</small></h3><div class="card3">${mine.filter(x => x.result !== 'won' && x.result !== 'lost').map(x => { const t = Date.parse(x.commence_time), st = x.result === 'won' ? `<span class="chip won">vinta ${esc(x.score || '')}</span>` : x.result === 'lost' ? `<span class="chip lost">persa ${esc(x.score || '')}</span>` : x.result === 'void' ? '<span class="chip">annullata</span>' : Date.now() < t ? `<span class="muted">alle ${dt(x.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>` : Date.now() < t + 115 * 60000 ? '<span class="chip live">● in corso</span>' : '<span class="muted">finita, risultato in arrivo</span>';
             return `<div class="oplay"><div><b>${esc(x.home)} – ${esc(x.away)}</b><small>${esc({ home: '1', draw: 'X', away: '2' }[x.selection] || '')} su ${esc(x.book)} a ${num(x.odd, 2)} · ${money(x.stake)} · <a class="tlink" href="${liveUrl(x.home, x.away)}" rel="noopener" onclick="rememberSpot()">🔎 su Google</a></small></div><div class="ores">${st}${x.pnlEur !== null ? `<b class="${cls(x.pnlEur)}">${signedMoney(x.pnlEur)}</b>` : ''}</div></div>`; }).join('')}</div></section>` : ''}
         ${todo.length ? `<section class="block"><h3>✏️ Da segnare</h3><div class="card3">${todo.slice(0, 6).map(x => `<div class="otodo">${esc(x.home)} – ${esc(x.away)}<small>${esc(x.book)} ${num(x.odd, 2)}</small></div>`).join('')}<button class="primary wide" onclick="show('bankroll')">Segna i risultati</button></div><p class="muted">Quelle delle serie maggiori si chiudono da sole entro domattina.</p></section>` : ''}
-        ${(d.checks || []).length ? `<section class="block"><h3>🔍 Risultati da ricontrollare</h3><div class="card3">${d.checks.map(x => `<div class="ocheck"><b>${esc(x.match)}</b><small>Hai scritto <b>${esc(x.mine)}</b>, per ${esc(x.src || 'la fonte ufficiale')} è <b>${esc(x.official)}</b> (90 minuti). <a class="tlink" href="${resUrl(x.home, x.away, x.commence_time)}" target="_blank" rel="noopener">🔎 verifica</a></small>
+        ${(d.checks || []).filter(x => !checksDone.has(x.id)).length ? `<section class="block"><h3>🔍 Risultati da ricontrollare</h3><div class="card3">${d.checks.filter(x => !checksDone.has(x.id)).map(x => `<div class="ocheck"><b>${esc(x.match)}</b><small>Hai scritto <b>${esc(x.mine)}</b>, per ${esc(x.src || 'la fonte ufficiale')} è <b>${esc(x.official)}</b> (90 minuti). <a class="tlink" href="${resUrl(x.home, x.away, x.commence_time)}" target="_blank" rel="noopener">🔎 verifica</a></small>
             <div class="pact"><button class="playbtn" onclick="fixCheck(${x.id}, '${esc(x.official)}', this)">Usa ${esc(x.official)}</button><button class="playbtn skipbtn" onclick="keepCheck(${x.id}, this)">Il mio è giusto</button></div></div>`).join('')}</div></section>` : ''}
         ${alerts.length ? `<section class="block"><h3>Avvisi</h3><div class="list card3">${alerts.slice(0, 3).map(a => `<div>${sdot(a.lv)}<div><b>${esc(a.t)}</b><span class="muted">${esc(a.s)}</span></div></div>`).join('')}</div></section>` : ''}`;
       lastLoad = Date.now();
@@ -1685,7 +1687,7 @@
       const r = await postRetry('/api/tracker/italia/' + id + '/result', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ homeGoals: hg, awayGoals: ag }) }, btn);
       if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova.'); btn.disabled = false; return; }
       if (!r.ok) { const d = await r.json().catch(() => ({})); alert('Errore: ' + (d.error || r.status)); btn.disabled = false; return; }
-      btn.closest('.ocheck').innerHTML = '✅ corretto in ' + esc(sc); refreshViews && refreshViews();
+      checksDone.add(id); btn.closest('.ocheck').innerHTML = '✅ corretto in ' + esc(sc); refreshViews && refreshViews();
     } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
   }
   // 16/11/2026: se il server si sta svegliando (Render gratuito) la prima prova puo' fallire. Solo per i risultati,
@@ -1706,7 +1708,7 @@
       const r = await fetch('/api/tracker/italia/' + id + '/keep', { method: 'POST', headers: { 'x-run-key': key } });
       if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova.'); btn.disabled = false; return; }
       if (!r.ok) { alert('Errore: ' + r.status); btn.disabled = false; return; }
-      btn.closest('.ocheck').innerHTML = '✅ tenuto il tuo risultato'; refreshViews && refreshViews();
+      checksDone.add(id); btn.closest('.ocheck').innerHTML = '✅ tenuto il tuo risultato'; refreshViews && refreshViews();
     } catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; }
   }
   // RISULTATO A MANO per i segnali italiani (le serie minori non le copre nessuna fonte gratuita): gol dei 90 minuti, si puo' correggere
