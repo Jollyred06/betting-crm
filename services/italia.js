@@ -171,29 +171,39 @@ function coherent(q, pin) {
  * Cerca i segnali in un elenco di righe del feed. Ritorna una lista di candidati (al massimo uno per partita ed esito).
  * Nessun accesso a rete o database.
  */
+// 22/11/2026: perche' una scansione trova 0 segnali (sabato dalle 9 alle 16:30 nove scansioni con 2.500-4.000 quote e nessun segnale):
+// si contano le partite scartate per motivo e si salvano con la scansione
+let lastDiag = null;
 function findSignals(records, c, nowMs = Date.now()) {
   const out = [];
   const seen = new Set();
+  const dg = { partite: 0, fuoriOrario: 0, rumore: 0, senzaPinnacle: 0, pinnacleVecchia: 0, margine: 0, senzaSitiFreschi: 0, sitiVecchi: 0, valutate: 0, etaPinMin: [] };
+  lastDiag = dg;
   for (const r of mergeWithPinnacle(records)) {
+    dg.partite++;
     const start = T(r.commence_time);
-    if (!(start > nowMs + c.minLeadMin * 60000) || start > nowMs + c.windowHours * 3600000) continue;
-    if (FLAGS.some(f => words(r.home_team).includes(f) || words(r.away_team).includes(f))) continue;   // giovanili, donne, riserve: quote poco affidabili
-    if (FRIENDLY.test(r.league || '')) continue;
-    if (LEAGUE_FLAGS.some(f => words(r.league).includes(f))) continue;                                // campionati giovanili, femminili, riserve                                                       // amichevoli: formazioni e motivazioni ignote, quote poco affidabili
+    if (!(start > nowMs + c.minLeadMin * 60000) || start > nowMs + c.windowHours * 3600000) { dg.fuoriOrario++; continue; }
+    if (FLAGS.some(f => words(r.home_team).includes(f) || words(r.away_team).includes(f))) { dg.rumore++; continue; }   // giovanili, donne, riserve: quote poco affidabili
+    if (FRIENDLY.test(r.league || '')) { dg.rumore++; continue; }
+    if (LEAGUE_FLAGS.some(f => words(r.league).includes(f))) { dg.rumore++; continue; }                                // campionati giovanili, femminili, riserve                                                       // amichevoli: formazioni e motivazioni ignote, quote poco affidabili
     const books = r.bookmakers || [];
     const pinB = books.find(b => b.key === 'pinnacle');
     const pin = pinB && trio(pinB.outcomes);
-    if (!pin || !fresh(pinB, nowMs, c.maxStaleMin)) continue;
+    if (!pin) { dg.senzaPinnacle++; continue; }
+    if (pinB.last_update && dg.etaPinMin.length < 400) dg.etaPinMin.push(Math.round((nowMs - T(pinB.last_update)) / 60000));
+    if (!fresh(pinB, nowMs, c.maxStaleMin)) { dg.pinnacleVecchia++; continue; }
     const over = 1 / pin.home + 1 / pin.draw + 1 / pin.away;
-    if (over < 1 || over > 1.12) continue;                                  // Pinnacle con margine strano: meglio non fidarsi
+    if (over < 1 || over > 1.12) { dg.margine++; continue; }                // Pinnacle con margine strano: meglio non fidarsi
     const fair = noVigPower(pin);
     const it = {};
     for (const b of books) {
-      if (!c.books.includes(b.key) || !fresh(b, nowMs, c.maxStaleMin)) continue;
+      if (!c.books.includes(b.key)) continue;
+      if (!fresh(b, nowMs, c.maxStaleMin)) { dg.sitiVecchi++; continue; }
       const q = trio(b.outcomes);
       if (q && coherent(q, pin)) it[b.key] = { q, suspended: new Set(b.suspended || []) };
     }
-    if (!Object.keys(it).length) continue;
+    if (!Object.keys(it).length) { dg.senzaSitiFreschi++; continue; }
+    dg.valutate++;
     for (const sel of ['home', 'draw', 'away']) {
       const k = `${r.event_id}|${sel}`;
       if (seen.has(k)) continue;
@@ -448,7 +458,7 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   try { golOut.bivioCarta = await require('./bivio').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreBivio = e.message; }
   // 🪜 la scalata (21/11): la giocata del giorno, fissata alla prima scansione che la trova
   try { golOut.scalata = await require('./scalata').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreScalata = e.message; }
-  const found = findSignals(records, c, nowMs);
+  const found = findSignals(records, c, nowMs), diagI = lastDiag;
   const foundB = c.bEnabled ? findSignals(records, cfgFor(c, 'B'), nowMs) : [];
   const foundT = c.tEnabled ? findSignals(records, cfgFor(c, 'T'), nowMs) : [];
   const fresh = [];
@@ -473,7 +483,8 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   const partite = new Set(mainRecords(records).map(r => r.event_id)).size;
   // 22/11: gli errori dei passi facoltativi (gol, sicure, migliori, bivio, scalata...) si salvano con la scansione: prima si vedevano solo nei log di Render
   const errori = Object.fromEntries(Object.entries(golOut).filter(([k]) => /^errore/.test(k)).map(([k, v]) => [k, String(v).slice(0, 200)]));
-  await noteRequest(pool, 'scan', { righe: records.length, partite, candidatiI: found.length, nuoviI: fresh.length, candidatiB: foundB.length, nuoviB, candidatiT: foundT.length, ...(Object.keys(errori).length ? { errori } : {}) });
+  let diag = null; try { if (diagI) { const a = [...diagI.etaPinMin].sort((x, y) => x - y); diag = { ...diagI, etaPinMin: undefined, etaPinMediana: a.length ? a[Math.floor(a.length / 2)] : null, etaPinMax: a.length ? a[a.length - 1] : null }; } } catch (e) { diag = null; }
+  await noteRequest(pool, 'scan', { righe: records.length, partite, candidatiI: found.length, nuoviI: fresh.length, candidatiB: foundB.length, nuoviB, candidatiT: foundT.length, ...(Object.keys(errori).length ? { errori } : {}), ...(diag ? { diag } : {}) });
   return { scan: 'fatta', righe: records.length, partite, candidati: found.length, nuovi: fresh.length, nuoviB, candidatiT: foundT.length, ...golOut };
 }
 
