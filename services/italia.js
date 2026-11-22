@@ -1315,7 +1315,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   const evsAll = [...new Set(all.map(r => r.event_id))], top30 = [...new Set(latestRows(all).slice(0, 30).map(r => r.event_id))];
   const pre = isI ? {
     played: soft(PL.playedSignalIds(pool)), skipped: soft(PL.skippedSignalIds(pool)), checks: soft(R.pendingChecks(pool)),
-    tq: soft(evsAll.length ? pool.query(`SELECT event_id, phase, quotes, created_at FROM italia_signals WHERE strategy = 'T' AND event_id = ANY($1) ORDER BY created_at`, [evsAll]) : { rows: [] }),
+    // 22/11: dalla copia in memoria (era la lettura piu' pesante rimasta: ~0,5 MB a ogni calcolo della pagina)
+    tq: soft(evsAll.length ? require('./sigstore').rows(pool, { strategy: 'T' }).then(rs => { const want = new Set(evsAll); return { rows: rs.filter(r => want.has(r.event_id)).map(r => ({ event_id: r.event_id, phase: r.phase, quotes: r.quotes, created_at: r.created_at })) }; }) : { rows: [] }),
     pin: soft(top30.length ? pool.query(`SELECT event_id, pin_h, pin_d, pin_a, updated_at FROM goal_watch WHERE event_id = ANY($1)`, [top30]) : { rows: [] }),
     hist: soft(top30.length ? pinHistory(pool, top30) : null), playedSum: soft(PL.getPlayed(pool)), team: soft(require('./team').stateOf(pool)), rem: soft(lastRemaining(pool))
   } : {};
