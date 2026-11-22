@@ -1479,9 +1479,24 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     for (const r of out.recent) r.verdict = verdictOf(r, { best: bestSet, budget, bc, nowMs: nowV, toHour: c.toHour });
     // 🎈 Svago: le prossime partite (al massimo 5 in lista), solo se giocabili sui tuoi siti e non gia' nelle ⭐
     const svagoOk = r => r.svago && !bestSet.has(r.id) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowV && !(r.market && r.market.dir === 'contro') && !budget.stopped;
-    out.svagoList = sb.stopped ? [] : out.recent.filter(svagoOk).sort((a, b) => T(a.commence_time) - T(b.commence_time)).slice(0, 5).map(r => r.id);
+    // 22/11/2026 (Christian: "lo Svago sembra instabile"): una partita entrata nella lista ci RESTA finche' non la giochi, la scarti o
+    // inizia. Prima spariva e ricompariva quando la quota si muoveva (fuori dallo Svago se il sito pagava un po' meno o il favorito cambiava).
+    // Se non va piu' bene resta con l'avviso "non giocarla". Le partite gia' mostrate si salvano (calib_state 'svago_shown').
+    let shown = new Map(); try { shown = new Map(((await require('./calib').loadState(pool, 'svago_shown')) || []).map(x => [Number(x.id), x.t])); } catch (e) { /* facoltativo */ }
+    const alive = r => !r.played && !r.skipped && T(r.commence_time) > nowV && !bestSet.has(r.id);
+    const sticky = sb.stopped ? [] : out.recent.filter(r => shown.has(Number(r.id)) && alive(r));
+    for (const r of sticky) if (!svagoOk(r)) r.svagoWarn = !r.play ? 'la quota è scesa sotto la minima sui tuoi siti' : !r.svago ? 'non è più il risultato più probabile o la quota è cambiata' : (r.market && r.market.dir === 'contro') ? 'il mercato si è girato contro' : 'non va più bene';
+    const freshS = sb.stopped ? [] : out.recent.filter(r => svagoOk(r) && !shown.has(Number(r.id))).sort((a, b) => T(a.commence_time) - T(b.commence_time));
+    const listS = [...sticky.sort((a, b) => T(a.commence_time) - T(b.commence_time)), ...freshS.slice(0, Math.max(0, 5 - sticky.length))].sort((a, b) => T(a.commence_time) - T(b.commence_time));
+    out.svagoList = listS.map(r => r.id);
+    try {
+      const keep = new Map([...shown].filter(([, t]) => t > nowV - 6 * 3600000)); let changed = keep.size !== shown.size;
+      for (const r of listS) if (!keep.has(Number(r.id))) { keep.set(Number(r.id), T(r.commence_time)); changed = true; }
+      if (changed) await require('./calib').saveState(pool, 'svago_shown', [...keep].map(([id, t]) => ({ id, t })));
+    } catch (e) { /* facoltativo */ }
     const svSet = new Set(out.svagoList);
-    for (const r of out.recent) if (svSet.has(r.id)) r.verdict = { play: 'svago', text: `🎈 Svago: è il risultato più probabile, ma non è una giocata di valore (in media si perde circa il 7%). Giocala solo per divertimento, ${r.play.book} a ${Number(r.play.odd).toFixed(2).replace('.', ',')}` };
+    for (const r of out.recent) if (svSet.has(r.id) && r.svagoWarn) r.verdict = { play: 'no', text: `⚠️ Svago: non giocarla, ${r.svagoWarn}.` };
+    for (const r of out.recent) if (svSet.has(r.id) && !r.svagoWarn) r.verdict = { play: 'svago', text: `🎈 Svago: è il risultato più probabile, ma non è una giocata di valore (in media si perde circa il 7%). Giocala solo per divertimento, ${r.play.book} a ${Number(r.play.odd).toFixed(2).replace('.', ',')}` };
     // vinte contro attese della lista da giocare (stesse regole: selezione, niente coppe, quota fino al massimo)
     TM.budget = Date.now() - T0;
     const ruleRows0 = bc.rule === 'consigliate' ? fin6Rows : bc.rule === 'sicure' ? fin5Rows : fin4Rows;
