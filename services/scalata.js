@@ -20,10 +20,11 @@
  *
  * CASSA KELLY — la cassa che Christian dichiara (salvata nel database): la puntata di ogni ⭐ = cassa x 1/4 Kelly, massimo 2%.
  */
-const BASE = 0.2, STOP = 30, MIN_ODD = 2, MAX_ODD = 3.5, MIN_EDGE = 2, SINCE = '2026-11-22T00:00:00Z';
+// 22/11 (Christian: anche 888sport ha il minimo di 1 €): si parte da 1 € e si sale di 0,20 € (STEP = 20% della partenza) fino a 5 € (21 gradini)
+const BASE = 1, STEP = 0.2, STOP = 21, MIN_ODD = 2, MAX_ODD = 3.5, MIN_EDGE = 2, SINCE = '2026-11-22T00:00:00Z';
 const PICK = { home: '1', draw: 'X', away: '2' };
 // puntata minima per sito (21/11, verificati da Christian): sotto 1 euro si puo' giocare solo su 888sport
-const BOOK_MIN = { eurobet: 1, goldbet: 1, '888sport_it': 0.01 };
+const BOOK_MIN = { eurobet: 1, goldbet: 1, '888sport_it': 1 };   // 22/11: anche 888sport da 1 €
 const minOf = k => (BOOK_MIN[k] === undefined ? 1 : BOOK_MIN[k]);
 const T = x => new Date(x).getTime();
 const ROME_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -115,7 +116,9 @@ async function settle(pool) {
 /** Parte pura: la scalata giocata per giocata (dal 22/11 D'Alembert con tetto 30) e la puntata di adesso. */
 /** cassa (21/11 sera, deciso con Christian): la partenza di ogni giro = cassa della scalata / 1.250, arrotondata in giu' a 0,10
  *  (minimo 0,10). Cassa della scalata = quella dichiarata - i ritiri + il saldo della scalata. Senza cassa: partenza fissa 0,20. */
-const baseFor = c => Math.max(0.1, Math.floor(c / 1250 * 10 + 1e-9) / 10);
+// partenza = cassa / 250 (con 250 € -> 1 €, con 500 € -> 2 €), mai sotto 1 € (minimo dei siti); tetto = 5 volte la partenza (2% della cassa)
+const baseFor = c => Math.max(1, Math.floor(c / 250 * 10 + 1e-9) / 10);
+const stakeAt = (base, k) => Math.round(base * (1 + STEP * (k - 1)) * 100) / 100;
 function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, lastLevel = 0, keepAll = false } = {}) {
   // 22/11: D'Alembert con tetto. k = numero di gradini (1..stop); stake = gradino x k
   const adaptive = Number(cassa) > 0, bankAt = p => Number(cassa) - Number(withdrawn || 0) + p;
@@ -125,7 +128,7 @@ function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, l
   const steps = [];
   for (const r of list) {
     if (r.result === 'skip') continue;   // non giocata: non conta
-    const stake = Math.round(base * k * 100) / 100, odd = Number(r.odd), res = r.result;
+    const stake = stakeAt(base, k), odd = Number(r.odd), res = r.result;
     if (res !== 'won' && res !== 'lost') { steps.push({ ...r, step: k, stake, open: true }); waiting = true; continue; }
     staked += stake;
     if (res === 'won') { const win = stake * (odd - 1); pnl += win; lost = Math.max(0, lost - win); steps.push({ ...r, step: k, stake, pnl: win });
@@ -133,7 +136,7 @@ function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, l
     else { pnl -= stake; lost += stake; steps.push({ ...r, step: k, stake, pnl: -stake }); if (k >= stop) { steps[steps.length - 1].cycleEnd = 'tetto'; stops++; } k = Math.min(stop, k + 1); maxK = Math.max(maxK, k); }
   }
   const cassaNow = adaptive ? bankAt(pnl) : null;
-  return { method: 'dalembert', base, stop, maxStake: Math.round(base * stop * 100) / 100, maxLoss: base * stop * (stop + 1) / 2, step: k, nextStake: Math.round(base * k * 100) / 100, lostInCycle: lost, pnl, staked, cycles, stops, maxStep: maxK, waiting,
+  return { method: 'dalembert', base, stop, maxStake: stakeAt(base, stop), maxLoss: Array.from({ length: stop }, (_, i) => stakeAt(base, i + 1)).reduce((a, b) => a + b, 0), step: k, nextStake: stakeAt(base, k), lostInCycle: lost, pnl, staked, cycles, stops, maxStep: maxK, waiting,
     cassa: adaptive ? Number(cassa) : null, withdrawn: Number(withdrawn || 0), cassaNow,
     // ritiro del capitale: appena la cassa della scalata raddoppia, si ritira la cassa iniziale (una volta)
     // 21/11 sera: dopo il primo ritiro, ogni volta che la cassa raddoppia ancora (rispetto a dopo l'ultimo ritiro) si ritira meta' del guadagno
@@ -186,4 +189,4 @@ async function setKellyCassa(pool, value) {
   await require('./calib').ensureCalib(pool); await require('./calib').saveState(pool, 'kelly_cassa', { value: v, at: new Date().toISOString() }); return v;
 }
 
-module.exports = { kellyNowOf, getKelly, withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STOP, SINCE };
+module.exports = { kellyNowOf, getKelly, withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STEP, STOP, SINCE, stakeAt };
