@@ -498,6 +498,11 @@ console.log('books.test.js: tutti i controlli passati');
   let back = 0; const pool2 = { query: async (q, p) => { if (/SELECT \* FROM italia_signals\s*$/.test(String(q).trim())) return { rows: data }; if (/WHERE updated_at >/.test(q)) { const r = data.filter(x => new Date(x.updated_at) > new Date(p[0])); back += r.length; return { rows: r }; } return { rows: [] }; } };
   SS.reset(); await SS.rows(pool2, {}); await new Promise(r => setTimeout(r, 1600)); await SS.rows(pool2, {});
   assert.strictEqual(back, 0, 'nessuna riga riletta se non e\' cambiato niente');
+  // 22/11: il database ha i microsecondi (…:00.123456), JavaScript solo i millisecondi: senza +1 ms le rileggeva tutte
+  back = 0; data = data.map(r => ({ ...r, updated_at: '2026-11-20T10:00:00.000400Z' }));
+  const pool3 = { query: async (q, p) => { if (/SELECT \* FROM italia_signals\s*$/.test(String(q).trim())) return { rows: data.map(r => ({ ...r, updated_at: new Date(r.updated_at) })) }; if (/WHERE updated_at >/.test(q)) { const t = p[0]; const r = data.filter(x => x.updated_at > t); back += r.length; return { rows: r }; } return { rows: [] }; } };
+  SS.reset(); await SS.rows(pool3, {}); await new Promise(r => setTimeout(r, 1600)); await SS.rows(pool3, {});
+  assert.strictEqual(back, 0, 'microsecondi: nessuna riga riletta');
   SS.reset();
   console.log('statistiche su tutti i segnali, dalla copia in memoria: ok');
 })();

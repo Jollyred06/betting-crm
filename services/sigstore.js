@@ -26,7 +26,7 @@ async function refresh(pool) {
   } else {
     // solo le righe piu' nuove dell'ultima vista, piu' quelle toccate negli ultimi 15 secondi (una modifica salvata un attimo dopo non si perde).
     // 22/11: prima la finestra era "ultima vista - 2 minuti" e, con tutte le righe alla stessa ora, le rileggeva TUTTE ogni volta
-    const rows = (await pool.query(`SELECT * FROM italia_signals WHERE updated_at > $1 OR updated_at > NOW() - INTERVAL '15 seconds'`, [new Date(maxAt).toISOString()])).rows;
+    const rows = (await pool.query(`SELECT * FROM italia_signals WHERE updated_at > $1 OR updated_at > NOW() - INTERVAL '15 seconds'`, [new Date(maxAt + 1).toISOString()]   /* +1 ms: il database ha i microsecondi, JavaScript solo i millisecondi (senza, rileggeva tutto) */)).rows;
     for (const r of rows) snap.set(Number(r.id), r);
   }
   for (const r of snap.values()) if (T(r.updated_at) > maxAt) maxAt = T(r.updated_at);
@@ -70,7 +70,7 @@ function makeStore(table, key) {
   async function ref(pool) {
     await ens(pool);
     if (!inc) m = null;
-    const rows = m ? (await pool.query(`SELECT * FROM ${table} WHERE updated_at > $1 OR updated_at > NOW() - INTERVAL '15 seconds'`, [new Date(mx).toISOString()])).rows : (await pool.query(`SELECT * FROM ${table}`)).rows;
+    const rows = m ? (await pool.query(`SELECT * FROM ${table} WHERE updated_at > $1 OR updated_at > NOW() - INTERVAL '15 seconds'`, [new Date(mx + 1).toISOString()])).rows : (await pool.query(`SELECT * FROM ${table}`)).rows;
     if (!m) m = new Map();
     for (const r of rows) { m.set(String(r[key]), r); if (T(r.updated_at) > mx) mx = T(r.updated_at); }
     last = Date.now();
