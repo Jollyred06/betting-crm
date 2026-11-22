@@ -8,7 +8,8 @@
  */
 const ROME_DAY = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' });
 const romeHour = ms => Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(new Date(ms))) % 24;
-const dcCfg = (env = process.env) => ({ on: String(env.DC_PAPER || '').trim().toLowerCase() !== 'false', hour: Number.isFinite(Number(env.DC_HOUR)) && env.DC_HOUR !== undefined && env.DC_HOUR !== '' ? Number(env.DC_HOUR) : 17, minEdge: 2, maxMargin: 6, freshH: 3 });
+const dcCfg = (env = process.env) => ({ on: String(env.DC_PAPER || '').trim().toLowerCase() === 'true',   // 22/11: spenta (accesa solo con DC_PAPER=true)
+  hour: Number.isFinite(Number(env.DC_HOUR)) && env.DC_HOUR !== undefined && env.DC_HOUR !== '' ? Number(env.DC_HOUR) : 17, minEdge: 2, maxMargin: 6, freshH: 3 });
 let ready = false;
 async function ensureDc(pool) {
   if (ready) return;

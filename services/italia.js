@@ -446,14 +446,13 @@ async function scan(pool, c, { nowMs = Date.now(), http, notify } = {}) {
   // 22/11: se il feed sposta l'orario di una partita (stessa partita, entro 48 ore) si corregge anche sulle righe gia' salvate e ancora aperte.
   // Prima Pachuca-Toluca era rimasta alle 15:15 (orario sbagliato) mentre si giocava alle 22:50: sembrava da chiudere e finiva "rinviata"
   try { golOut.orariCorretti = await fixKickoffs(pool, records); } catch (e) { golOut.erroreOrari = e.message; }
-  try { const merged = mergeWithPinnacle(records), G = require('./goals'); golOut.partiteGol = await G.watch(pool, merged, trio, nowMs);
-    try { Object.assign(golOut, await G.scanTotals(pool, c, { nowMs, http, merged, trio })); } catch (e) { golOut.erroreGol = e.message; }
-    try { Object.assign(golOut, await G.valangaOdds(pool, c, { nowMs, http })); } catch (e) { golOut.erroreThor = e.message; } } catch (e) { /* facoltativo */ }
+  // 22/11 sera (Christian: "togli"): Gol/Over-Under e Valanga spenti (−18 € sulla carta, crediti e traffico). Resta solo goal_watch,
+  // l'elenco delle partite viste, che serve a IA, risultati e prove
+  try { const merged = mergeWithPinnacle(records), G = require('./goals'); golOut.partiteGol = await G.watch(pool, merged, trio, nowMs); } catch (e) { /* facoltativo */ }
   // 🔒 le piu' sicure sulla carta (20/11): stessa richiesta, nessun credito in piu'
   const mergedAll = mergeWithPinnacle(records);
-  try { golOut.sicureCarta = await require('./sicurepaper').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreSicure = e.message; }
+  // 22/11 sera: Sicure sulla carta e Migliori sulla carta spente (verdetto: vincono spesso ma perdono; il Bivio fa meglio). Dati in archivio.
   // 🏆 le migliori del giorno sulla carta (20/11): fiducia + valore + quadro buono, stessa richiesta
-  try { golOut.miglioriCarta = await require('./migliori').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreMigliori = e.message; }
   // 🧭 il bivio sulla carta (22/11): per ogni partita la giocata che fa crescere di piu' la cassa, stessa richiesta
   try { golOut.bivioCarta = await require('./bivio').record(pool, mergedAll, c.myBooks, nowMs); } catch (e) { golOut.erroreBivio = e.message; }
   // 🪜 la scalata (21/11): la giocata del giorno, fissata alla prima scansione che la trova
@@ -592,10 +591,7 @@ async function tick(pool, { env = process.env, nowMs = Date.now(), http, notify,
   try { Object.assign(out, await captureClosing(pool, c, { nowMs, http })); } catch (e) { out.erroreChiusura = e.message; }
   try { Object.assign(out, await scan(pool, c, { nowMs, http, notify })); } catch (e) { out.erroreScansione = e.message; }
   try { Object.assign(out, await require('./autoplay').runAutoplay(pool, { env, nowMs })); } catch (e) { out.erroreSimulate = e.message; }
-  try { Object.assign(out, await require('./dcpaper').dcDaily(pool, c, { nowMs, http, env })); } catch (e) { out.erroreDoppiaChance = e.message; }
-  try { await require('./dcpaper').settleDc(pool); } catch (e) { /* facoltativo */ }
-  try { await require('./sicurepaper').settle(pool); } catch (e) { /* facoltativo */ }
-  try { await require('./migliori').settle(pool); } catch (e) { /* facoltativo */ }
+  // 22/11 sera: Doppia chance sulla carta spenta (0 segnali in un mese: 1 richiesta al giorno sprecata)
   try { await require('./bivio').settle(pool); } catch (e) { /* facoltativo */ }
   try { await require('./scalata').settle(pool); } catch (e) { /* facoltativo */ }
   try { Object.assign(out, await require('./calib').maybeRefresh(pool, { nowMs })); } catch (e) { out.erroreStorico = e.message; }

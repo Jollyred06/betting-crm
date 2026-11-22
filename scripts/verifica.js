@@ -31,8 +31,6 @@ const CHECKS = [
     const w = Object.values(a.weights || {}), s = w.reduce((x, y) => x + y, 0); if (Math.abs(s - 1) > 1e-6) return 'pesi IA non sommano a 1';
     if (Math.min(...w) < 0.01) return 'un esperto IA e\' spento'; return true; }],
   ['/api/tracker/sicure', r => (r.json && Array.isArray(r.json.tiers) && r.json.tiers.length === 5) || 'le piu\' sicure mancanti'],
-  ['/api/tracker/sicure-paper', r => (r.json && Number.isFinite(r.json.count)) || 'prova sulla carta mancante'],
-  ['/api/tracker/dc-paper', r => (r.json && Array.isArray(r.json.reads)) || 'doppia chance mancante'],
   ['/api/tracker/calibration', r => (r.json && !r.json.error) || 'storico mancante'],
   ['/api/tracker/backtest', r => (r.json && !r.json.error) || 'prova sullo storico mancante'],
   ['/api/tracker/forma-test', r => (r.json && !!r.json.verdict) || 'prova della forma mancante'],

@@ -44,7 +44,6 @@ async function summary(pool) {
       siti: await require('./bookcash').getBookCash(pool) };
   });
   await safe('bivio', async () => { const b = await require('./bivio').getBivio(pool); return { since: b.since, regole: b.rules, tutte: b.all, probabilita: b.prob, quota: b.quota }; });
-  await safe('sicureCarta', async () => { const x = await require('./sicurepaper').getSicurePaper(pool); delete x.items; return x; });
   return out;
 }
 
