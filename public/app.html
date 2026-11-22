@@ -210,6 +210,10 @@
   .rrow { display:flex; gap:12px; padding:10px 0; border-top:1px solid var(--line); } .rrow b { display:block; font-weight:600; } .rrow span { display:block; font-weight:700; font-size:16px; } .rrow small { display:block; color:var(--muted); font-size:13px; }
   .wbar { display:grid; grid-template-columns:minmax(0,1.3fr) 1fr auto; gap:8px; align-items:center; font-size:13px; padding:3px 0; } .wbar i { display:block; height:8px; border-radius:4px; background:var(--ok); } .wbar b { font-size:13px; }
   .guess { display:block; margin:4px 0 2px; font-size:13px; color:var(--muted); } .guess b { color:var(--ink); }
+  /* 22/11: la puntata Kelly ben visibile */
+  .stakebox { margin:8px 0 4px; padding:8px 12px; border:2px solid var(--ok); border-radius:12px; font-size:17px; }
+  .stakebox b { font-size:22px; color:var(--ink); } .stakebox small { display:block; font-size:12.5px; margin-top:2px; }
+  .stakebox.warnbox { border-color:var(--warn); font-size:15px; } .stakebox.warnbox b { font-size:16px; }
   .ticket.tsmall .stub { padding-top:8px; padding-bottom:8px; } .ticket.tsmall .stub b { font-size:18px; } .ticket.tsmall .teams { font-size:15px; } .mline { display:flex; flex-wrap:wrap; gap:2px 10px; font-size:14px; margin-top:2px; } .mline .mno { color:var(--bad); font-size:13px; }
   .agrp { margin:18px 0 2px; padding:0 4px; font-size:13px; color:var(--muted); font-weight:700; } .agrp:first-child { margin-top:4px; }
   #playedBox .play .pm b { white-space:normal; overflow-wrap:anywhere; } #playedBox .play { padding:8px 0; } #playedBox .play .pr { flex:none; margin-left:4px; }
@@ -1139,9 +1143,13 @@
     return Math.max(2, Math.min(bank * k / 4, bank * 0.02));
   }
   function stakeLine(r) {
-    const odd = r.play ? r.play.odd : r.odd, s = stakeOf(odd, r.fair_prob);
+    // 22/11: la probabilita' e' quella di adesso (la stessa di "Vince il X%"), non quella del momento del segnale: con la quota scesa
+    // Kelly dava 0 e la scheda diceva "punta 0,01 €"
+    const odd = r.play ? r.play.odd : r.odd, pNow = Number(r.win_prob) > 0 && Number(r.win_prob) < 1 ? Number(r.win_prob) : r.fair_prob, s = stakeOf(odd, pNow);
     if (KELLY) { const bk = String(r.play ? r.play.book : r.book || ''), mn = BOOK_MIN[bk.toLowerCase()];
-      return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(mn && s < mn ? mn : s, 2)} €</b> · ¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${mn && s < mn ? ` (Kelly dice ${num(s, 2)} €, su ${esc(bk)} il minimo è ${num(mn, 0)} €)` : ''}${cashWarn(bk, mn && s < mn ? mn : s)}</small>`; }
+      if (!(s > 0)) return `<div class="stakebox warnbox">💶 Kelly: <b>niente valore adesso</b> a ${num(odd, 2)}: non giocarla</div>`;
+      const st = mn && s < mn ? mn : s;
+      return `<div class="stakebox">💶 Punta <b>${num(st, 2)} €</b><small class="muted tnum">¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${mn && s < mn ? ` · Kelly dice ${num(s, 2)} €, su ${esc(bk)} il minimo è ${num(mn, mn < 1 ? 2 : 0)} €` : ''}</small>${cashWarn(bk, st)}</div>`; }
     return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(Math.round(s * 2) / 2, s % 1 ? 2 : 0)} €</b> · ${BANK && BANK >= 300 ? '¼ Kelly sulla cassa di ' + num(BANK, 0) + ' €, massimo 2%' : '2 € fissi finché la cassa è sotto i 300 €' + (BANK ? ' (ora ' + num(BANK, 0) + ' €)' : '')}</small>`;
   }
   function probLine(r) {
