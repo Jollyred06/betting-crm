@@ -119,7 +119,7 @@ const fresh = (b, nowMs, maxStaleMin) => !b.last_update || (nowMs - T(b.last_upd
 // Abbinamento tra righe della stessa partita scritte in modo diverso dai bookmaker ("Benfica - Celtic" e "Benfica - Celtic Glasgow").
 const GENERIC = new Set(['fc', 'cf', 'ac', 'sc', 'afc', 'cd', 'ud', 'sd', 'club', 'de', 'the', 'calcio', 'fk', 'sk', 'if', 'bk', 'cp', 'sv', 'vfb', 'vfl', 'tsg', 'as', 'ss', 'us', 'rc', 'rcd', 'ca', 'ad', 'sl', 'fsv', 'spvgg', 'sporting', 'real', 'united', 'city', 'town', 'athletic', 'atletico']);
 const FLAGS = ['u17', 'u18', 'u19', 'u20', 'u21', 'u23', 'women', 'w', 'femminile', 'riserve', 'reserves', 'ii', 'b'];
-const LEAGUE_FLAGS = ['u17', 'u18', 'u19', 'u20', 'u21', 'u23', 'women', 'femminile', 'reserves', 'riserve', 'youth', 'primavera'];
+const LEAGUE_FLAGS = ['u17', 'u18', 'u19', 'u20', 'u21', 'u23', 'women', 'femminile', 'reserves', 'riserve', 'youth', 'primavera', 'feminino', 'femenino', 'feminina', 'femenina', 'feminine', 'frauen', 'ladies', 'damallsvenskan'];   // 22/11: anche i campionati femminili in altre lingue
 const FRIENDLY = /friendl|amichev|club friendly|test match/i;
 /** 21/11: giovanili, femminili, riserve e amichevoli (non si giocano mai): fuori anche dall'IA, dalle prove sulla carta e dalla scalata. */
 const isNoise = r => !!r && (FLAGS.some(f => words(r.home_team || r.home).includes(f) || words(r.away_team || r.away).includes(f))
@@ -131,12 +131,24 @@ const words = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, 
 // Nomi che non hanno parole in comune tra le fonti (football-data.org scrive "Athletic Club" o "Athletic", il feed "Athletic Bilbao")
 const ALIAS = { 'athletic club': 'athletic bilbao', 'athletic': 'athletic bilbao', 'athletic club bilbao': 'athletic bilbao' };
 const canonWords = s => { const w = words(s), k = w.join(' '); return ALIAS[k] ? ALIAS[k].split(' ') : w; };
+// 22/11/2026: articoli arabi e simili ("Al", "El") non bastano piu' a dire che due squadre sono uguali (prima "Al Qous" = "Al Njoom":
+// le partite arabe risultavano ambigue e restavano senza risultato). In compenso si accettano grafie quasi uguali
+// ("Al Njoom" / "Al Najoom", una lettera) e nomi scritti attaccati ("Bani Yas" / "Baniyas").
+const WEAK = new Set(['al', 'el', 'la', 'le', 'los', 'las', 'di', 'da', 'do', 'du', 'van', 'von', 'st', 'san', 'santa']);
+function lev1(a, b) {   // distanza di modifica al massimo 1 (una lettera tolta, aggiunta o cambiata)
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0, j = 0, d = 0;
+  while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } if (++d > 1) return false; if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } }
+  return d + (a.length - i) + (b.length - j) <= 1;
+}
 function sameTeam(a, b) {
   const wa = canonWords(a), wb = canonWords(b);
   if (FLAGS.filter(f => wa.includes(f)).join() !== FLAGS.filter(f => wb.includes(f)).join()) return false;   // giovanili, donne, riserve: mai con la prima squadra
-  const A = wa.filter(w => !GENERIC.has(w) && w.length > 1), B = wb.filter(w => !GENERIC.has(w) && w.length > 1);
+  const A = wa.filter(w => !GENERIC.has(w) && !WEAK.has(w) && w.length > 1), B = wb.filter(w => !GENERIC.has(w) && !WEAK.has(w) && w.length > 1);
   if (!A.length || !B.length) return wa.join(' ') === wb.join(' ');
-  return A.some(x => B.some(y => x === y || (x.length >= 5 && y.length >= 5 && (x.startsWith(y) || y.startsWith(x)))));
+  if (A.some(x => B.some(y => x === y || (x.length >= 5 && y.length >= 5 && (x.startsWith(y) || y.startsWith(x) || lev1(x, y)))))) return true;
+  const ja = A.join(''), jb = B.join('');   // "bani yas" = "baniyas"
+  return ja.length >= 6 && (ja === jb || lev1(ja, jb));
 }
 const sameMatch = (p, r) => p.commence_time && T(p.commence_time) === T(r.commence_time) && sameTeam(p.home_team, r.home_team) && sameTeam(p.away_team, r.away_team);
 

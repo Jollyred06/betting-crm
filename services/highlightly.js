@@ -60,7 +60,7 @@ function coverage(matches, signals, sameTeam) {
   }
   return { partiteHighlightly: matches.length, nostrePartite: rows.length, trovate: rows.filter(r => r.found).length, conRisultato: rows.filter(r => r.score).length,
     campionatiMancanti: Object.entries(missingLeagues).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([l, n]) => `${l} (${n})`), esempi: rows.slice(0, 8),
-    nonTrovate: { conSimili: forse.filter(f => f.simili.length).length, senzaSimili: forse.filter(f => !f.simili.length).length, elenco: forse.slice(0, 60) } };
+    nonTrovate: { conSimili: forse.filter(f => f.simili.length).length, senzaSimili: forse.filter(f => !f.simili.length).length, elenco: forse.filter(f => f.simili.length).slice(0, 150) } };
 }
 
 async function check(pool, { env = process.env, http = axios, nowMs = Date.now(), day = null } = {}) {
