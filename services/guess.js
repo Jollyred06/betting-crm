@@ -1,3 +1,4 @@
+
 /**
  * 🔮 PRONOSTICO DEL CRM (15 novembre 2026, chiesto da Christian: "su ogni partita scrivimi il tuo 1, X o 2, voglio vedere se indovini").
  * E' l'esito piu' probabile secondo Pinnacle senza margine: nei test nessun modello fatto con i dati del CRM e' riuscito a fare meglio.
@@ -9,6 +10,7 @@
  * su 622 partite, cioe' 3 in piu': NON e' dimostrato. Si misurano tutti e due fianco a fianco.
  * 💪 Dal 15/11 sera c'e' anche la forza delle squadre (Elo dallo storico, services/elo.js) come sesto esperto.
  */
+const SURE = 0.6;   // soglia delle "IA sicure" (sui dati: favorite sopra il 60% indovinate circa 3 volte su 4, quota media 1,35)
 const { noVigPower } = require('./sharpSignals');
 const LIVE_SINCE = '2026-11-15T16:10:00Z';
 const PICK = { home: '1', draw: 'X', away: '2' };
@@ -146,14 +148,14 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
     recent.push({ home: r.home, away: r.away, at: r.commence_time, pick: g.pick, prob: g.prob, ai: ai ? ai.pick : null, aiHit: !!aiHit, score: score.get(ev), hit: !!hit });
   }
   // 22/11: anche su TUTTE le partite viste (prima squadra), non solo quelle con segnale (le piu' equilibrate): ultima quota letta
-  const seenPin = mk(), seenAi = mk();
+  const seenPin = mk(), seenAi = mk(), sureAi = mk();   // 24/11: "IA sicure" = l'IA da' all'esito almeno il 60% (favorita netta)
   for (const e of evs) {
     const ps = SELS.reduce((x, y) => (e.l[y] > e.l[x] ? y : x), 'home'); seenPin.n++; seenPin.hit += ps === e.out ? 1 : 0; seenPin.expected += e.l[ps];
-    const a = model.preds.get(e.id); if (a) { seenAi.n++; seenAi.hit += a.sel === e.out ? 1 : 0; seenAi.expected += a.prob; }
+    const a = model.preds.get(e.id); if (a) { seenAi.n++; seenAi.hit += a.sel === e.out ? 1 : 0; seenAi.expected += a.prob;  if (a.prob >= SURE) { sureAi.n++; sureAi.hit += a.sel === e.out ? 1 : 0; sureAi.expected += a.prob; } }
   }
   const fin = t => ({ ...t, pct: t.n ? 100 * t.hit / t.n : null, expPct: t.n ? 100 * t.expected / t.n : null });
   recent.sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
-  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, withCal: !!cal, extra: evs.filter(e => e.extra).length, weekly: weeklyOf(evs, model.preds), seen: fin(seenAi), withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, seen: fin(seenPin), recent: recent.slice(0, 10) };
+  return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, withCal: !!cal, extra: evs.filter(e => e.extra).length, weekly: weeklyOf(evs, model.preds), seen: fin(seenAi), sure: fin(sureAi), sureMin: SURE, withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, seen: fin(seenPin), recent: recent.slice(0, 10) };
 }
 
 let cacheG = null;
