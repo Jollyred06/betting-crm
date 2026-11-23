@@ -7,7 +7,9 @@
  * vantaggio piccolo erano andate male (-28 € su 134): per questo sotto quota 2 serve valore dal 4%. Sulla carta, 2 € fissi.
  */
 const { noVigPower } = require('./sharpSignals');
-const SINCE = '2026-11-22T00:00:00Z', STAKE = 2, MIN_ODD = 1.25, MAX_ODD = 3.5, MIN_EDGE = 2, MIN_EDGE_LOW = 4, MAX_MARGIN = 8;
+// 23/11 (Christian: "regole meno severe"): niente limite di margine Pinnacle (non cambia il valore: senza limite +4,4% contro la
+// chiusura su 450 partite, col limite 8% +3,4% su 122) e quota fino a 4 (3,50-4 reggono). Sotto quota 2 resta il 4% (dal vivo erano andate male).
+const SINCE = '2026-11-22T00:00:00Z', STAKE = 2, MIN_ODD = 1.25, MAX_ODD = 4, MIN_EDGE = 2, MIN_EDGE_LOW = 4, MAX_MARGIN = Infinity;
 const OUT = { home: 'HOME', draw: 'DRAW', away: 'AWAY' }, PICK = { home: '1', draw: 'X', away: '2' };
 const T = x => new Date(x).getTime();
 let ready = false;
