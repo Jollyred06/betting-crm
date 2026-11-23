@@ -13,7 +13,7 @@ const MIN_N = 40, Z_OK = -1.5, Z_BAD = -2.5, BRAKE_DAYS = 7;
 
 // chi c'e' in squadra: kind 'star' = le sue partite diventano ⭐ quando e' in campo; 'filter' = una regola che toglie partite
 const MEMBERS = [
-  { key: 'oceani', what: '🏆 formazione titolare: liquide, vantaggio dal 2%, quota 2,00–3,50, appena compare', kind: 'star', on: true },
+  { key: 'oceani', what: '🏆 formazione titolare: vantaggio dal 5%, quota 1,60–4,00, qualsiasi mercato (dal 23 novembre)', kind: 'star', on: true },
   { key: 'fascia', what: '✅ consigliate', kind: 'star', on: false },
   { key: 'oceano', what: '💧 liquide (ultime 3 ore)', kind: 'star', on: false },
   { key: 'coro', what: '👥 F2+ con 4+ siti d\'accordo', kind: 'star', on: false },

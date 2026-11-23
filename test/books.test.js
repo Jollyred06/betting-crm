@@ -81,7 +81,7 @@ console.log('books.test.js: tutti i controlli passati');
     { id: 2, event_id: 'b', final4: true, final6: true, odd: 3.6, play: { odd: 3.6 }, win_prob: 0.3, commence_time: ko, league: 'Liga' },
     { id: 3, event_id: 'c', final4: true, final6: true, odd: 3.3, play: { odd: 3.55 }, win_prob: 0.31, commence_time: ko, league: 'Liga' }];
   assert.deepStrictEqual(I.pickBest(items, { nowMs: now, rule: 'consigliate' }), [1]);
-  assert.strictEqual(I.budgetCfg({}).maxOdd, 3.5); assert.strictEqual(I.budgetCfg({ BEST_MAX_ODD: '3' }).maxOdd, 3);
+  assert.strictEqual(I.budgetCfg({}).maxOdd, 4); assert.strictEqual(I.budgetCfg({ BEST_MAX_ODD: '3' }).maxOdd, 3);
   const mk = (n, won, p) => Array.from({ length: n }, (_, i) => ({ result: i < won ? 'won' : 'lost', fair_prob: p, odd: 1 / p }));
   assert.strictEqual(I.winCheck(mk(10, 5, 0.5)).level, 'pochi');
   assert.strictEqual(I.winCheck(mk(40, 20, 0.5)).level, 'ok');
@@ -285,11 +285,15 @@ console.log('books.test.js: tutti i controlli passati');
 // 🌊 Gli Oceani e i freni sulle perdite
 {
   const I = require('../services/italia');
-  const r = { pin_margin: 4, edge_pct: 2.5, odd: 2.4, league: 'Serie B', play: { book: 'Snai', odd: 2.4 } };
+  // 23/11: vantaggio dal 5%, quota 1,60–4,00, qualsiasi margine
+  const r = { pin_margin: 4, edge_pct: 5.5, odd: 2.4, league: 'Serie B', play: { book: 'Snai', odd: 2.4 } };
   assert.strictEqual(I.isOceani(r), true);
-  assert.strictEqual(I.isOceani({ ...r, pin_margin: 7 }), false);
-  assert.strictEqual(I.isOceani({ ...r, odd: 1.8, play: { book: 'Snai', odd: 1.8 } }), false);
-  assert.strictEqual(I.isOceani({ ...r, odd: 3.8, play: { book: 'Snai', odd: 3.8 } }), false);
+  assert.strictEqual(I.isOceani({ ...r, pin_margin: 9 }), true);
+  assert.strictEqual(I.isOceani({ ...r, edge_pct: 4 }), false);
+  assert.strictEqual(I.isOceani({ ...r, odd: 1.8, play: { book: 'Snai', odd: 1.8 } }), true);
+  assert.strictEqual(I.isOceani({ ...r, odd: 1.5, play: { book: 'Snai', odd: 1.5 } }), false);
+  assert.strictEqual(I.isOceani({ ...r, odd: 3.8, play: { book: 'Snai', odd: 3.8 } }), true);
+  assert.strictEqual(I.isOceani({ ...r, odd: 4.2, play: { book: 'Snai', odd: 4.2 } }), false);
   assert.strictEqual(I.isOceani({ ...r, league: 'Coppa Italia' }), false);
   const c = { start: 100, stop: 60, maxPerDay: 10 }, now = Date.parse('2026-11-05T18:00:00Z');   // giovedi'
   const L = (at, res, p) => ({ at, result: res, pnlEur: p, stake: 2 });
@@ -310,9 +314,9 @@ console.log('books.test.js: tutti i controlli passati');
   const I = require('../services/italia');
   const now = Date.parse('2026-11-06T20:50:00Z'), ko = '2026-11-06T21:00:00Z';
   const cand = [
-    { id: 1, event_id: 'e1', selection: 'home', odd: 3.2, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Primera A', pin_h: 3.6, pin_d: 3.3, pin_a: 2.2 },     // ⭐ con vantaggio 2,5%
+    { id: 1, event_id: 'e1', selection: 'home', odd: 3.2, commence_time: ko, strategy: 'I', edge_pct: 5.5, league: 'Primera A', pin_h: 3.6, pin_d: 3.3, pin_a: 2.2 },     // ⭐ (dal 23/11 vantaggio dal 5%)
     { id: 2, event_id: 'e2', selection: 'home', odd: 1.9, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Ligue 2', pin_h: 2.0, pin_d: 3.0, pin_a: 3.6 },       // non ⭐, sotto soglia
-    { id: 3, event_id: 'e3', selection: 'home', odd: 1.9, commence_time: ko, strategy: 'I', edge_pct: 6.0, league: 'Ligue 2', pin_h: 2.0, pin_d: 3.0, pin_a: 3.6 },       // 12 novembre: mai giocata, anche con vantaggio alto non si chiude piu'
+    { id: 3, event_id: 'e3', selection: 'home', odd: 1.5, commence_time: ko, strategy: 'I', edge_pct: 6.0, league: 'Ligue 2', pin_h: 2.0, pin_d: 3.0, pin_a: 3.6 },       // 12 novembre: mai giocata, anche con vantaggio alto non si chiude piu'
     { id: 4, event_id: 'e4', selection: 'away', odd: 2.3, commence_time: ko, strategy: 'I', edge_pct: 3.0, league: 'Ligue 2', pin_h: 3.0, pin_d: 3.2, pin_a: 2.1 },        // Superman (trasferta, mercato sottile): si misura ancora
     { id: 5, event_id: 'e5', selection: 'home', odd: 1.8, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Serie A', pin_h: 1.75, pin_d: 3.8, pin_a: 5.0 },     // 14 novembre: fascia bassa sulla carta (margine 3%, quota 1,60-2,00): ora si chiude
     { id: 6, event_id: 'e6', selection: 'home', odd: 2.4, commence_time: ko, strategy: 'I', edge_pct: 2.5, league: 'Ligue 2', pin_h: 2.2, pin_d: 3.0, pin_a: 3.5 }       // mercati medi sulla carta (margine 7%): ora si chiude
@@ -339,12 +343,12 @@ console.log('books.test.js: tutti i controlli passati');
 
 { // 💎 Top (7 novembre 2026): Justice League con vantaggio dal 3% e margine Pinnacle sotto il 5%
   const I = require('../services/italia');
-  const jl = { odd: 2.8, edge_pct: 3.5, league: 'Allsvenskan', pin_h: 2.7, pin_d: 3.5, pin_a: 2.75 };      // margine circa 1,2%
+  const jl = { odd: 2.8, edge_pct: 5.5, league: 'Allsvenskan', pin_h: 2.7, pin_d: 3.5, pin_a: 2.75 };      // margine circa 1,2%
   assert.strictEqual(I.isOceani(jl), true); assert.strictEqual(I.isTop(jl), true);
   assert.strictEqual(I.isTop({ ...jl, edge_pct: 2.5 }), false);                                            // vantaggio sotto il 3%
   assert.strictEqual(I.isTop({ ...jl, pin_h: 2.6, pin_d: 3.3, pin_a: 2.75 }), false);                      // margine 5,1%: liquida ma non Top
   assert.strictEqual(I.isOceani({ ...jl, pin_h: 2.6, pin_d: 3.3, pin_a: 2.75 }), true);
-  assert.strictEqual(I.isTop({ ...jl, odd: 1.9 }), false);                                                 // fuori dalla Justice League
+  assert.strictEqual(I.isTop({ ...jl, odd: 1.5 }), false);                                                 // fuori dalla Justice League (sotto 1,60)
   console.log('💎 Top: ok');
 }
 
@@ -381,9 +385,9 @@ console.log('books.test.js: tutti i controlli passati');
 
 { // 🧪 Prova (10 novembre 2026): liquide dal 2%, quota 2,00-4,00, fuori dalle Justice League (coppe e quote 3,50-4,00)
   const I = require('../services/italia');
-  const jl = { odd: 2.8, edge_pct: 3.5, league: 'Allsvenskan', pin_h: 2.7, pin_d: 3.5, pin_a: 2.75 };
+  const jl = { odd: 2.8, edge_pct: 5.5, league: 'Allsvenskan', pin_h: 2.7, pin_d: 3.5, pin_a: 2.75 };
   assert.strictEqual(I.isOceani(jl), true); assert.strictEqual(I.isProva(jl), false);                      // le Justice League restano Justice League
-  assert.strictEqual(I.isProva({ ...jl, odd: 3.8 }), true);                                                // quota 3,50-4,00
+  assert.strictEqual(I.isProva({ ...jl, edge_pct: 3, odd: 3.8 }), true);                                   // quota 3,50-4,00 (sotto il 5%: fuori dalle JL dal 23/11)
   assert.strictEqual(I.isProva({ ...jl, odd: 4.2 }), false);                                               // oltre 4,00
   assert.strictEqual(I.isProva({ ...jl, league: 'EFL Trophy' }), true);                                    // coppa
   assert.strictEqual(I.isProva({ ...jl, odd: 1.8 }), false);                                              // sotto 2,00

@@ -868,7 +868,11 @@ function markDraw(rows) {
  * Mercato liquido (margine Pinnacle sotto il 6%), vantaggio dal 2%, quota da 2,00 a 3,50, niente coppe, appena compare (anche ore prima).
  * All'indietro (prima lettura): 51 partite, 33 vinte su 19,2 attese, +82,14 euro, positiva in tutte e due le meta', valore +3,9%.
  */
-const OCEANI = { since: '2026-11-05T22:05:00Z', maxMarginPct: 6, minEdge: 2, minOdd: 2.0, maxOdd: 3.5 };
+/** 23/11/2026 (Christian, dopo l'analisi di tutto il backup): la Justice League non filtra piu' per margine di Pinnacle (il margine non
+ *  cambia il valore: +3% sotto il 4% come sopra l'8%). L'unica cosa che regge in tutti e due i periodi e' il VANTAGGIO:
+ *  2–5% -> +2,1% contro la chiusura; dal 5% -> +5,3% (5,0 prima del 5/11, 5,8 dopo); quota 1,60–4,00 (sotto 1,60 non regge).
+ *  Prima: { since: '2026-11-05T22:05:00Z', maxMarginPct: 6, minEdge: 2, minOdd: 2.0, maxOdd: 3.5 }. */
+const OCEANI = { since: '2026-11-23T16:00:00Z', maxMarginPct: Infinity, minEdge: 5, minOdd: 1.6, maxOdd: 4.0 };
 function isOceani(r) {
   const m = r.pin_margin !== undefined ? r.pin_margin : pinMarginPct(r), odd = r.play ? r.play.odd : Number(r.odd);
   return m !== null && m !== undefined && Number(m) < OCEANI.maxMarginPct && Number(r.edge_pct) >= OCEANI.minEdge && Number(r.odd) >= OCEANI.minOdd && odd >= OCEANI.minOdd && odd <= OCEANI.maxOdd && !isCup(r.league);
@@ -1053,7 +1057,7 @@ const budgetCfg = (env = process.env) => ({
   rule: ['consigliate', 'sicure', 'tutte'].includes(env.BEST_RULE) ? env.BEST_RULE : 'consigliate',
   onlySafe: env.BEST_RULE === 'sicure',
   // 1° novembre 2026: nella lista da giocare niente quote sopra 3,50 (F2+ fino a 3,50: +5..+8% contro la chiusura; sopra: -3,1% su 17)
-  maxOdd: Number(env.BEST_MAX_ODD) > 1 ? Number(env.BEST_MAX_ODD) : 3.5,
+  maxOdd: Number(env.BEST_MAX_ODD) > 1 ? Number(env.BEST_MAX_ODD) : 4,   // 23/11: 4 (le ⭐ dal 5% reggono fino a 4)
   // 1° novembre 2026: niente 2 (trasferta) nei mercati sottili; BEST_AWAY_THIN=true su Render per rimetterle
   noAwayThin: env.BEST_AWAY_THIN !== 'true'
 });

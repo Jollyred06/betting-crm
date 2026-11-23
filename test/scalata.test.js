@@ -8,7 +8,7 @@ const c = [
   { event_id: 'd', odd: 3.0, edgePct: 1, prob: 0.337 },
   { event_id: 'e', odd: 4.2, edgePct: 9, prob: 0.26 }   // 22/11: tetto a 4: sopra resta fuori
 ];
-assert.deepStrictEqual(S.pickScalata(c).map(x => x.event_id), ['b', 'c']);
+assert.deepStrictEqual(S.pickScalata(c).map(x => x.event_id), ['b']);   // 23/11: vantaggio dal 5% (c: 2,6 x 0,40 = +4%, resta fuori)
 assert.ok(S.reasonsOf({ ...c[1], movedPts: 0.5 }).some(r => /IA d'accordo/.test(r)));
 // 23/11: D'Alembert a passi di 0,50 €. 1 € persa, 1,50 persa, 2 € vinta a 2,5 (+3) -> si scende a 1,50
 const day = i => `2026-11-${String(22 + i).padStart(2, '0')}`;

@@ -25,7 +25,7 @@
 // Sulle 542 partite vere: +241 € (+0,20: +208); quote 4% peggiori +141 €; rimescolate: tipico +112 €, 1 volta su 10 sotto +66 €,
 // cassa sotto 100 € 1,1 volte su 100. Serie storta fino al tetto: 22 € persi.
 const BASE = 1, STEP = 0.5, STOP = 9, MIN_ODD = 2, MAX_ODD = 4,   // 22/11 sera: da 3,50 a 4 (+12% di partite, stesso guadagno sullo storico)
-    MIN_EDGE = 2, SINCE = '2026-11-22T00:00:00Z';
+    MIN_EDGE = 5, SINCE = '2026-11-22T00:00:00Z';
 const PICK = { home: '1', draw: 'X', away: '2' };
 // puntata minima per sito (21/11, verificati da Christian): sotto 1 euro si puo' giocare solo su 888sport
 const BOOK_MIN = { eurobet: 1, goldbet: 1, '888sport_it': 1 };   // 22/11: anche 888sport da 1 €
@@ -95,8 +95,9 @@ async function record(pool, merged, books, nowMs = Date.now()) {
   const all = (await pool.query(`SELECT id, day, event_id, selection, commence_time, odd, played_odd, result FROM scalata_picks ORDER BY commence_time, id`)).rows;
   if (all.some(r => !['won', 'lost', 'skip'].includes(r.result))) return 0;
   const C = await getScalataCassa(pool), stake = ladder(all, C || {}).nextStake, used = new Set(all.map(r => r.event_id));
-  // 22/11: mai una partita che e' gia' nelle ⭐ (Kelly): ogni partita in un solo metodo
-  let stars = new Set(); try { const I = require('./italia'); stars = new Set((await require('./sigstore').rows(pool, { strategy: 'I' })).filter(r => I.isOceani(r)).map(r => r.event_id)); } catch (e) { /* facoltativo */ }
+  // 22/11: ogni partita in un solo metodo. 23/11: le ⭐ ora sono le stesse partite buone (vantaggio dal 5%), quindi la scalata
+  // sceglie per prima e la sua partita esce dalla lista Kelly (scalEv in italia.js); qui si saltano solo quelle gia' giocate con Kelly.
+  let stars = new Set(); try { stars = new Set((await pool.query(`SELECT s.event_id FROM played_bets p JOIN italia_signals s ON s.id = p.signal_id WHERE s.commence_time > NOW() - INTERVAL '1 day'`)).rows.map(r => r.event_id)); } catch (e) { /* facoltativo */ }
   const x = pickScalata(cands, stake).find(c => !used.has(c.event_id) && !stars.has(c.event_id) && T(c.commence_time) >= nowMs + 30 * 60000 && T(c.commence_time) <= nowMs + 12 * 3600000);
   if (!x) return 0;
   const r = await pool.query(`INSERT INTO scalata_picks (day, event_id, selection, league, home, away, commence_time, prob, book, odd, edge_pct, score, reasons, quotes)
