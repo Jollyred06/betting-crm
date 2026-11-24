@@ -142,6 +142,7 @@
   .alt { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:13px; margin-top:4px; } .alt .ok { color:var(--ok); } .alt .no { color:var(--muted); text-decoration:line-through; }
   .playbtn { margin-top:8px; border:1.5px solid var(--ink); background:none; color:var(--ink); border-radius:999px; padding:6px 14px; font-weight:700; font-size:13.5px; cursor:pointer; }
   .played.no { color:var(--muted); } .skipbtn { border-color:var(--line); color:var(--muted); }
+  .vbadge { display:inline-block; margin:0 0 6px; padding:3px 10px; border-radius:999px; font-size:13px; font-weight:800; letter-spacing:.02em; } .vbadge.go { border:1.5px solid var(--ok); color:var(--ok); } .vbadge.no { border:1.5px solid var(--bad); color:var(--bad); }
   .played { margin-top:8px; font-size:13.5px; color:var(--ok); font-weight:600; }
   .bestbox { margin:0 0 18px; } .wcheck { display:flex; flex-direction:column; gap:2px; padding:8px 14px; margin:-4px 0 10px; font-size:13.5px; border-left:3px solid var(--line); } .wcheck small { color:var(--muted); } .wcheck.attenzione { border-color:var(--warn, #c90); } .wcheck.allarme { border-color:var(--bad); background:color-mix(in srgb, var(--bad) 8%, transparent); } .wcheck.ok { border-color:var(--ok); } .ticket.bestt { border-color:var(--ok); box-shadow:0 0 0 1.5px var(--ok) inset; }
   .budget { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 12px; padding:10px 14px; margin:0 0 10px; border:1px solid var(--line); border-radius:12px; background:var(--surface); font-size:14.5px; }
@@ -408,7 +409,7 @@
         <h3 style="margin-top:30px;">Come funziona</h3>
         <p class="muted" style="font-size:15px;">Più volte al giorno (ogni 2 ore dalle 9 alle 21, se i crediti bastano) il CRM legge le quote dei siti italiani e le confronta con il prezzo giusto di Pinnacle (senza margine). Quando un sito paga di più del giusto nasce un segnale; se rispetta le regole della squadra diventa una ⭐ in Oggi, con il verdetto 🟢 / 🟡 / 🔴 e il livello: 💎 Top, ⭐ Buona o ⚪ Debole (non si gioca). Sotto trovi quante volte vince e il guadagno atteso.</p>
         <p class="muted" style="font-size:15px;">Poco prima del calcio d'inizio il CRM rilegge Pinnacle (la chiusura): se la quota presa batte la chiusura, il valore era vero. Poi chiude da solo il risultato e aggiorna la pagella della squadra.</p>
-        <p style="font-weight:600;">Si gioca solo le ⭐ in Oggi, 2 € l'una, a quota almeno il 🎯. Lo stop del budget ferma tutto se si scende troppo.</p>
+        <p style="font-weight:600;">Si gioca solo le ⭐ in Oggi, con la puntata indicata, a quota almeno il 🎯. Lo stop del budget ferma tutto se si scende troppo.</p>
         <h3 style="margin-top:30px;">Mettere al sicuro la chiave</h3>
         <p class="muted" style="font-size:15px;">Oggi i job su cron-job.org hanno la chiave nell'indirizzo (dopo "key="), e gli indirizzi restano nelle cronologie. È più sicuro metterla in un'intestazione.</p>
         <ol class="steps">
@@ -1239,7 +1240,7 @@
         ${(() => { const sb = d.svagoBudget; if (!sb || !sb.on) return '';
           const sv = (d.svagoList || []).map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
           const left = Math.max(0, sb.monthLossEur + Math.min(0, sb.pnlMonth));
-          return `<details class="fold quiet svago"><summary><span>🎈 Svago</span><small>per divertimento, 2 € l'una · oggi ${sb.playedToday} su ${sb.perDay}</small></summary>
+          return `<details class="fold quiet svago"><summary><span>🎈 Svago</span><small>per divertimento, 1 € l'una · oggi ${sb.playedToday} su ${sb.perDay}</small></summary>
             <p class="muted" style="font-size:13.5px;margin:2px 0 6px;">Il risultato più probabile, non giocate di valore: in media si perde circa il 7%. Questo mese ${signedMoney(sb.pnlMonth)}, perdita massima ${money(sb.monthLossEur)} (restano ${money(left)}).</p>
             ${sb.stopped ? `<div class="oempty">${esc(sb.stopWhy || 'Svago fermo.')}</div>` : sv.length ? sv.map(oggiRow).join('') : `<div class="oempty">Niente Svago adesso: compaiono con le prossime scansioni (${scanTxt()}).</div>`}</details>`; })()}
         ${(() => { const done = mine.filter(x => x.result === 'won' || x.result === 'lost'); if (!done.length) return '';
@@ -1495,6 +1496,9 @@
     return `<small class="guess" style="display:block;margin-top:4px">🤖 Pronostico IA: <b>${ai}</b> (${num(100 * ap, 0)}%) · Pinnacle: ${r.guess.pick}${ai === r.pick ? ' · <b class="agree">🤝 d\'accordo con la giocata</b>' : ''}</small>`;
   }
   function ticket(r, chip) {
+    // 24/11 (Christian: "metti chiaro quelle che vanno giocate e quelle no"): si gioca SOLO cio' che e' nella lista ⭐ (vantaggio dal 5%).
+    // Se il calcolo del giudizio dice "giocala" ma la partita non e' in lista, vince la lista: NON GIOCARE, con il motivo.
+    if (r && !r.best && r.verdict && r.verdict.play === 'yes') r = { ...r, verdict: { ...r.verdict, play: 'no', text: Number(r.edge_pct) < 5 ? `vantaggio ${num(r.edge_pct, 1)}%, sotto il 5%` : 'fuori dalla lista ⭐ di oggi' } };
     const it = chip.includes('chip it'), live = Date.parse(r.commence_time) > Date.now();
     const guessHtml = `
             ${r.guess ? (() => { const m = String(r.result_score || '').match(/(\d+)\s*-\s*(\d+)/), out = m ? (+m[1] > +m[2] ? '1' : +m[1] === +m[2] ? 'X' : '2') : null, mark = p => out ? (p === out ? ' ✅' : ' ❌') : '';
@@ -1514,7 +1518,7 @@
           <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b></div>
           <div class="tmain">
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
-            <div class="mline"><span><b>${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> a <b class="num">${num(r.play ? r.play.odd : r.odd, 2)}</b>${r.play ? ` su ${esc(r.play.book)}` : ''}</span><span class="mno">🔴 ${r.verdict ? esc(r.verdict.text) : 'non giocabile sui tuoi siti'}</span></div>
+            <div class="mline"><span><b>${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> a <b class="num">${num(r.play ? r.play.odd : r.odd, 2)}</b>${r.play ? ` su ${esc(r.play.book)}` : ''}</span><span class="mno">⛔ <b>NON GIOCARE</b> · ${r.verdict ? esc(r.verdict.text) : 'non giocabile sui tuoi siti'}</span></div>
             ${guessHtml}
             ${r.result === 'won' || r.result === 'lost' ? `<div class="foot"><span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span></div>` : ''}${r.result === 'void' ? `<div class="foot"><span class="chip">annullata/rinviata: non conta</span></div>` : ''}
             ${detHtml}
@@ -1525,6 +1529,7 @@
         <article class="ticket${r.best ? ' bestt' : ''}">
           <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { day: 'numeric', month: 'short' })}</span></div>
           <div class="tmain">
+            ${it && Date.parse(r.commence_time) > Date.now() && !r.played && !r.skipped ? (r.best ? '<div class="vbadge go">✅ DA GIOCARE</div>' : '<div class="vbadge no">⛔ NON GIOCARE</div>') : ''}
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="pick"><span>${it && r.play ? `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
             ${guessHtml}
