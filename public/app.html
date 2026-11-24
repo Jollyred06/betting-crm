@@ -1339,7 +1339,9 @@
     try {
       const [S, d, BC] = await Promise.all([getJson('/api/tracker/scalata'), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/casse-siti').catch(() => null)]);
       BOOKCASH = BC;
-      KELLY = (S.kelly && S.kelly.now > 0 ? S.kelly.now : S.kellyCassa) || null;
+      const kWas = KELLY; KELLY = (S.kelly && S.kelly.now > 0 ? S.kelly.now : S.kellyCassa) || null;
+      // 24/11: Oggi a volte si disegnava prima di sapere la cassa Kelly ("2 € l'una" invece della puntata Kelly): appena arriva, si ridisegna
+      if (KELLY !== kWas) setTimeout(() => { try { loadOggi(); } catch (e) { /* facoltativo */ } }, 0);
       const hhmm = x => new Date(x).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
       if (kb) kb.innerHTML = `<h3>📈 La tua cassa per Kelly</h3>
         <p class="muted" style="font-size:14px;margin:4px 0 8px;">Su ogni ⭐ il CRM ti dice quanto puntare: un quarto di Kelly sulla cassa, mai più del 2%, contando il valore che di solito resta alla chiusura. La cassa si aggiorna da sola con le vincite e le perdite. Se non la scrivi, valgono 2 € fissi.</p>
