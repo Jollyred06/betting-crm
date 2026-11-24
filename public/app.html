@@ -1172,8 +1172,8 @@
   function consChip(r) {
     const k = r && r.consensus; if (!k) return awayChip(r) + liqChip(r);
     const odd = r.play ? r.play.odd : r.odd, ratio = k.median ? odd / k.median : 0;
-    const iso = ratio > 1.08 ? `<span class="chip warnc" title="Quota molto sopra gli altri siti: controlla che ci sia ancora prima di puntare">${heroImg('guardalinee', 20)}Loki · quota isolata +${num((ratio - 1) * 100, 0)}%</span>` : '';
-    return `<span class="chip${k.above >= 4 ? ' fin' : ''}" title="Siti italiani che pagano sopra il prezzo giusto">${k.above >= 4 ? heroImg('coro', 20) : '👥 '}${k.above} su ${k.sites} d'accordo</span>${iso}${awayChip(r)}${liqChip(r)}`;
+    const iso = ratio > 1.08 ? `<span class="chip warnc" title="Quota molto sopra gli altri siti: controlla che ci sia ancora prima di puntare">${heroImg('guardalinee', 20)}solo qui paga così (+${num((ratio - 1) * 100, 0)}%): controlla la quota</span>` : '';
+    return `<span class="chip${k.above >= 4 ? ' fin' : ''}" title="Siti italiani che pagano sopra il prezzo giusto">${k.above >= 4 ? heroImg('coro', 20) : '👥 '}${k.above} siti su ${k.sites} pagano più del giusto</span>${iso}${awayChip(r)}${liqChip(r)}`;
   }
   // 🎯 quota minima sempre in vista: sotto questa quota il segnale non ha piu' valore
   function minLine(r) {
@@ -1503,7 +1503,7 @@
               ${it && r.play && !r.played && live ? `<div class="avail">🔍 Su ${esc(r.play.book)} cerca <b>${esc(r.home)}</b> · <a class="tlink" href="https://www.google.com/search?q=${encodeURIComponent(r.play.book + ' ' + r.home + ' ' + r.away)}" target="_blank" rel="noopener" onclick="rememberSpot()">cerca la partita</a></div>` : ''}
               ${it && r.min_odd ? `<div class="avail">Quote viste dal CRM${r.alt && Object.keys(r.alt).length ? ' · ' + Object.entries(r.alt).map(([b, v]) => `<span class="${v >= r.min_odd ? 'okq' : 'noq'}">${esc(b)} ${num(v, 2)}</span>`).join(' · ') : ''} · minimo ${num(r.min_odd, 2)}</div>` : ''}
               ${it && live && r.verdict && r.verdict.play !== 'yes' && !r.played && !r.skipped ? `<div class="todo-line no">Se la giochi lo stesso, segnala qui (conta nel budget)</div>${playActions(r)}` : ''}
-              <div class="foot">${chip}${consChip(r)}${r.final6 ? '<span class="chip fin">✅ consigliata</span>' : ''}${r.solid && r.solid.score >= 2 ? '<span class="chip fin">🟢 solida</span>' : ''}${r.final5 ? '<span class="chip">🛡️ sicura</span>' : ''}${r.final4 ? '<span class="chip">⚙️ F2+</span>' : ''}${r.final ? '<span class="chip">F</span>' : ''}${r.final2 ? '<span class="chip">F2</span>' : ''}${r.final3 ? '<span class="chip">F3</span>' : ''}${learnMap[r.id] ? `<span class="chip">🧠 stima ${pct(learnMap[r.id].pred, 1)}</span>` : ''}${r.win_prob ? `<span>vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} vs chiusura</span>` : '<span>chiusura da misurare</span>'}</div>
+              <div class="foot">${consChip(r)}${r.win_prob ? `<span>vince ${num(r.win_prob * 10, 1)} volte su 10</span>` : ''}<span>vantaggio ${pct(r.edge_pct)}</span>${r.result === 'void' ? '<span class="chip">annullata</span>' : ''}${r.clv_pct !== null ? `<span class="${cls(r.clv_pct)}">${pct(r.clv_pct)} vs chiusura</span>` : '<span>chiusura da misurare</span>'}</div>
             </details>`;
     // 21/11: i segnali da NON giocare (fuori dalle ⭐, non segnati) in poche righe: partita, quota, pronostico e motivo; il resto in "dettagli"
     if (it && !r.best && !r.played && !r.skipped && (!r.verdict ? !r.play : r.verdict.play === 'no'))
@@ -1552,7 +1552,7 @@
     else if (b.playedToday >= b.maxPerDay) body = `<p class="muted hidnote">Hai già fatto ${b.playedToday} giocate oggi: per oggi basta così. Meno giocate scelte bene, meno errori.</p>`;
     else if (!items.length) body = `<p class="muted hidnote">Niente da giocare adesso: il CRM controlla ${scanTxt()}.</p>`;
     else body = items.map(r => ticket(r, '<span class="chip it">IT</span>')).join('');
-    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, 2 € l'una</small></h4>${b.stopped ? line : ''}${body}<details class="tdet"><summary>regole e risultati della lista</summary><p class="muted">Selezione ${d.bestRule === 'consigliate' ? '✅ consigliate' : d.bestOnlySafe ? '🛡️ sicure' : '⚙️ F2+'}, quota fino a ${num(d.bestMaxOdd || 3.5, 2)}, niente coppe${d.bestNoAwayThin ? ', niente 2 nei campionati minori' : ''}, prima le 🟢 solide, massimo ${b.maxPerDay} al giorno.</p>${ckLine}${agreeLine(d)}</details></section>`;
+    return `<section class="bestbox"><h4 class="sechead">⭐ Le migliori di oggi <small class="muted">· gioca solo queste, con la puntata indicata</small></h4>${b.stopped ? line : ''}${body}<details class="tdet"><summary>regole e risultati della lista</summary><p class="muted">Selezione ${d.bestRule === 'consigliate' ? '✅ consigliate' : d.bestOnlySafe ? '🛡️ sicure' : '⚙️ F2+'}, quota fino a ${num(d.bestMaxOdd || 3.5, 2)}, niente coppe${d.bestNoAwayThin ? ', niente 2 nei campionati minori' : ''}, prima le 🟢 solide, massimo ${b.maxPerDay} al giorno.</p>${ckLine}${agreeLine(d)}</details></section>`;
   }
   let showOthers = false;
   // 🤝 21/11/2026: ⭐ d'accordo con il pronostico (l'esito giocato e' anche il favorito) contro le altre, valore e saldo
