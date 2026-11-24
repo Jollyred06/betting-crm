@@ -1481,6 +1481,8 @@
   const sigById = {};
   let learnMap = {};
   async function loadLearnMap() { try { const L = await getJson('/api/tracker/learning'); learnMap = Object.fromEntries((L.upcoming || []).map(u => [u.id, u])); } catch (e) { learnMap = {}; } }
+  // 24/11: nell'archivio il sito e' quello con la quota piu' alta del mercato, anche se Christian non ci ha il conto (es. Netwin)
+  const notMine = b => myBookNames.length > 0 && !myBookNames.some(n => nk(n) === nk(b)); const nk = x => String(x || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/it$/, '');
   const liveUrl = (h, a) => 'https://www.google.com/search?q=' + encodeURIComponent(`${h} - ${a}`);
   // il testo e l'indirizzo li aggiorna paintDots ogni minuto (prima, durante e dopo la partita)
   const liveLink = (h, a) => `<a class="live" data-q="${esc(h + ' - ' + a)}" href="${liveUrl(h, a)}" rel="noopener" onclick="rememberSpot()">🔎 Partita su Google</a>`;
@@ -1583,7 +1585,7 @@
     return top + head + note + list.map(r => ticket(r, chip)).join('') + (it ? `<button class="sixbtn" onclick="showOthers=false;loadSignals()">Nascondi gli altri segnali</button>` : '') + tail;
   }
   // i siti dove hai il conto (MY_BOOKS su Render) per primi, poi gli altri piu' comuni
-  let myBookNames = ['888sport', 'Snai', 'Netwin', 'Eurobet', 'Goldbet'];
+  let myBookNames = ['888sport', 'Eurobet', 'Goldbet', 'Snai'];   // 24/11 (poi arriva quella vera da MY_BOOKS)
   const PLAY_BOOKS_BASE = ['888sport', 'Snai', 'Netwin', 'Eurobet', 'Goldbet', 'Fastbet', 'Sisal', 'Winamax', 'Lottomatica'];
   const playBooks = () => [...new Set([...myBookNames, ...PLAY_BOOKS_BASE])];
   // il modulo si apre accanto al pulsante toccato (in Oggi o in Segnali): niente id doppi tra le pagine
@@ -1781,13 +1783,13 @@
             return `<span class="jlline">⭐ Justice League: <b>${j.count} ${j.count === 1 ? 'partita' : 'partite'}</b>${j.settled ? ` · <b>${j.won} ${j.won === 1 ? 'vinta' : 'vinte'} su ${j.settled}</b> · <span class="${cls(j.pnlEur)}">${signedMoney(j.pnlEur)}</span>` : ''} · 💎 ${j.top ? `${j.top}${j.topSettled ? ` (${j.topWon} su ${j.topSettled})` : ''}` : '0'}</span>`; })()}<small class="muted allline">tutti i segnali: ${items.length}${g.avgClvPct !== null ? ` · <span class="${cls(g.avgClvPct)}">${pct(g.avgClvPct, 1)}</span> vs chiusura` : ''}${res}</small></summary>
           ${items.map(r => `<div class="arow"><span class="t">${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</span>
             <span class="m"><a class="tlink" href="${liveUrl(r.home, r.away)}" rel="noopener" onclick="rememberSpot()">${esc(r.home)} – ${esc(r.away)}</a>
-              <small>${r.top ? '💎 ' : r.jl ? '⭐ ' : ''}${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${r.final ? ' · ✅ F' : ''}${r.six ? ' 🎯' : ''}${r.final6 ? ' · ✅' : ''}${r.final5 ? ' · 🛡️' : ''}${r.final4 ? ' · ⚙️ F2+' : ''}${r.final2 ? ' · ✅ F2' : ''}${r.final3 ? ' · ✅ F3' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small>${resEdit(r.id, r.home, r.away, r.result === 'won' || r.result === 'lost' || r.result === 'void', r.commence_time)}</span>
+              <small>${r.top ? '💎 ' : r.jl ? '⭐ ' : ''}${esc(r.league || '')} · Punta <b>${esc(r.pick)}</b> a ${num(r.odd, 2)} su ${esc(r.book)}${notMine(r.book) ? ' (non è tra i tuoi siti: era la quota migliore del mercato)' : ''}${r.played ? ` · ✍️ giocata a ${num(r.played.odd, 2)}` : ''}</small>${resEdit(r.id, r.home, r.away, r.result === 'won' || r.result === 'lost' || r.result === 'void', r.commence_time)}</span>
             <span class="v"><b class="${r.clv_pct !== null ? cls(r.clv_pct) : 'muted'}">${r.clv_pct !== null ? pct(r.clv_pct, 1) : '—'}</b><small>${r.result === 'won' ? '✅ vinta ' + esc(r.result_score || '') : r.result === 'lost' ? '❌ persa ' + esc(r.result_score || '') : r.result === 'void' ? 'annullata' : 'risultato da leggere'}</small></span></div>`).join('')}</details>`;
       }).join('');
       const todoN = d.days.reduce((n, g) => n + g.items.filter(r => needsResult(r) && (r.final4 || r.played)).length, 0);
       const todoAllN = d.days.reduce((n, g) => n + g.items.filter(needsResult).length, 0);
       const intro = reset && todoOnly ? `<p class="muted sub">✏️ <b>${todoN} risultati importanti da scrivere</b> (⚙️ F2+ e giocate) in questi giorni. Tocca "🔎 vedi il risultato", poi "✏️ scrivi il risultato". ${todoAll ? `Stai vedendo anche le altre (${todoAllN} in tutto): non servono alle decisioni. <button class="linkbtn" onclick="toggleTodoAll()">Solo quelle importanti</button>` : `Le altre ${todoAllN - todoN} non servono alle decisioni: <button class="linkbtn" onclick="toggleTodoAll()">mostrale lo stesso</button>`}</p>`
-        : reset ? `<p class="muted sub">${todoN ? `<button class="linkbtn" onclick="toggleTodo()">✏️ ${todoN} risultati importanti da scrivere</button> · ` : ''}Tutte le partite già giocate, dalla più recente. Niente viene cancellato: servono alle misure di F, F2, F3 e del modello che impara. Il numero colorato è il valore contro la chiusura.</p>` : '';
+        : reset ? `<p class="muted sub">${todoN ? `<button class="linkbtn" onclick="toggleTodo()">✏️ ${todoN} risultati importanti da scrivere</button> · ` : ''}Tutte le partite già giocate, dalla più recente. Niente viene cancellato: servono alle misure e all'IA che impara. Il sito indicato è quello con la quota più alta in quel momento, anche se non hai il conto. Il numero colorato è il valore contro la chiusura.</p>` : '';
       const more = d.more ? `<button class="sixbtn" id="archMore" onclick="loadArchive(false)">Mostra i 7 giorni prima</button>` : '';
       archNext = d.next;
       if (reset) el.innerHTML = intro + (html || '<div class="empty">Nessuna partita in archivio con questi filtri.</div>') + more;
