@@ -28,7 +28,7 @@ function validate({ book, odd, stake }) {
 
 async function addPlayed(pool, signalId, body = {}) {
   await ensurePlayed(pool);
-  const b = { book: String(body.book || '').trim(), odd: Number(String(body.odd).replace(',', '.')), stake: Number(String(body.stake ?? 2).replace(',', '.')) };
+  const b = { book: String(body.book || '').trim(), odd: Number(String(body.odd).replace(',', '.')), stake: Number(String(body.stake ?? 1).replace(',', '.')) };   // 24/11: 1 € (il minimo dei siti, quello che Christian gioca)
   const err = validate(b);
   if (err) { const e = new Error(err); e.status = 400; throw e; }
   const s = (await pool.query(`SELECT id FROM italia_signals WHERE id = $1`, [signalId])).rows[0];
