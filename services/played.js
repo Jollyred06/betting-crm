@@ -95,6 +95,9 @@ async function addSkipped(pool, signalId, body = {}) {
   if (!SKIP_REASONS[reason]) { const e = new Error('Scegli il motivo.'); e.status = 400; throw e; }
   const s = (await pool.query(`SELECT id FROM italia_signals WHERE id = $1`, [signalId])).rows[0];
   if (!s) { const e = new Error('Segnale non trovato.'); e.status = 404; throw e; }
+  // 24/11: doppio tocco o nuovo tentativo dopo un errore di rete: una sola "non giocata" per segnale
+  const dup = (await pool.query(`SELECT id FROM skipped_bets WHERE signal_id = $1 ORDER BY id LIMIT 1`, [signalId])).rows[0];
+  if (dup) return { id: dup.id, giaRegistrata: true };
   const odd = Number(String(body.odd || '').replace(',', '.'));
   const r = await pool.query(`INSERT INTO skipped_bets (signal_id, reason, book, odd_seen) VALUES ($1,$2,$3,$4) RETURNING id`,
     [signalId, reason, body.book ? String(body.book).slice(0, 40) : null, odd > 1 && odd < 100 ? odd : null]);

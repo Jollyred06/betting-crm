@@ -1099,7 +1099,7 @@
     if (!confirm(`${heroName(hk)}: confermi ${on ? 'in campo' : 'fuori'}? Per 7 giorni non si potranno fare altri cambi.`)) return;
     btn.disabled = true; const label = btn.textContent; btn.textContent = 'Salvo…';
     try {
-      const r = await fetch('/api/tracker/team/' + hk, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ on, note: 'approvato dalla pagella' }) });
+      const r = await postRetry('/api/tracker/team/' + hk, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ on, note: 'approvato dalla pagella' }) });
       const d = await r.json().catch(() => ({}));
       if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova.'); btn.disabled = false; btn.textContent = label; return; }
       if (!r.ok) { alert(d.error || 'Errore ' + r.status); btn.disabled = false; btn.textContent = label; return; }
@@ -1320,7 +1320,7 @@
   async function saveScalOdd(id, btn) {
     const v = Number(String($('sq_' + id).value).replace(',', '.')); if (!(v > 1)) { alert('Scrivi la quota a cui hai giocato, per esempio 1,96'); return; }
     if (!(await ensureKey())) return; btn.disabled = true; btn.textContent = 'Salvo…';
-    try { const r = await fetch('/api/tracker/scalata/' + id + '/played', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ odd: v }) });
+    try { const r = await postRetry('/api/tracker/scalata/' + id + '/played', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ odd: v }) });
       const j = await r.json().catch(() => ({})); if (!r.ok) { alert('Non salvato: ' + (j.error || r.status)); btn.disabled = false; btn.textContent = 'Salva'; return; }
       btn.parentNode.innerHTML = `✅ Giocata a <b>${num(v, 2)}</b>`; memo.clear(); loadScalata(); }
     catch (e) { alert('Errore di connessione: ' + e.message); btn.disabled = false; btn.textContent = 'Salva'; }
@@ -1328,7 +1328,7 @@
   async function saveBookCash(k, btn) {
     const v = Number(String($('bc_' + k).value).replace(',', '.')); if (!(v >= 0) || $('bc_' + k).value === '') { alert('Scrivi il saldo in euro, per esempio 100'); return; }
     if (!(await ensureKey())) return; btn.disabled = true;
-    try { const r = await fetch('/api/tracker/casse-siti', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book: k, saldo: v }) });
+    try { const r = await postRetry('/api/tracker/casse-siti', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book: k, saldo: v }) });
       const j = await r.json().catch(() => ({})); if (!r.ok) { alert('Non salvato: ' + (j.error || r.status)); return; } btn.textContent = '✅'; memo.clear(); loadScalata(); refreshViews(); }
     finally { btn.disabled = false; }
   }
@@ -1366,13 +1366,13 @@
   }
   async function scalataResult(id, result, btn) {
     if (!(await ensureKey())) return; btn.disabled = true;
-    try { const r = await fetch('/api/tracker/scalata/' + id + '/result', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ result }) });
+    try { const r = await postRetry('/api/tracker/scalata/' + id + '/result', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ result }) });
       const j = await r.json().catch(() => ({})); if (!r.ok) { alert('Non salvato: ' + (j.error || r.status)); return; } memo.clear(); await loadScalata(); }
     finally { btn.disabled = false; }
   }
   async function postScalCassa(body, btn) {
     if (!(await ensureKey())) return; btn.disabled = true;
-    try { const r = await fetch('/api/tracker/scalata-cassa', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    try { const r = await postRetry('/api/tracker/scalata-cassa', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const j = await r.json().catch(() => ({})); if (!r.ok) { alert('Non salvata: ' + (j.error || r.status)); return; } memo.clear(); await loadScalata(); refreshViews(); }
     finally { btn.disabled = false; }
   }
@@ -1381,7 +1381,7 @@
   async function saveKelly(btn) {
     const v = Number(String($('kellyIn').value).replace(',', '.')); if (!(v >= 10)) { alert('Scrivi la cassa in euro, per esempio 500'); return; }
     if (!(await ensureKey())) return; btn.disabled = true;   // ensureKey dice solo se c'e' la chiave: la chiave e' la variabile 'key'
-    try { const r = await fetch('/api/tracker/kelly-cassa', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ cassa: v }) });
+    try { const r = await postRetry('/api/tracker/kelly-cassa', { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ cassa: v }) });
       const j = await r.json().catch(() => ({})); if (!r.ok) { alert('Non salvata: ' + (j.error || r.status)); return; } KELLY = j.cassa; memo.clear(); loadScalata(); refreshViews(); }
     finally { btn.disabled = false; }
   }
@@ -1611,7 +1611,7 @@
     box.innerHTML = `<div class="played">✅ Giocata a <b>${num(odd, 2)}</b> su ${esc(book)}</div>`;   // subito, prima di tutto il resto
     refreshViews();
     try {
-      const res = await fetch('/api/tracker/played/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book, odd, stake }) });
+      const res = await postRetry('/api/tracker/played/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ book, odd, stake }) });
       const d = await res.json().catch(() => ({}));
       if (res.status === 401) lock();
       if (!res.ok) { optimistic.delete(id); if (r) r.played = null; refreshViews(); alert(res.status === 401 ? 'La chiave non è più valida: riprova.' : 'Giocata non salvata: ' + (d.error || 'errore ' + res.status)); return; }
@@ -1633,7 +1633,7 @@
     optimistic.set(id, { skipped: r ? r.skipped : { id: null, reason, label: SKIP_TEXT[reason] || reason } });
     refreshViews();   // subito sulla scheda
     try {
-      const res = await fetch('/api/tracker/skipped/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
+      const res = await postRetry('/api/tracker/skipped/' + id, { method: 'POST', headers: { 'x-run-key': key, 'Content-Type': 'application/json' }, body: JSON.stringify({ reason }) });
       const d = await res.json().catch(() => ({}));
       if (res.status === 401) lock();
       if (!res.ok) { optimistic.delete(id); if (r) r.skipped = null; refreshViews(); alert('Non salvata: ' + (d.error || 'errore ' + res.status)); return; }
@@ -1736,7 +1736,7 @@
     if (!(await ensureKey())) return;
     btn.disabled = true;
     try {
-      const r = await fetch('/api/tracker/italia/' + id + '/keep', { method: 'POST', headers: { 'x-run-key': key } });
+      const r = await postRetry('/api/tracker/italia/' + id + '/keep', { method: 'POST', headers: { 'x-run-key': key } });
       if (r.status === 401) { lock(); alert('La chiave non è più valida: riprova.'); btn.disabled = false; return; }
       if (!r.ok) { alert('Errore: ' + r.status); btn.disabled = false; return; }
       checksDone.add(id); btn.closest('.ocheck').innerHTML = '✅ tenuto il tuo risultato'; refreshViews && refreshViews();
