@@ -1290,6 +1290,11 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
   const past = latestRows(all).filter(r => T(r.commence_time) <= nowMs && (!before || romeDay(T(r.commence_time)) < before));
   const dayList = [...new Set(past.map(r => romeDay(T(r.commence_time))))].slice(0, Math.max(1, Math.min(31, days)));
   const R = require('./results');
+  // 24/11 (Christian: "qui non esce Pinnacle e il pronostico"): pronostico di Pinnacle (prima lettura) e dell'IA anche nell'archivio
+  const GS = require('./guess'); try { GS.peekGuess(pool); } catch (e) { /* facoltativo */ }
+  const firstPin = new Map(); for (const r of [...all].sort((x, y) => T(x.created_at) - T(y.created_at))) if (!firstPin.has(r.event_id) && r.pin_h) firstPin.set(r.event_id, r);
+  const guessFor = r => { const f = firstPin.get(r.event_id), g = f ? GS.guessOf(f.pin_h, f.pin_d, f.pin_a) : null, a = GS.aiPickOf(r.event_id);
+    return g ? { pin: g.pick, ai: a ? a.pick : null, aiProb: a ? a.prob : null } : null; };
   const out = dayList.map(day => {
     const items = past.filter(r => romeDay(T(r.commence_time)) === day).map(r => {
       const first = firstOf.get(sigKey(r));
@@ -1297,7 +1302,7 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
         odd: Number(r.odd), clv_pct: r.clv_pct !== null ? Number(r.clv_pct) : null, result: r.result || null, result_score: r.result_score || null,
         win_prob: r.fair_prob ? Number(r.fair_prob) : null, final: !!(fin.get(first) || {}).final, final2: !!(fin2.get(r.id) || {}).final, final3: !!(fin3.get(first) || {}).final, final4: !!(fin4.get(r.id) || {}).final, final5: !!(fin5.get(r.id) || {}).final, final6: !!(fin6.get(r.id) || {}).final, thin: pinMarginPct(r) !== null && pinMarginPct(r) >= FINAL6.thinMarginPct,
         jl: jlByKey.has(sigKey(r)), top: jlByKey.has(sigKey(r)) && isTop(jlByKey.get(sigKey(r))),
-        six: !!(fin.get(first) || {}).final && isSix(r), played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null };
+        guess: guessFor(r), six: !!(fin.get(first) || {}).final && isSix(r), played: played.get(Number(r.id)) || playedByKey.get(sigKey(r)) || null };
     });
     const cl = items.map(i => i.clv_pct).filter(v => v !== null);
     return { day, count: items.length, avgClvPct: cl.length ? cl.reduce((a, b) => a + b, 0) / cl.length : null, positivePct: cl.length ? 100 * cl.filter(v => v > 0).length / cl.length : null,

@@ -137,6 +137,7 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
     if (l && out) { known.add(r.event_id); evs.push({ id: r.event_id, t: Date.parse(r.commence_time), f, l, out, ctx: contextOf(r), grp: ownGroup(r), elo: eloOf ? eloOf(r.home, r.away) : null, extra: true }); }
   }
   const model = learn(evs, cal, adjust, ownRows);
+  lastPreds = model.preds;   // 24/11: il pronostico IA di ogni partita gia' giocata, per l'archivio
   for (const [ev, r] of first) {
     const g = guessOf(r.pin_h, r.pin_d, r.pin_a), out = outcomeOf(score.get(ev));
     if (!g || !out) continue;
@@ -158,7 +159,9 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
   return { liveSince, all: fin(all), live: fin(live), ai: { all: fin(aiAll), live: fin(aiLive), differ, differAi, differPin, weights: model.weights, own: model.own, ownN: model.own.n, byContext: model.byContext, ctxLoss: model.ctxLoss, contexts: CONTEXTS, learnedOn: model.learnedOn, withCal: !!cal, extra: evs.filter(e => e.extra).length, weekly: weeklyOf(evs, model.preds), seen: fin(seenAi), sure: fin(sureAi), sureMin: SURE, withElo: model.withElo, names: Object.fromEntries(KEYS.map(k => [k, EXPERTS[k].name])) }, byPick: { '1': fin(by['1']), X: fin(by.X), '2': fin(by['2']) }, seen: fin(seenPin), recent: recent.slice(0, 10) };
 }
 
-let cacheG = null;
+let cacheG = null, lastPreds = new Map();
+/** 24/11: pronostico IA (imparato senza vedere il risultato) di una partita passata, dall'ultimo calcolo; null se non c'e'. */
+const aiPickOf = ev => lastPreds.get(ev) || null;
 /** Statistiche e pesi attuali (in memoria 10 minuti): servono anche ai pronostici delle partite aperte. */
 async function getGuessCached(pool, { nowMs = Date.now() } = {}) {
   if (cacheG && nowMs - cacheG.at < (cacheG.full ? 10 : 1) * 60000) return cacheG.val;
@@ -188,4 +191,4 @@ async function getGuess(pool) {
   return guessStats(rows, { cal, adjust: C.adjust, eloOf, ownRows, extraRows: ownRows });
 }
 
-module.exports = { peekGuess, weeklyOf, weekOf, ownBuild, ownShift, ownGroup, contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };
+module.exports = { aiPickOf, peekGuess, weeklyOf, weekOf, ownBuild, ownShift, ownGroup, contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };
