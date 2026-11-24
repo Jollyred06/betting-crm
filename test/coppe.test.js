@@ -14,7 +14,7 @@ assert.ok(!I.isCoppe(r('FA Cup', 1.9, 3)) && !I.isCoppe(r('FA Cup', 3.6, 3)), 'q
 assert.ok(!I.isCoppe(r('FA Cup', 2.6, 1.5)), 'vantaggio sotto il 2%: no');
 assert.ok(!I.isCoppe(r('FA Cup', 2.6, 3, { play: { odd: 3.8, book: 'snai' } })), 'quota dove si gioca oltre 3,50: no');
 // lista da giocare
-const now = Date.parse('2026-11-17T12:00:00Z'), item = { ...r('EFL Trophy', 2.8, 4), coppe: true, play: { book: 'snai', odd: 2.8 }, win_prob: 0.4, commence_time: '2026-11-17T19:45:00Z' };
+const now = Date.parse('2026-11-17T12:00:00Z'), item = { ...r('EFL Trophy', 2.8, 6), coppe: true, play: { book: 'snai', odd: 2.8 }, win_prob: 0.4, commence_time: '2026-11-17T19:45:00Z' };
 assert.strictEqual(I.pickBest([item], { nowMs: now, team: { coppe: false } }).length, 0, 'squadra in panchina: non si gioca');
 assert.strictEqual(I.pickBest([item], { nowMs: now, team: { coppe: true } }).length, 1, 'in campo: si gioca anche se e\' coppa');
 assert.strictEqual(I.pickBest([{ ...item, market: { dir: 'contro' } }], { nowMs: now, team: { coppe: true } }).length, 0, 'mercato contro: no');
@@ -23,3 +23,5 @@ const pick = A.pickNew([{ ...r('FA Cup', 2.6, 3), id: 1, created_at: '2026-11-17
   { sinceMs: Date.parse('2026-11-17T00:00:00Z'), nowMs: now, taken: { ids: [], keys: [] }, isOceani: () => false, isCoppe: I.isCoppe, primaryRows: x => x });
 assert.strictEqual(pick.length, 1);
 console.log('coppe: ok');
+// 24/11: nella lista da giocare solo dal 5% di vantaggio (regola unica dal 23/11)
+assert.strictEqual(I.pickBest([{ ...item, edge_pct: 3 }], { nowMs: now, team: { coppe: true } }).length, 0, 'coppa sotto il 5%: solo sulla carta');

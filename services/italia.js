@@ -1103,7 +1103,10 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
   const okProva = r => tm.prova && r.prova && !(Number(r.odd) > PROVA.maxOdd);
   const okCoppe = r => tm.coppe && r.coppe;
   const liq = r => (okLiq(r) ? 1 : 0);
-  return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r) || okProva(r) || okCoppe(r)) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs && !(r.market && r.market.dir === 'contro'))
+  // 24/11 (Christian: "perche' esce tutto sto papillo?"): dal 23/11 la regola e' una sola, vantaggio dal 5% (vedi OCEANI).
+  // 💧 liquide, 🧪 Prova e 🏆 coppe restano misurate sulla carta, ma nella lista da giocare entrano solo dal 5%.
+  const okEdge = r => r.edge_pct == null || Number(r.edge_pct) >= OCEANI.minEdge;
+  return items.filter(r => ((tm.fascia && r.final4 && ok(r)) || okLiq(r) || okExtra(r) || okProva(r) || okCoppe(r)) && okEdge(r) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs && !(r.market && r.market.dir === 'contro'))
     .sort((a, b) => ((tm.oceani && b.oceani ? 1 : 0) - (tm.oceani && a.oceani ? 1 : 0)) || ((b.score ? b.score.vote : -1) - (a.score ? a.score.vote : -1)) || (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);   // 4 novembre: prima il 🧮 voto piu' alto
 }
 
