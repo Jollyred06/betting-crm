@@ -46,7 +46,8 @@ app.use('/api', (req, res, next) => {
   // 1° novembre 2026: una giocata, una non giocata o un risultato cambiano solo segnali e giocate. Si butta solo quello e si
   // riprepara solo quello, piu' tardi: prima si ricalcolava TUTTO subito e il server restava occupato per secondi (tocchi lenti).
   if (/^\/tracker\/(played|skipped|italia\/\d+\/(result|keep))/.test(req.path)) {
-    const re = /^\/api\/tracker\/(italia|played|archive|books)/;
+    // 24/11: anche il saldo per sito, la cassa Kelly e la scalata dipendono dalle giocate (prima restavano vecchi fino a 5 minuti)
+    const re = /^\/api\/tracker\/(italia|played|archive|books|casse-siti|kelly|scalata)/;
     cache.clearMatching(re);
     res.on('finish', () => { cache.clearMatching(re); cache.warm({ port: PORT, delayMs: 2500, paths: ['/api/tracker/italia', '/api/tracker/played'] }); });
     return next();
