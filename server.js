@@ -80,7 +80,7 @@ app.listen(PORT, () => {
   // Un solo servizio gratuito acceso tutto il mese: 720-744 ore, dentro le 750 di Render. Si spegne con KEEP_AWAKE=false.
   // 24/11: il server ora resta sveglio (sotto), quindi si riavvia solo dopo una pubblicazione: prepara subito le pagine principali,
   // cosi' la prima apertura dopo un aggiornamento non aspetta 10 secondi. Una volta per avvio, non a ogni risveglio.
-  if (process.env.DATABASE_URL && process.env.WARM_ON_BOOT !== 'false') require('./services/cache').warm({ port: PORT, delayMs: 4000, paths: ['/api/tracker/italia', '/api/tracker/scalata', '/api/tracker/played', '/api/tracker/learning', '/api/tracker/books', '/api/tracker/team', '/api/tracker/brain', '/api/tracker/guess', '/api/tracker/strategies', '/api/tracker/training'] });   // 25/11: anche Analisi
+  if (process.env.DATABASE_URL && process.env.WARM_ON_BOOT !== 'false') require('./services/cache').warm({ port: PORT, delayMs: 4000, paths: ['/api/tracker/learning', '/api/tracker/italia', '/api/tracker/scalata', '/api/tracker/played', '/api/tracker/books', '/api/tracker/team', '/api/tracker/brain', '/api/tracker/guess', '/api/tracker/strategies', '/api/tracker/training'] });   // 25/11: anche Analisi
   const self = process.env.RENDER_EXTERNAL_URL;
   if (self && process.env.KEEP_AWAKE !== 'false') setInterval(() => { try { require(self.startsWith('https') ? 'https' : 'http').get(`${self}/health`, r => r.resume()).on('error', () => {}); } catch (e) { /* mai fermare il server per un ping */ } }, 10 * 60000);
 });

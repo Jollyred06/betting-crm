@@ -1563,6 +1563,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     out.agreeStats = { star: ag(liqRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd)), all: ag(primaryRows(all)) };
   }
   // 🤝 25/11: le partite "tutti d'accordo" (giocata = Pinnacle = IA, quota da 1,60) si registrano sulla carta; non blocca la pagina
+  // 🧠 25/11: il giudizio dell'IA che impara (sceglie le ⭐ che rendono di piu': prova a ritroso +6,8% contro +3,6% delle altre ⭐)
+  if (strategy === 'I' && out.recent) { const LR = require('./learner'); for (const r of out.recent) { try { const q = LR.quickPick(r); if (q) r.learn = q; } catch (e) { /* facoltativo */ } } }
   if (strategy === 'I' && out.recent) require('./concordi').record(pool, out.recent).catch(e => console.warn('concordi:', e.message));
   TM.totale = Date.now() - T0; out.timing = TM;
   return out;

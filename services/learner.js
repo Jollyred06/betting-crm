@@ -24,6 +24,10 @@ const FEATURES = {
   vantaggio: { label: 'Vantaggio del segnale', of: r => { const e = num(r.edge_pct); return e < 3 ? '2–3%' : e < 4 ? '3–4%' : e < 6 ? '4–6%' : '6% e oltre'; } },
   esito: { label: 'Esito', of: r => ({ home: 'segno 1', draw: 'pareggio', away: 'segno 2' }[r.selection] || r.selection) },
   giorno: { label: 'Giorno della partita', of: r => { const d = WEEKDAY.format(new Date(r.commence_time)); return d === 'Sat' || d === 'Sun' ? 'weekend' : 'giorni feriali'; } },
+  // 25/11/2026: l'esito favorito da Pinnacle (prova a ritroso sul backup del 25/11: scelte +5,44% contro +5,26% senza, scartate +3,02%
+  // contro +3,11%; tra le ⭐ dal 5%: favorito +6,4%, non favorito +4,1%). Margine e numero di siti sopra il giusto provati e scartati: peggioravano.
+  favorito: { label: 'Esito favorito da Pinnacle', of: r => { const h = num(r.pin_h), d = num(r.pin_d), a = num(r.pin_a); if (!(h > 1 && d > 1 && a > 1)) return 'non noto';
+    const p = { home: 1 / h, draw: 1 / d, away: 1 / a }; return p[r.selection] >= Math.max(p.home, p.draw, p.away) ? 'esito favorito' : 'non favorito'; } },
   quota: { label: 'Quota', of: r => { const o = num(r.odd); return o < 1.6 ? 'sotto 1,60' : o <= 2.6 ? '1,60–2,60' : o <= 3.5 ? '2,60–3,50' : 'sopra 3,50'; } }
 };
 
@@ -113,4 +117,11 @@ async function getLearning(pool, nowMs = Date.now()) {
   return buildLearning(I.primaryRows(rows), nowMs);
 }
 
-module.exports = { calibration, K, DAMP, MIN_TRAIN, PICK_MARGIN, FEATURES, fit, predict, walkForward, buildLearning, getLearning, band };
+/** 25/11: il giudizio del modello per le schede di oggi, con l'ULTIMO modello gia' calcolato (/learning o /advice): non rifa' il
+ *  calcolo pesante. null se il modello non c'e' ancora o non ha dimostrato di scegliere meglio (prova a ritroso). */
+function quickPick(r) {
+  if (!heavy || !heavy.wf || !heavy.wf.proven) return null;
+  const pred = predict(heavy.model, r); return { pred, pick: pred >= heavy.model.mu + PICK_MARGIN };
+}
+
+module.exports = { quickPick, calibration, K, DAMP, MIN_TRAIN, PICK_MARGIN, FEATURES, fit, predict, walkForward, buildLearning, getLearning, band };

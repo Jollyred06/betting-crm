@@ -1195,7 +1195,7 @@
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.coppe ? 'coppe' : r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.svago && !r.oceani && !r.prova && !r.coppe ? '🎈 Svago' : r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}</span>${voteChip(r)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>${r.svagoWarn ? `<div class="omin" style="color:var(--warn)"><b>⚠️ Non giocarla:</b> ${esc(r.svagoWarn)}</div>` : ''}
         <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${r.played || r.skipped || r.svago ? '' : stakeLine(r)}${probLine(r)}
-        ${drawLine(r)}${guessLine(r)}${r.guess && r.guess.pick === r.pick && !r.svago ? `<div class="favtag">🎯 <b>favorita</b> · ${r.guess.ai && r.guess.ai.pick === r.pick ? 'Pinnacle e IA d\'accordo' : 'per Pinnacle'}</div>` : ''}
+        ${drawLine(r)}${guessLine(r)}${!r.svago ? starTags(r) : ''}
         <div class="ochips">${isoChip(r)}</div>
         ${r.played || r.skipped ? '' : bookLink(r)}
         ${playActions(r)}</div>
@@ -1400,7 +1400,15 @@
   // 🌡️ TERMOMETRO DEL RECUPERO (25/11, chiesto da Christian): non cambia le puntate. Dice quanto sei sopra/sotto con le giocate vere
   // (dal 21/11), quanto hai fatto oggi rispetto al freno di 10 €, e se sei sotto quanto tempo serve in media per tornare in pari
   // con il valore attuale e il tuo ritmo di gioco; se il valore alla chiusura e' buono, stai perdendo per sfortuna.
-  const favFirst = L => L.sort((a, b) => (b.guess && b.guess.pick === b.pick ? 1 : 0) - (a.guess && a.guess.pick === a.pick ? 1 : 0));
+  // 25/11: in cima le ⭐ scelte dall'IA che impara, poi le favorite
+  const isFav = r => !!(r.guess && r.guess.pick === r.pick), isLearn = r => !!(r.learn && r.learn.pick);
+  const favFirst = L => L.sort((a, b) => (2 * isLearn(b) + isFav(b)) - (2 * isLearn(a) + isFav(a)));
+  function starTags(r) {
+    const t = [];
+    if (isLearn(r)) t.push(`🧠 <b>scelta dall'IA</b> (tra le ⭐ quelle che rendono di più)`);
+    if (isFav(r)) t.push(`🎯 <b>favorita</b> · ${r.guess.ai && r.guess.ai.pick === r.pick ? 'Pinnacle e IA d\'accordo' : 'per Pinnacle'}`);
+    return t.length ? `<div class="favtag">${t.join('<br>')}</div>` : '';
+  }
   function thermoHtml() {
     // 25/11 sera: i soldi veri si contano dai SALDI DEI SITI (quello che vedi sui siti, scalata compresa), non dalle giocate
     // segnate (dentro ci sono anche le prove "Ho giocato" dei primi giorni, da 2 €, anche su siti che non hai)
@@ -1551,7 +1559,7 @@
               return `<small class="guess">🤖 Pronostico IA: <b>${r.guess.ai ? r.guess.ai.pick : r.guess.pick}</b> (${num(100 * (r.guess.ai ? r.guess.ai.prob : r.guess.prob), 0)}%)${mark(r.guess.ai ? r.guess.ai.pick : r.guess.pick)} · Pinnacle: ${r.guess.pick}${mark(r.guess.pick)}${(r.guess.ai ? r.guess.ai.pick : r.guess.pick) === r.pick ? ' · <b class="agree">🤝 d\'accordo con la giocata</b>' : ''}</small>`; })() : ''}`;
     // 25/11 (analisi backup): tra le ⭐ quelle sull'esito favorito da Pinnacle rendono di piu' (+6,4% contro +4,1%, stabile nei due periodi);
     // l'IA dice quasi sempre lo stesso esito di Pinnacle, quindi e' un solo segno, non due. Resta la riga IA/Pinnacle di sempre.
-    const favHtml = r.best && r.guess && r.guess.pick === r.pick ? `<div class="favtag">🎯 <b>favorita</b> · ${r.guess.ai && r.guess.ai.pick === r.pick ? 'Pinnacle e IA d\'accordo' : 'per Pinnacle'}: tra le ⭐ sono le più affidabili</div>` : '';
+    const favHtml = r.best ? starTags(r) : '';
     const detHtml = `
             <details class="tdet" data-k="t${r.id}"><summary>dettagli</summary>
               <div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
