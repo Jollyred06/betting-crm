@@ -1133,7 +1133,7 @@
   // 💎 Top (Justice League con vantaggio dal 3% e margine sotto il 5%) · ⭐ Buona (le altre Justice League) · ⚪ Debole (tutto il resto, non si gioca)
   const tierOf = r => (!r ? null : r.top ? ['hi', '💎 Top'] : r.oceani ? ['mid', '⭐ Buona'] : r.prova ? ['pr', '🧪 Prova'] : r.coppe ? ['mid', '🏆 Coppa'] : ['lo', '⚪ Debole']);
   const voteChip = r => { const t = tierOf(r); return t ? `<span class="vote ${t[0]}" title="💎 Top e ⭐ Buona si giocano; 🧪 Prova solo in simulazione; ⚪ Debole no">${t[1]}</span>` : ''; };
-  // probabilita' di vincere (prezzo giusto di Pinnacle) e guadagno atteso sui 2 euro alla quota che giochi
+  // probabilita' di vincere (prezzo giusto di Pinnacle) e guadagno atteso sulla puntata (1 € lo svago, 2 € le altre) alla quota che giochi
   // 20/11/2026: quanto puntare. Sotto i 300 euro di cassa 2 euro fissi; sopra, un quarto di Kelly (minimo 2, massimo 2% della cassa)
   // puntata minima per sito (21/11: Eurobet 1 euro, detto da Christian; gli altri quando li sappiamo)
   const BOOK_MIN = { eurobet: 1, goldbet: 1, '888sport': 1, '888sport_it': 1, snai: 1 };   // 23/11 Snai da 1 €   // 22/11: anche 888sport da 1 €   // 21/11 da Christian, verificati sui siti
@@ -1160,9 +1160,9 @@
   function probLine(r) {
     const p = r && Number(r.win_prob), odd = r && Number(r.play ? r.play.odd : r.odd);
     if (!(p > 0 && p < 1) || !(odd > 1)) return '';
-    const ev = 2 * (odd * p - 1);
+    const stk = r.svago && !r.best ? 1 : 2, ev = stk * (odd * p - 1);   // 25/11: lo svago si gioca da 1 €
     const m = r.market, mk = !m ? '' : m.dir === 'contro' ? ` · <b class="neg">📉 mercato contro (−${num(Math.abs(m.mv), 1)} punti)</b>` : m.dir === 'con' ? ` · <b class="pos">📈 mercato con noi (+${num(m.mv, 1)})</b>` : ' · ➖ mercato fermo';
-    return `<div class="probline">📊 Vince il <b>${num(p * 100, 0)}%</b> (circa ${num(p * 10, 0)} su 10) · guadagno atteso <b class="${ev >= 0 ? 'pos' : 'neg'}">${ev >= 0 ? '+' : '−'}${money(Math.abs(ev))}</b> su 2 €${mk}</div>`;
+    return `<div class="probline">📊 Vince il <b>${num(p * 100, 0)}%</b> (circa ${num(p * 10, 0)} su 10) · guadagno atteso <b class="${ev >= 0 ? 'pos' : 'neg'}">${ev >= 0 ? '+' : '−'}${money(Math.abs(ev))}</b> su ${stk} €${mk}</div>`;
   }
   function drawLine(r) {
     if (!r || r.draw_prob === null || r.draw_prob === undefined || r.selection === 'draw') return '';
