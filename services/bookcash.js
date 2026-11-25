@@ -47,8 +47,11 @@ async function getBookCash(pool, { nowMs = Date.now() } = {}) {
     const set = st.books[k], mine = bets.filter(b => b.book === k);
     return { key: k, name: NAMES[k] || k, ...(set ? balanceOf(set, mine, nowMs) : { saldo: null, open: mine.filter(b => !b.result).reduce((a, b) => a + Number(b.stake || 0), 0) }) };
   });
-  const known = books.filter(b => b.saldo !== null);
-  return { books, total: known.length ? Math.round(known.reduce((a, b) => a + b.saldo, 0) * 100) / 100 : null };
+  // 25/11: il versato di ogni sito = il primo saldo scritto (dall'archivio); guadagno vero = saldo + in gioco - versato
+  for (const b of books) { const first = (st.log || []).find(l => l.book === b.key); b.deposit = first ? Number(first.saldo) : (st.books[b.key] ? Number(st.books[b.key].saldo) : null); }
+  const known = books.filter(b => b.saldo !== null), r2 = x => Math.round(x * 100) / 100;
+  const deposited = known.reduce((a, b) => a + (b.deposit || 0), 0), now = known.reduce((a, b) => a + b.saldo + (b.open || 0), 0);
+  return { books, total: known.length ? r2(known.reduce((a, b) => a + b.saldo, 0)) : null, deposited: known.length ? r2(deposited) : null, realPnl: known.length ? r2(now - deposited) : null };
 }
 
 async function setBookCash(pool, book, saldo) {

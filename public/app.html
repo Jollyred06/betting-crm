@@ -1233,7 +1233,7 @@
           <div class="ostop"><div class="ostopbar"><i style="width:${pos}%"></i></div><span>stop a ${money(b.stop)}</span></div>
           <div class="ometa"><span>Oggi: <b>${b.playedToday} su ${b.maxPerDay}</b> giocate</span>${ck && ck.n ? `<span>${sdot(ck.level === 'allarme' ? 'bad' : ck.level === 'attenzione' ? 'warn' : ck.level === 'ok' ? 'ok' : 'info')}Lista: ${ck.won} vinte su ${ck.n} (attese ${num(ck.expected, 1)})</span>` : ''}</div>
         </section>
-        ${thermoHtml(P)}
+        <div id="thermoBox">${(window.__P = P, thermoHtml())}</div>
         <section class="block">
           <h3>⭐ Da giocare <small class="muted">${b.stopped ? '' : room ? `· ${KELLY ? 'puntata Kelly su ogni riga' : "2 € l'una"} · ancora ${room} oggi` : '· per oggi basta così'}</small></h3>
           ${b.stopped ? (dayOnly ? `<div class="callout warn"><b>${esc(b.stopWhy)}.</b> È il freno per le giornate storte: si riparte da solo${/settimana/.test(b.stopWhy) ? ' lunedì' : ' domani'}. La scalata non si ferma.</div>` : `<div class="callout warn"><b>Stop a ${money(b.stop)} raggiunto.</b> Niente giocate finché non controlliamo i numeri insieme: mandami il backup.</div>`)
@@ -1341,6 +1341,7 @@
     const kb = $('kellyBox');
     try {
       const [S, d, BC] = await Promise.all([getJson('/api/tracker/scalata'), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/casse-siti').catch(() => null)]);
+      if (BC) { window.__BC = BC; const tb = $('thermoBox'); if (tb) tb.innerHTML = thermoHtml(); }
       BOOKCASH = BC;
       const kWas = KELLY; KELLY = (S.kelly && S.kelly.now > 0 ? S.kelly.now : S.kellyCassa) || null;
       // 24/11: Oggi a volte si disegnava prima di sapere la cassa Kelly ("2 € l'una" invece della puntata Kelly): appena arriva, si ridisegna
@@ -1397,19 +1398,22 @@
   // 🌡️ TERMOMETRO DEL RECUPERO (25/11, chiesto da Christian): non cambia le puntate. Dice quanto sei sopra/sotto con le giocate vere
   // (dal 21/11), quanto hai fatto oggi rispetto al freno di 10 €, e se sei sotto quanto tempo serve in media per tornare in pari
   // con il valore attuale e il tuo ritmo di gioco; se il valore alla chiusura e' buono, stai perdendo per sfortuna.
-  function thermoHtml(P) {
+  function thermoHtml() {
+    // 25/11 sera: i soldi veri si contano dai SALDI DEI SITI (quello che vedi sui siti, scalata compresa), non dalle giocate
+    // segnate (dentro ci sono anche le prove "Ho giocato" dei primi giorni, da 2 €, anche su siti che non hai)
     try {
-      const items = ((P && P.items) || []).filter(x => String(x.at || '') >= '2026-11-21');
-      if (!items.length) return '';
+      const BC = window.__BC, P = window.__P;
+      if (!BC || BC.realPnl === null || BC.realPnl === undefined) return '';
       const romeDay = t => new Date(t).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }), today = romeDay(Date.now());
-      const tot = items.reduce((a, x) => a + (x.pnlEur || 0), 0), day = items.filter(x => romeDay(x.at) === today).reduce((a, x) => a + (x.pnlEur || 0), 0);
+      const items = ((P && P.items) || []).filter(x => String(x.at || '') >= '2026-11-21');
+      const tot = BC.realPnl, day = items.filter(x => romeDay(x.at) === today).reduce((a, x) => a + (x.pnlEur || 0), 0);
       const clvL = items.filter(x => x.clvPct !== null && x.clvPct !== undefined), clv = clvL.length ? clvL.reduce((a, x) => a + x.clvPct, 0) / clvL.length : null;
-      const days = Math.max(1, (Date.now() - Date.parse('2026-11-21T00:00:00Z')) / 86400000), perDay = items.length / days, avgStake = items.reduce((a, x) => a + (x.stake || 0), 0) / items.length;
+      const days = Math.max(1, (Date.now() - Date.parse('2026-11-21T00:00:00Z')) / 86400000), perDay = Math.max(1, items.length / days), avgStake = items.length ? items.reduce((a, x) => a + (x.stake || 0), 0) / items.length : 1;
       const gainDay = clv !== null && clv > 0 ? perDay * avgStake * clv / 100 : 0;
       const LIM = 10, lv = day <= -LIM ? 'bad' : tot < 0 ? 'warn' : 'ok';
-      const rec = tot < 0 ? (gainDay > 0 ? `Sei sotto di <b>${money(-tot)}</b>: con il valore di adesso (${pct(clv, 1)} alla chiusura) e il tuo ritmo (${num(perDay, 1)} giocate al giorno) torni in pari in media in <b>circa ${Math.max(1, Math.round(-tot / gainDay))} giorni</b>, senza alzare le puntate.` : `Sei sotto di <b>${money(-tot)}</b> e il valore alla chiusura non è ancora positivo: non alzare le puntate, aspetta che le ⭐ tornino a rendere.`) : `Sei sopra di <b>${money(tot)}</b> con le giocate vere: continua così, stesse puntate.`;
+      const rec = tot < -0.005 ? (gainDay > 0 ? `Sei sotto di <b>${money(-tot)}</b>: con il valore di adesso (${pct(clv, 1)} alla chiusura) torni in pari in media in <b>circa ${Math.max(1, Math.round(-tot / gainDay))} giorni</b>, senza alzare le puntate.` : `Sei sotto di <b>${money(-tot)}</b>: non alzare le puntate, aspetta che le ⭐ tornino a rendere.`) : tot > 0.005 ? `Sei sopra di <b>${money(tot)}</b>: continua così, stesse puntate.` : 'Sei in pari.';
       const luck = clv !== null && clvL.length >= 10 ? (clv > 1 ? ' Il valore alla chiusura è buono: se perdi è sfortuna, il metodo funziona.' : ' Il valore alla chiusura è basso: guardiamolo insieme nella revisione.') : '';
-      return `<section class="thermo ${lv}"><div class="th1"><b>🌡️ Termometro</b> · giocate vere dal 21/11: <b class="${cls(tot)}">${signedMoney(tot)}</b> <small>(${items.length})</small> · oggi <b class="${cls(day)}">${signedMoney(day)}</b> <small>(freno a −${LIM} €)</small></div><div class="th2">${rec}${luck}</div></section>`;
+      return `<section class="thermo ${lv}"><div class="th1"><b>🌡️ Termometro</b> · sui siti hai <b>${money(BC.total + BC.books.reduce((a, b) => a + (b.saldo !== null ? b.open || 0 : 0), 0))}</b> <small>(versati ${money(BC.deposited)})</small> → <b class="${cls(tot)}">${signedMoney(tot)}</b> · oggi <b class="${cls(day)}">${signedMoney(day)}</b> <small>(freno a −${LIM} €)</small></div><div class="th2">${rec}${luck}</div></section>`;
     } catch (e) { return ''; }
   }
   // 🤝 TUTTI D'ACCORDO (25/11): giocata = Pinnacle = IA, quota da 1,60; sulla carta a 1 € per 2-3 settimane
