@@ -144,6 +144,7 @@
   .playbtn { margin-top:8px; border:1.5px solid var(--ink); background:none; color:var(--ink); border-radius:999px; padding:6px 14px; font-weight:700; font-size:13.5px; cursor:pointer; }
   .played.no { color:var(--muted); } .skipbtn { border-color:var(--line); color:var(--muted); }
   .arow .res { font-size:13px; font-weight:800; white-space:nowrap; } .arow .res.won { color:var(--ok); } .arow .res.lost { color:var(--bad); } .arow .res.wait { color:var(--muted); font-weight:600; } .arow .m small { display:block; }
+  .favtag { margin:4px 0 2px; font-size:14px; color:var(--ok); }
   .vbadge { display:inline-block; margin:0 0 6px; padding:3px 10px; border-radius:999px; font-size:13px; font-weight:800; letter-spacing:.02em; } .vbadge.go { border:1.5px solid var(--ok); color:var(--ok); } .vbadge.no { border:1.5px solid var(--bad); color:var(--bad); }
   .played { margin-top:8px; font-size:13.5px; color:var(--ok); font-weight:600; }
   .bestbox { margin:0 0 18px; } .wcheck { display:flex; flex-direction:column; gap:2px; padding:8px 14px; margin:-4px 0 10px; font-size:13.5px; border-left:3px solid var(--line); } .wcheck small { color:var(--muted); } .wcheck.attenzione { border-color:var(--warn, #c90); } .wcheck.allarme { border-color:var(--bad); background:color-mix(in srgb, var(--bad) 8%, transparent); } .wcheck.ok { border-color:var(--ok); } .ticket.bestt { border-color:var(--ok); box-shadow:0 0 0 1.5px var(--ok) inset; }
@@ -1194,7 +1195,7 @@
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.coppe ? 'coppe' : r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.svago && !r.oceani && !r.prova && !r.coppe ? '🎈 Svago' : r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}</span>${voteChip(r)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>${r.svagoWarn ? `<div class="omin" style="color:var(--warn)"><b>⚠️ Non giocarla:</b> ${esc(r.svagoWarn)}</div>` : ''}
         <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${r.played || r.skipped || r.svago ? '' : stakeLine(r)}${probLine(r)}
-        ${drawLine(r)}${guessLine(r)}
+        ${drawLine(r)}${guessLine(r)}${r.guess && r.guess.pick === r.pick && !r.svago ? `<div class="favtag">🎯 <b>favorita</b> · ${r.guess.ai && r.guess.ai.pick === r.pick ? 'Pinnacle e IA d\'accordo' : 'per Pinnacle'}</div>` : ''}
         <div class="ochips">${isoChip(r)}</div>
         ${r.played || r.skipped ? '' : bookLink(r)}
         ${playActions(r)}</div>
@@ -1210,6 +1211,7 @@
       const b = d.budget || { start: 100, balance: 100, pnl: 0, stop: 60, playedToday: 0, maxPerDay: 5 }, ck = d.bestCheck;
       if (d.budget && Number.isFinite(Number(d.budget.balance))) BANK = Number(d.budget.balance);
       const best = (d.best || []).map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
+      favFirst(best);   // 25/11: le ⭐ sull'esito favorito (Pinnacle) in cima
       const todo = P && P.items ? P.items.filter(x => !['won', 'lost', 'void'].includes(x.result) && Date.parse(x.commence_time) < Date.now() - 150 * 60000) : [];
       // le giocate di oggi (anche finite) e quelle delle prossime partite, dalla prima che si gioca
       const romeDay = ms => new Date(ms).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }), today = romeDay(Date.now());
@@ -1398,6 +1400,7 @@
   // 🌡️ TERMOMETRO DEL RECUPERO (25/11, chiesto da Christian): non cambia le puntate. Dice quanto sei sopra/sotto con le giocate vere
   // (dal 21/11), quanto hai fatto oggi rispetto al freno di 10 €, e se sei sotto quanto tempo serve in media per tornare in pari
   // con il valore attuale e il tuo ritmo di gioco; se il valore alla chiusura e' buono, stai perdendo per sfortuna.
+  const favFirst = L => L.sort((a, b) => (b.guess && b.guess.pick === b.pick ? 1 : 0) - (a.guess && a.guess.pick === a.pick ? 1 : 0));
   function thermoHtml() {
     // 25/11 sera: i soldi veri si contano dai SALDI DEI SITI (quello che vedi sui siti, scalata compresa), non dalle giocate
     // segnate (dentro ci sono anche le prove "Ho giocato" dei primi giorni, da 2 €, anche su siti che non hai)
@@ -1546,6 +1549,9 @@
     const guessHtml = `
             ${r.guess ? (() => { const m = String(r.result_score || '').match(/(\d+)\s*-\s*(\d+)/), out = m ? (+m[1] > +m[2] ? '1' : +m[1] === +m[2] ? 'X' : '2') : null, mark = p => out ? (p === out ? ' ✅' : ' ❌') : '';
               return `<small class="guess">🤖 Pronostico IA: <b>${r.guess.ai ? r.guess.ai.pick : r.guess.pick}</b> (${num(100 * (r.guess.ai ? r.guess.ai.prob : r.guess.prob), 0)}%)${mark(r.guess.ai ? r.guess.ai.pick : r.guess.pick)} · Pinnacle: ${r.guess.pick}${mark(r.guess.pick)}${(r.guess.ai ? r.guess.ai.pick : r.guess.pick) === r.pick ? ' · <b class="agree">🤝 d\'accordo con la giocata</b>' : ''}</small>`; })() : ''}`;
+    // 25/11 (analisi backup): tra le ⭐ quelle sull'esito favorito da Pinnacle rendono di piu' (+6,4% contro +4,1%, stabile nei due periodi);
+    // l'IA dice quasi sempre lo stesso esito di Pinnacle, quindi e' un solo segno, non due. Resta la riga IA/Pinnacle di sempre.
+    const favHtml = r.best && r.guess && r.guess.pick === r.pick ? `<div class="favtag">🎯 <b>favorita</b> · ${r.guess.ai && r.guess.ai.pick === r.pick ? 'Pinnacle e IA d\'accordo' : 'per Pinnacle'}: tra le ⭐ sono le più affidabili</div>` : '';
     const detHtml = `
             <details class="tdet" data-k="t${r.id}"><summary>dettagli</summary>
               <div class="league">${esc(r.league || '')}</div><div class="livebox">${liveLink(r.home, r.away)}</div>
@@ -1562,7 +1568,7 @@
           <div class="tmain">
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="mline"><span><b>${esc(r.pick === '1' ? '1' : r.pick === '2' ? '2' : 'X')}</b> a <b class="num">${num(r.play ? r.play.odd : r.odd, 2)}</b>${r.play ? ` su ${esc(r.play.book)}` : ''}</span><span class="mno">⛔ <b>NON GIOCARE</b> · ${r.verdict ? esc(r.verdict.text) : 'non giocabile sui tuoi siti'}</span></div>
-            ${guessHtml}
+            ${guessHtml}${favHtml}
             ${r.result === 'won' || r.result === 'lost' ? `<div class="foot"><span class="chip ${r.result}">${r.result === 'won' ? 'vinta' : 'persa'} ${esc(r.result_score || '')}</span></div>` : ''}${r.result === 'void' ? `<div class="foot"><span class="chip">annullata/rinviata: non conta</span></div>` : ''}
             ${detHtml}
           </div>
@@ -1575,7 +1581,7 @@
             ${it && Date.parse(r.commence_time) > Date.now() && !r.played && !r.skipped ? (r.best ? '<div class="vbadge go">✅ DA GIOCARE</div>' : '<div class="vbadge no">⛔ NON GIOCARE</div>') : ''}
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="pick"><span>${it && r.play ? `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
-            ${guessHtml}
+            ${guessHtml}${favHtml}
             ${it && r.verdict ? `<div class="verdict ${r.verdict.play}"><b>${r.verdict.play === 'yes' ? `🟢 GIOCALA · ${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.liquid ? 'oceano' : 'fascia', 22)} ${r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}${r.top ? ' · 💎 Top' : ''}` : r.verdict.play === 'wait' ? '🟡 ASPETTA' : r.verdict.play === 'svago' ? '🎈 SVAGO' : '🔴 NON GIOCARE'}</b><span>${esc(r.verdict.text)}</span></div>` : ''}
             ${it && r.paper && r.paper.length && !(r.verdict && r.verdict.play === 'yes') ? `<small class="muted">🧪 Misurata sulla carta (${r.paper.map(k => k === 'bassa' ? 'fascia bassa' : k === 'medi' ? 'mercati medi' : k === 'alte' ? 'quote alte' : esc(k)).join(', ')}): non si gioca</small>` : ''}
             ${it && r.verdict && r.verdict.play === 'yes' && !r.played && !r.skipped ? `<div class="ohero">${voteChip(r)}</div>` + stakeLine(r) + probLine(r) + drawLine(r) : ''}
@@ -1591,6 +1597,7 @@
   function bestBox(d) {
     const b = d && d.budget; if (!b) return '';
     const ids = d.best || [], items = ids.map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
+      favFirst(items);   // 25/11: le ⭐ sull'esito favorito (Pinnacle) in cima
     items.forEach(r => { r.best = true; });
     const line = `<div class="budget${b.stopped ? ' stop' : ''}"><span>💶 Budget: <b>${money(b.start)}</b> → <b class="${cls(b.pnl)}">${money(b.balance)}</b>${b.open ? ` <small class="muted">(${money(b.open)} in gioco)</small>` : ''}</span><span class="muted">stop a ${money(b.stop)} · oggi ${b.playedToday} su ${b.maxPerDay}</span></div>`;
     // vinte contro attese della lista da giocare: la protezione contro un valore che sulla carta c'e' ma nei risultati no
