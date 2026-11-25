@@ -68,6 +68,9 @@ function pickScalata(cands, stake = 0) {
     if (stake > 0) { const ok = Object.entries(x.quotes || {}).filter(([k]) => minOf(k) <= stake + 1e-9).sort((a, b) => b[1] - a[1]); if (!ok.length) continue; [book, odd] = ok[0]; }
     const edgePct = (odd * x.prob - 1) * 100;
     if (odd < MIN_ODD || odd > MAX_ODD || edgePct < MIN_EDGE) continue;
+    // 25/11 (Christian): solo l'esito favorito. Sui suoi siti, quota 2-4, dal 3%: favorite vinte 42%, utile +3,6%, +5,3% alla chiusura;
+    // non favorite vinte 30%, utile -0,9% (pareggi -9,7%). Nella scalata ogni persa fa salire la puntata: meno perse di fila.
+    if (!x.isFav) continue;
     const y = { ...x, book, odd, edgePct }; out.push({ ...y, score: ladderScore(y) });
   }
   return out.sort((a, b) => b.score - a.score);

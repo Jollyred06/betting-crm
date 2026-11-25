@@ -8,7 +8,7 @@ const c = [
   { event_id: 'd', odd: 3.0, edgePct: 1, prob: 0.337 },
   { event_id: 'e', odd: 4.2, edgePct: 9, prob: 0.26 }   // 22/11: tetto a 4: sopra resta fuori
 ];
-assert.deepStrictEqual(S.pickScalata(c).map(x => x.event_id), ['b', 'c']);   // 24/11: vantaggio dal 3% (c: 2,6 x 0,40 = +4%, entra)
+assert.deepStrictEqual(S.pickScalata(c).map(x => x.event_id), ['b']);   // 25/11: solo favorite (c ha +4% ma non e' l'esito favorito)
 assert.ok(S.reasonsOf({ ...c[1], movedPts: 0.5 }).some(r => /IA d'accordo/.test(r)));
 // 23/11: D'Alembert a passi di 0,50 €. 1 € persa, 1,50 persa, 2 € vinta a 2,5 (+3) -> si scende a 1,50
 const day = i => `2026-11-${String(22 + i).padStart(2, '0')}`;
@@ -32,9 +32,9 @@ console.log('scalata D\'Alembert e tetto: ok');
 // 21/11: sotto 1 euro solo 888sport, con la sua quota e il suo valore
 {
   const cc = [
-    { event_id: 'x', prob: 0.45, odd: 2.5, edgePct: 12.5, quotes: { eurobet: 2.5, '888sport_it': 2.3 } },   // su 888 vale +3,5%: ok
-    { event_id: 'y', prob: 0.46, odd: 2.4, edgePct: 10.4, quotes: { goldbet: 2.4 } },                         // niente 888: fuori a 0,20
-    { event_id: 'z', prob: 0.47, odd: 2.3, edgePct: 8.1, quotes: { eurobet: 2.3, '888sport_it': 2.15 } }     // su 888 +1%: fuori
+    { event_id: 'x', prob: 0.45, isFav: true, odd: 2.5, edgePct: 12.5, quotes: { eurobet: 2.5, '888sport_it': 2.3 } },   // su 888 vale +3,5%: ok
+    { event_id: 'y', prob: 0.46, isFav: true, odd: 2.4, edgePct: 10.4, quotes: { goldbet: 2.4 } },                         // niente 888: fuori a 0,20
+    { event_id: 'z', prob: 0.47, isFav: true, odd: 2.3, edgePct: 8.1, quotes: { eurobet: 2.3, '888sport_it': 2.15 } }     // su 888 +1%: fuori
   ];
   // 22/11: anche 888sport ha il minimo di 1 €: sotto 1 € nessun sito
   const low = S.pickScalata(cc, 0.2);
