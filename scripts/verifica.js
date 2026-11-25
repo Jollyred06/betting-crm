@@ -36,6 +36,7 @@ const CHECKS = [
   ['/api/tracker/forma-test', r => (r.json && !!r.json.verdict) || 'prova della forma mancante'],
   ['/api/tracker/casse-siti', r => (r.json && Array.isArray(r.json.books)) || 'casse per sito mancanti'],
   ['/api/tracker/bivio', r => (r.json && !!r.json.all) || 'bivio mancante'],
+  ['/api/tracker/concordi', r => (r.json && r.json.since !== undefined) || 'tutti d\'accordo mancante'],
   // 22/11: l'ultima scansione non deve avere errori nei passi facoltativi (gol, sicure, migliori, bivio, scalata...)
   ['/api/tracker/scans?limit=20', r => { if (!Array.isArray(r.json)) return 'registro scansioni mancante'; const s = r.json.find(x => x.kind === 'scan'); return !s || !s.errori || 'errori nell\'ultima scansione: ' + Object.entries(s.errori).map(([k, v]) => k + ': ' + v).join(' · '); }]
 ];

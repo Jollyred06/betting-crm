@@ -113,6 +113,7 @@
   .ms .snap { padding:10px 0 4px 21px; }
   .callout { border-left:5px solid var(--muted); background:var(--tint); border-radius:0 12px 12px 0; padding:12px 14px; margin:12px 0; } .callout.plausible { border-left-color:var(--ok); } .callout.close, .callout.mixed { border-left-color:var(--bad); } .callout.none { border-left-color:var(--warn); }
   .callout.ok { border-left-color:var(--ok); } .callout.warn { border-left-color:var(--warn); }
+  .thermo { border-left:5px solid var(--ok); background:var(--tint); border-radius:0 12px 12px 0; padding:12px 14px; margin:10px 0; } .thermo.warn { border-left-color:var(--warn); } .thermo.bad { border-left-color:var(--bad); } .thermo .th1 { font-size:15px; } .thermo .th1 small { color:var(--muted); } .thermo .th2 { margin-top:6px; font-size:14px; color:var(--muted); } .thermo .th2 b { color:var(--ink); }
   .callout b { display:block; } .callout span { color:var(--muted); font-size:14.5px; }
   .hash { font:12.5px ui-monospace,Menlo,Consolas,monospace; color:var(--muted); margin-top:10px; word-break:break-all; }
   .rule ul { padding-left:18px; margin:8px 0 0; } .rule li { margin:7px 0; color:var(--muted); font-size:14.5px; }
@@ -319,6 +320,7 @@
     </section>
     <details class="fold"><summary><span>🧪 Sulla carta</span><small>il Bivio e le Più sicure: si misurano, non si giocano</small></summary>
     <section class="block bivio" id="bivioBox" hidden></section>
+    <section class="block bivio" id="concordiBox" hidden></section>
     <section class="block migliori" id="miglioriBox" hidden></section>
     <section class="block sicure" id="sicureBox" hidden></section>
     </details>
@@ -758,7 +760,7 @@
         return row(tl, '💎 Top contro le altre', `Top: ${line(T.top)}`, `Altre: ${line(T.rest)} · Top = vantaggio dal ${num(T.rules.minEdge, 0)}% e margine Pinnacle sotto il ${num(T.rules.maxMarginPct, 0)}%. Per ora si gioca tutto a 2 €: a fine novembre si decide`); })() : ''}
       ${i.marketStats && tm.oceani ? (() => { const M = i.marketStats, line = x => `${x.results && x.results.settled ? `${x.results.won} vinte su ${x.results.settled}, attese ${num(x.results.expected, 1)}, ${signedMoney(x.results.pnlEur || 0)}` : 'nessun risultato'}`;
         return row('info', '📉 Mercato contro: non si gioca', `Justice League con Pinnacle spostato contro di ${num(M.rules.againstPts, 0)} punto o più: ${line(M.against)}`, `Le altre: ${line(M.other)} · Se dopo il segnale il mercato si gira contro, il verdetto diventa 🔴`); })() : ''}
-      <p class="muted" style="margin:10px 0 0;font-size:13px;">${b ? (b.stopWhy ? `🛑 Freno: ${esc(b.stopWhy)}` : `Budget: stop a ${money(b.stop)} · freni: ${b.stopRule ? b.stopRule.dayLosses : 3} perse in un giorno, ${b.stopRule ? b.stopRule.weekLossEur : 15} € persi in una settimana`) : ''}${vl === 'info' ? ' · il valore si giudica da 20 segnali con chiusura' : ''}</p>
+      <p class="muted" style="margin:10px 0 0;font-size:13px;">${b ? (b.stopWhy ? `🛑 Freno: ${esc(b.stopWhy)}` : `Budget: stop a ${money(b.stop)} · freni: ${b.stopRule ? b.stopRule.dayLossEur : 10} € persi in un giorno, ${b.stopRule ? b.stopRule.weekLossEur : 15} € persi in una settimana`) : ''}${vl === 'info' ? ' · il valore si giudica da 20 segnali con chiusura' : ''}</p>
     </div>`;
   }
   function booksCard(B) {
@@ -1231,6 +1233,7 @@
           <div class="ostop"><div class="ostopbar"><i style="width:${pos}%"></i></div><span>stop a ${money(b.stop)}</span></div>
           <div class="ometa"><span>Oggi: <b>${b.playedToday} su ${b.maxPerDay}</b> giocate</span>${ck && ck.n ? `<span>${sdot(ck.level === 'allarme' ? 'bad' : ck.level === 'attenzione' ? 'warn' : ck.level === 'ok' ? 'ok' : 'info')}Lista: ${ck.won} vinte su ${ck.n} (attese ${num(ck.expected, 1)})</span>` : ''}</div>
         </section>
+        ${thermoHtml(P)}
         <section class="block">
           <h3>⭐ Da giocare <small class="muted">${b.stopped ? '' : room ? `· ${KELLY ? 'puntata Kelly su ogni riga' : "2 € l'una"} · ancora ${room} oggi` : '· per oggi basta così'}</small></h3>
           ${b.stopped ? (dayOnly ? `<div class="callout warn"><b>${esc(b.stopWhy)}.</b> È il freno per le giornate storte: si riparte da solo${/settimana/.test(b.stopWhy) ? ' lunedì' : ' domani'}. La scalata non si ferma.</div>` : `<div class="callout warn"><b>Stop a ${money(b.stop)} raggiunto.</b> Niente giocate finché non controlliamo i numeri insieme: mandami il backup.</div>`)
@@ -1391,6 +1394,39 @@
   }
   // 21/11: le prove sulla carta si colorano solo da 30 chiuse (prima: 0 su 1 diventava rosso)
   const paperDot = (n, pnl) => !(n >= 30) ? 'info' : pnl >= 0 ? 'ok' : 'bad';
+  // 🌡️ TERMOMETRO DEL RECUPERO (25/11, chiesto da Christian): non cambia le puntate. Dice quanto sei sopra/sotto con le giocate vere
+  // (dal 21/11), quanto hai fatto oggi rispetto al freno di 10 €, e se sei sotto quanto tempo serve in media per tornare in pari
+  // con il valore attuale e il tuo ritmo di gioco; se il valore alla chiusura e' buono, stai perdendo per sfortuna.
+  function thermoHtml(P) {
+    try {
+      const items = ((P && P.items) || []).filter(x => String(x.at || '') >= '2026-11-21');
+      if (!items.length) return '';
+      const romeDay = t => new Date(t).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome' }), today = romeDay(Date.now());
+      const tot = items.reduce((a, x) => a + (x.pnlEur || 0), 0), day = items.filter(x => romeDay(x.at) === today).reduce((a, x) => a + (x.pnlEur || 0), 0);
+      const clvL = items.filter(x => x.clvPct !== null && x.clvPct !== undefined), clv = clvL.length ? clvL.reduce((a, x) => a + x.clvPct, 0) / clvL.length : null;
+      const days = Math.max(1, (Date.now() - Date.parse('2026-11-21T00:00:00Z')) / 86400000), perDay = items.length / days, avgStake = items.reduce((a, x) => a + (x.stake || 0), 0) / items.length;
+      const gainDay = clv !== null && clv > 0 ? perDay * avgStake * clv / 100 : 0;
+      const LIM = 10, lv = day <= -LIM ? 'bad' : tot < 0 ? 'warn' : 'ok';
+      const rec = tot < 0 ? (gainDay > 0 ? `Sei sotto di <b>${money(-tot)}</b>: con il valore di adesso (${pct(clv, 1)} alla chiusura) e il tuo ritmo (${num(perDay, 1)} giocate al giorno) torni in pari in media in <b>circa ${Math.max(1, Math.round(-tot / gainDay))} giorni</b>, senza alzare le puntate.` : `Sei sotto di <b>${money(-tot)}</b> e il valore alla chiusura non è ancora positivo: non alzare le puntate, aspetta che le ⭐ tornino a rendere.`) : `Sei sopra di <b>${money(tot)}</b> con le giocate vere: continua così, stesse puntate.`;
+      const luck = clv !== null && clvL.length >= 10 ? (clv > 1 ? ' Il valore alla chiusura è buono: se perdi è sfortuna, il metodo funziona.' : ' Il valore alla chiusura è basso: guardiamolo insieme nella revisione.') : '';
+      return `<section class="thermo ${lv}"><div class="th1"><b>🌡️ Termometro</b> · giocate vere dal 21/11: <b class="${cls(tot)}">${signedMoney(tot)}</b> <small>(${items.length})</small> · oggi <b class="${cls(day)}">${signedMoney(day)}</b> <small>(freno a −${LIM} €)</small></div><div class="th2">${rec}${luck}</div></section>`;
+    } catch (e) { return ''; }
+  }
+  // 🤝 TUTTI D'ACCORDO (25/11): giocata = Pinnacle = IA, quota da 1,60; sulla carta a 1 € per 2-3 settimane
+  async function loadConcordi() {
+    const box = $('concordiBox'); if (!box) return;
+    try {
+      const C = await getJson('/api/tracker/concordi');
+      const hhmm = x => new Date(x).toLocaleString('it-IT', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+      const next = (C.next || []).map(x => `<div class="prow"><span class="sdot ok"></span><div><b>${esc(x.home)} – ${esc(x.away)}</b> <span class="muted tnum">· ${hhmm(x.at)}</span><br><span class="tnum">🤝 <b>${x.pick}</b> a ${num(x.odd, 2)} su ${esc(x.book)}</span></div></div>`).join('');
+      const last = (C.recent || []).map(x => `<div class="prow"><span class="sdot ${x.result === 'won' ? 'ok' : 'bad'}"></span><div>${esc(x.home)} – ${esc(x.away)} <span class="muted tnum">· <b>${x.pick}</b> a ${num(x.odd, 2)} · ${x.result === 'won' ? '✅' : '❌'} ${esc(x.score || '')}</span></div></div>`).join('');
+      box.innerHTML = `<h3>🤝 Tutti d'accordo <small class="muted">· prova sulla carta, 1 € l'una</small></h3>
+        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Partite dove la giocata, Pinnacle e l'IA dicono la stessa cosa, a quota da 1,60. Sull'archivio rendevano di più (+4,8% contro la chiusura, le altre +2,6%): qui si verifica dal vivo. Non si giocano: se in 2–3 settimane reggono, diventano ⭐.</p>
+        <div class="prow" style="margin:0 0 8px"><span class="sdot ${paperDot(C.settled, C.pnlEur)}"></span><div><b>Dal 25/11</b> <span class="muted tnum">${C.settled ? `vinte ${C.won} su ${C.settled}, attese ${num(C.expected, 1)} · saldo ${signedMoney(C.pnlEur)}` : `${C.n} registrate, ancora nessuna chiusa`}${C.measured ? ` · valore alla chiusura ${pct(C.avgClvPct, 1)} su ${C.measured}` : ''}</span></div></div>
+        <div class="list">${next || '<p class="muted">Nessuna partita "tutti d\'accordo" in arrivo adesso: le cerca a ogni scansione.</p>'}</div>${last ? `<details class="pmore"><summary>ultime chiuse</summary>${last}</details>` : ''}`;
+      box.hidden = false;
+    } catch (e) { box.hidden = true; }
+  }
   // 🧭 IL BIVIO (22/11): per ogni partita il CRM dice cosa giocare (1, X o 2), scegliendo tra probabilita' e quota quella che fa crescere di piu' la cassa
   async function loadBivio() {
     const box = $('bivioBox'); if (!box) return;
@@ -1439,7 +1475,7 @@
     } catch (e) { box.hidden = true; }
   }
   async function loadHome() {
-    loadOggi(); loadContano(); loadScalata(); loadBivio(); loadSicure();   /* 22/11 sera: Migliori sulla carta tolte (c'e' il Bivio) */ loadAdvice(); loadToday(); loadCredits();
+    loadOggi(); loadContano(); loadScalata(); loadBivio(); loadConcordi(); loadSicure();   /* 22/11 sera: Migliori sulla carta tolte (c'e' il Bivio) */ loadAdvice(); loadToday(); loadCredits();
     // 22/11: niente piu' richieste per la strategia A (verdetto, tappe, bankroll di carta: nascosti dal 21/11) -> 3 richieste in meno all'apertura
     try {
       const h = await getJson('/api/tracker/health');
@@ -2008,7 +2044,7 @@
         item('info', 'In campo', onKeys.length ? onKeys.map(k => `${HERO[k].e} ${esc(HERO[k].n)}`).join(', ') + ' · i cambi li propone la pagella in Analisi, li approvi tu' : '—'),
         item(i && i.myBooks && i.myBooks.length ? 'ok' : 'warn', 'I tuoi siti', i && i.myBooks && i.myBooks.length ? esc(i.myBooks.join(', ')) + ' · si cambiano su Render, variabile MY_BOOKS' : 'Non impostati: su Render, variabile MY_BOOKS'),
         item('info', 'Puntata', `${money(2)} a partita · al massimo ${b.maxPerDay || 10} al giorno`),
-        item(b.stopped ? 'bad' : 'ok', 'I freni', `Ti fermi dopo ${sr.dayLosses || 3} perse in un giorno, ${money(sr.weekLossEur || 15)} persi in una settimana (da lunedì) o con il budget sotto ${money(b.stop || 60)}${b.balance !== undefined ? ` · ora ${money(b.balance)}` : ''}`),
+        item(b.stopped ? 'bad' : 'ok', 'I freni', `Ti fermi dopo ${money(sr.dayLossEur || 10)} persi in un giorno, ${money(sr.weekLossEur || 15)} persi in una settimana (da lunedì) o con il budget sotto ${money(b.stop || 60)}${b.balance !== undefined ? ` · ora ${money(b.balance)}` : ''}`),
         item('info', 'Lettura delle quote', `Dalle 9 alle 22, più volte al giorno, e la chiusura di Pinnacle poco prima del calcio d'inizio${i && i.quotaRemaining !== undefined && i.quotaRemaining !== null ? ` · crediti rimasti ${i.quotaRemaining} (si ricaricano il 12)` : ''}`),
         item(tg ? 'ok' : 'warn', 'Messaggi su Telegram', [c.notify.telegram && 'Telegram', c.notify.email && 'email', c.notify.whatsapp && 'WhatsApp'].filter(Boolean).join(', ') || 'Non collegato: per ora tutto si legge qui nell\'app.'),
         ''

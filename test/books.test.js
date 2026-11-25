@@ -298,8 +298,10 @@ console.log('books.test.js: tutti i controlli passati');
   const c = { start: 100, stop: 60, maxPerDay: 10 }, now = Date.parse('2026-11-05T18:00:00Z');   // giovedi'
   const L = (at, res, p) => ({ at, result: res, pnlEur: p, stake: 2 });
   assert.strictEqual(I.budgetOf({ items: [L('2026-11-05T10:00:00Z', 'lost', -2), L('2026-11-05T11:00:00Z', 'lost', -2)] }, c, now).stopped, false);
-  const b3 = I.budgetOf({ items: [L('2026-11-05T10:00:00Z', 'lost', -2), L('2026-11-05T11:00:00Z', 'lost', -2), L('2026-11-05T12:00:00Z', 'lost', -2)] }, c, now);
-  assert.strictEqual(b3.dayStop, true); assert.strictEqual(b3.stopped, true);
+  // 25/11: freno del giorno = 10 € persi oggi (3 perse da 2 € non bastano piu')
+  assert.strictEqual(I.budgetOf({ items: [L('2026-11-05T10:00:00Z', 'lost', -2), L('2026-11-05T11:00:00Z', 'lost', -2), L('2026-11-05T12:00:00Z', 'lost', -2)] }, c, now).dayStop, false);
+  const b3 = I.budgetOf({ items: [L('2026-11-05T10:00:00Z', 'lost', -4), L('2026-11-05T11:00:00Z', 'lost', -3), L('2026-11-05T12:00:00Z', 'lost', -3)] }, c, now);
+  assert.strictEqual(b3.dayStop, true); assert.strictEqual(b3.stopped, true); assert.ok(/10/.test(b3.stopWhy));
   const wk = I.budgetOf({ items: [L('2026-11-03T10:00:00Z', 'lost', -8), L('2026-11-04T10:00:00Z', 'lost', -8)] }, c, now);
   assert.strictEqual(wk.weekStop, true);
   assert.strictEqual(I.budgetOf({ items: [L('2026-10-30T10:00:00Z', 'lost', -8), L('2026-10-31T10:00:00Z', 'lost', -8)] }, c, now).weekStop, false);   // settimana scorsa

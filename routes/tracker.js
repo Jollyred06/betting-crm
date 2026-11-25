@@ -174,6 +174,9 @@ router.post('/casse-siti', async (req, res) => {
 });
 // 📶 traffico verso Supabase dall'ultimo avvio (22/11): chi legge quanti dati
 router.get('/db-traffic', (req, res) => { res.setHeader('Cache-Control', 'no-store'); res.json({ ...pool.traffic(), copie: require('../services/sigstore').stats() }); });
+router.get('/concordi', async (req, res) => {
+  try { res.json(await require('../services/concordi').getConcordi(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
+});
 router.get('/bivio', async (req, res) => {
   try { res.json(await require('../services/bivio').getBivio(pool)); } catch (err) { res.status(500).json({ error: err.message }); }
 });

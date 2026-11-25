@@ -1227,7 +1227,8 @@ function svagoBudget(items, c, nowMs = Date.now()) {
 }
 
 /** Budget dalle giocate vere: partenza + saldo delle chiuse; "in gioco" = puntate ancora senza risultato. */
-const STOPS = { dayLosses: 3, weekLossEur: 15 };
+// 25/11 (Christian): freno del giorno = 10 € persi oggi (tutte le giocate, anche lo svago), al posto di "3 perse"
+const STOPS = { dayLossEur: 10, weekLossEur: 15 };
 function budgetOf(played, c, nowMs = Date.now()) {
   const items = (played && played.items) || [];
   const pnl = items.reduce((a, x) => a + (x.pnlEur || 0), 0);
@@ -1240,10 +1241,11 @@ function budgetOf(played, c, nowMs = Date.now()) {
   const wd = (new Date(new Date(nowMs).toLocaleString('en-US', { timeZone: 'Europe/Rome' })).getDay() + 6) % 7;   // 0 = lunedi'
   const weekStart = nowMs - wd * 86400000, wkDays = new Set(Array.from({ length: wd + 1 }, (_, i) => ROME_DAY.format(new Date(weekStart + i * 86400000))));
   const weekPnl = items.filter(x => wkDays.has(ROME_DAY.format(new Date(x.at)))).reduce((a, x) => a + (x.pnlEur || 0), 0);
-  const dayStop = lostToday >= STOPS.dayLosses, weekStop = weekPnl <= -STOPS.weekLossEur;
-  return { start: c.start, stop: c.stop, maxPerDay: c.maxPerDay, balance, pnl, open, count: items.length, playedToday, lostToday, weekPnl,
+  const dayPnl = items.filter(x => ROME_DAY.format(new Date(x.at)) === today).reduce((a, x) => a + (x.pnlEur || 0), 0);
+  const dayStop = dayPnl <= -STOPS.dayLossEur, weekStop = weekPnl <= -STOPS.weekLossEur;
+  return { start: c.start, stop: c.stop, maxPerDay: c.maxPerDay, balance, pnl, open, count: items.length, playedToday, lostToday, dayPnl, weekPnl,
     dayStop, weekStop, stopRule: STOPS, stopped: balance <= c.stop || dayStop || weekStop,
-    stopWhy: balance <= c.stop ? 'stop del budget' : weekStop ? `settimana a ${weekPnl.toFixed(2)} €: pausa fino a lunedì` : dayStop ? `${lostToday} perse oggi: basta per oggi` : null };
+    stopWhy: balance <= c.stop ? 'stop del budget' : weekStop ? `settimana a ${weekPnl.toFixed(2)} €: pausa fino a lunedì` : dayStop ? `oggi hai perso ${(-dayPnl).toFixed(2).replace('.', ',')} € (limite ${STOPS.dayLossEur} €): basta per oggi` : null };
 }
 
 // ------------------------------------------------------------------------------------------- riepilogo per l'app
@@ -1560,6 +1562,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     const ag = l => { const y = l.filter(agreesWithFav), n = l.filter(r => !agreesWithFav(r)); return { yes: { ...oddsStats(y), results: R.resultStats(y) }, no: { ...oddsStats(n), results: R.resultStats(n) } }; };
     out.agreeStats = { star: ag(liqRows.filter(r => !isCup(r.league) && Number(r.odd) <= bc.maxOdd)), all: ag(primaryRows(all)) };
   }
+  // 🤝 25/11: le partite "tutti d'accordo" (giocata = Pinnacle = IA, quota da 1,60) si registrano sulla carta; non blocca la pagina
+  if (strategy === 'I' && out.recent) require('./concordi').record(pool, out.recent).catch(e => console.warn('concordi:', e.message));
   TM.totale = Date.now() - T0; out.timing = TM;
   return out;
 }
