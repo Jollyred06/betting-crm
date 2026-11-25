@@ -1183,7 +1183,7 @@ function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now
   if (!liqOk && bc.rule === 'consigliate' && Number(r.win_prob) >= 0.5 && Number(r.pin_margin) >= 6) return { play: 'no', text: 'Favorito in un campionato minore: vince meno del previsto' };
   if (!liqOk && bc.noAwayThin && r.awayThin) return { play: 'no', text: 'Trasferta in un campionato minore: vince meno del previsto' };
   if (!r.final4 && !r.liquid) {
-    if (!(Number(r.edge_pct) >= 4 || liqOk)) return { play: 'no', text: `Vantaggio troppo basso (${n2(r.edge_pct)}%, serve almeno 4%, o 2% nei campionati principali)` };
+    if (!(Number(r.edge_pct) >= 4 || liqOk)) return { play: 'no', text: `Vantaggio troppo basso (${n2(r.edge_pct)}%, nella lista ⭐ entrano solo dal ${OCEANI.minEdge}%)` };
     const from = t - 3 * 3600000, rome = ms => Number(new Intl.DateTimeFormat('it-IT', { hour: 'numeric', hour12: false, timeZone: 'Europe/Rome' }).format(new Date(ms)));
     // l'ultimo controllo e' alle 22: se le 3 ore prima cadono di notte, non diventera' mai una ⭐
     if (rome(t) < 9 || (rome(from) >= toHour && rome(t) >= toHour) || (from > nowMs && rome(from) >= toHour)) return { play: 'no', text: 'Partita di notte: il CRM non controlla dopo le 22, non diventerà una ⭐' };
