@@ -1124,7 +1124,7 @@
     return `<div class="pact"><button class="playbtn" onclick="openPlay(${Number(r.id)}, this)">✍️ Ho giocato</button><button class="playbtn skipbtn" onclick="openSkip(${Number(r.id)}, this)">🚫 Non giocata</button><div class="playform"></div></div>`;
   }
   // 👥 consenso dei siti: quanti pagano sopra il giusto; ⚠️ quota isolata se la tua quota supera dell'8% la mediana degli altri
-  const liqChip = r => r && r.liquid ? `<span class="chip fin" title="Mercato liquido: il prezzo di Pinnacle è affidabile, basta un vantaggio dal 2%">${heroImg('oceano', 20)}Aquaman · liquida</span>` : '';
+  const liqChip = r => r && r.liquid ? `<span class="chip fin" title="Mercato liquido: il prezzo di Pinnacle è affidabile">${heroImg('oceano', 20)}Aquaman · liquida</span>` : '';
   const awayChip = r => r && r.awayThin ? `<span class="chip warnc" title="Nei campionati minori la squadra in trasferta vince meno di quanto dice Pinnacle: dal 1° novembre non è tra le ⭐">${heroImg('muro', 20)}Superman · trasferta nei minori</span>` : '';
   // nelle ⭐ di Oggi solo l'avviso che chiede di fare qualcosa: quota molto sopra gli altri siti, controllare che ci sia ancora
   // 🤝 il pareggio in vista (4 novembre 2026): quasi meta' delle giocate perse e' finita pari. Alto da 28% in su
@@ -1860,7 +1860,7 @@
       }).join('');
       const todoN = d.days.reduce((n, g) => n + g.items.filter(r => needsResult(r) && (r.final4 || r.played)).length, 0);
       const todoAllN = d.days.reduce((n, g) => n + g.items.filter(needsResult).length, 0);
-      const intro = reset && todoOnly ? `<p class="muted sub">✏️ <b>${todoN} risultati importanti da scrivere</b> (⚙️ F2+ e giocate) in questi giorni. Tocca "🔎 vedi il risultato", poi "✏️ scrivi il risultato". ${todoAll ? `Stai vedendo anche le altre (${todoAllN} in tutto): non servono alle decisioni. <button class="linkbtn" onclick="toggleTodoAll()">Solo quelle importanti</button>` : `Le altre ${todoAllN - todoN} non servono alle decisioni: <button class="linkbtn" onclick="toggleTodoAll()">mostrale lo stesso</button>`}</p>`
+      const intro = reset && todoOnly ? `<p class="muted sub">✏️ <b>${todoN} risultati importanti da scrivere</b> (le tue giocate e le più importanti) in questi giorni. Tocca "🔎 vedi il risultato", poi "✏️ scrivi il risultato". ${todoAll ? `Stai vedendo anche le altre (${todoAllN} in tutto): non servono alle decisioni. <button class="linkbtn" onclick="toggleTodoAll()">Solo quelle importanti</button>` : `Le altre ${todoAllN - todoN} non servono alle decisioni: <button class="linkbtn" onclick="toggleTodoAll()">mostrale lo stesso</button>`}</p>`
         : reset ? `<p class="muted sub">${todoN ? `<button class="linkbtn" onclick="toggleTodo()">✏️ ${todoN} risultati importanti da scrivere</button> · ` : ''}Tutte le partite già giocate, dalla più recente. Niente viene cancellato: servono alle misure e all'IA che impara. Il sito indicato è quello con la quota più alta in quel momento, anche se non hai il conto. A destra l'esito della puntata, sotto chi aveva ragione e il valore alla chiusura.</p>` : '';
       const more = d.more ? `<button class="sixbtn" id="archMore" onclick="loadArchive(false)">Mostra i 7 giorni prima</button>` : '';
       archNext = d.next;
@@ -2063,7 +2063,7 @@
       const item = (lv, t, v) => `<div>${marker(lv)}<div><b>${t}</b><span class="muted">${v}</span></div></div>`;
       $('config').innerHTML = [
         item('ok', '🦸 La regola che giochi', tm.oceani ? 'Justice League (dal 23/11): vantaggio dal 5%, quota da 1,60 a 4,00, qualsiasi campionato, niente coppe, appena compare' : 'Le ⭐ in Oggi'),
-        item('info', 'I livelli', '💎 Top: vantaggio dal 3% e margine sotto il 5% · ⭐ Buona: le altre Justice League · 🧪 Prova: liquide con coppe o quota 3,50–4,00, solo simulata · ⚪ Debole: tutto il resto, registrato ma da non giocare'),
+        item('info', 'Le puntate (dal 25/11)', '🧠 scelte dall\'IA e 🎯 favorite: puntata di Kelly · ⭐ non favorite: 1 € · 🪜 scalata: solo l\'esito favorito, vantaggio dal 3%, quota 2–4, da 1 a 5 € · 🎈 svago: 1 € · 🛑 freno: 10 € persi in un giorno'),
         item('info', 'In campo', onKeys.length ? onKeys.map(k => `${HERO[k].e} ${esc(HERO[k].n)}`).join(', ') + ' · i cambi li propone la pagella in Analisi, li approvi tu' : '—'),
         item(i && i.myBooks && i.myBooks.length ? 'ok' : 'warn', 'I tuoi siti', i && i.myBooks && i.myBooks.length ? esc(i.myBooks.join(', ')) + ' · si cambiano su Render, variabile MY_BOOKS' : 'Non impostati: su Render, variabile MY_BOOKS'),
         item('info', 'Puntata', `${money(2)} a partita · al massimo ${b.maxPerDay || 10} al giorno`),
