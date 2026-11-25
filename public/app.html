@@ -1154,6 +1154,9 @@
     if (KELLY) { const bk = String(r.play ? r.play.book : r.book || ''), mn = BOOK_MIN[bk.toLowerCase()];
       if (!(s > 0)) return `<div class="stakebox warnbox">💶 Kelly: <b>niente valore adesso</b> a ${num(odd, 2)}: non giocarla</div>`;
       const st = mn && s < mn ? mn : s;
+      // 25/11 (Christian, via di mezzo): le ⭐ non favorite e non scelte dall'IA si giocano col minimo (sui dati: +4,1% alla chiusura
+      // ma utile reale -1,4%; le favorite +13,5%). Restano misurate: se rendono, tornano alla puntata di Kelly.
+      if (r.best && !isFav(r) && !isLearn(r)) return `<div class="stakebox">💶 Punta <b>${num(mn || 1, 0)} €</b><small class="muted tnum">non favorita: puntata minima (Kelly direbbe ${num(st, 2)} €)</small></div>`;
       return `<div class="stakebox">💶 Punta <b>${num(st, 2)} €</b><small class="muted tnum">¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${mn && s < mn ? ` · Kelly dice ${num(s, 2)} €, su ${esc(bk)} il minimo è ${num(mn, mn < 1 ? 2 : 0)} €` : ''}</small>${cashWarn(bk, st)}</div>`; }
     return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(Math.round(s * 2) / 2, s % 1 ? 2 : 0)} €</b> · ${BANK && BANK >= 300 ? '¼ Kelly sulla cassa di ' + num(BANK, 0) + ' €, massimo 2%' : '2 € fissi finché la cassa è sotto i 300 €' + (BANK ? ' (ora ' + num(BANK, 0) + ' €)' : '')}</small>`;
   }
