@@ -24,7 +24,12 @@
 // 23/11 (Christian: si parte sempre da 1 €, scegli tu la scala): passi da 0,50 € -> 1; 1,50; 2; 2,50; 3; 3,50; 4; 4,50; 5 € (tetto).
 // Sulle 542 partite vere: +241 € (+0,20: +208); quote 4% peggiori +141 €; rimescolate: tipico +112 €, 1 volta su 10 sotto +66 €,
 // cassa sotto 100 € 1,1 volte su 100. Serie storta fino al tetto: 22 € persi.
-const BASE = 1, STEP = 0.5, STOP = 9, MIN_ODD = 2, MAX_ODD = 4,   // 22/11 sera: da 3,50 a 4 (+12% di partite, stesso guadagno sullo storico)
+// 26/11 sera (deciso con Christian): niente decimali (888sport accetta solo euro interi) -> PAROLI 1-2-4, resta a 4 finche' vinci.
+// Sulle 89 partite della scalata (16/10-25/11): +55 €, calo peggiore -26 €, quote -4% +46 €; rimescolate (quote -2%): tipico +24 €,
+// calo oltre 40 € 0 volte su 3.000 (D'Alembert 1-5: tipico +60 € ma calo oltre 40 € 28 volte su 100, calo -76 €).
+// Con 150 € sui siti si valuta la piatta 3 € (tipico +41 €, calo -49 €). STEP resta per compatibilita'.
+const PAROLI = [1, 2, 4];
+const BASE = 1, STEP = 0.5, STOP = PAROLI.length, MIN_ODD = 2, MAX_ODD = 4,   // 22/11 sera: da 3,50 a 4 (+12% di partite, stesso guadagno sullo storico)
     MIN_EDGE = 3,   // 24/11 (Christian: regole piu' morbide): sui suoi siti, quota 2-4, dal 3% = 7,7 partite al giorno, +5,0% alla chiusura (dal 5%: 4,2 e +6,4%)
     SINCE = '2026-11-22T00:00:00Z';
 const PICK = { home: '1', draw: 'X', away: '2' };
@@ -156,12 +161,12 @@ async function settle(pool) {
   return rows.length;
 }
 
-/** Parte pura: la scalata giocata per giocata (dal 22/11 D'Alembert con tetto 30) e la puntata di adesso. */
+/** Parte pura: la scalata giocata per giocata (dal 26/11 Paroli 1-2-4) e la puntata di adesso. */
 /** cassa (21/11 sera, deciso con Christian): la partenza di ogni giro = cassa della scalata / 1.250, arrotondata in giu' a 0,10
  *  (minimo 0,10). Cassa della scalata = quella dichiarata - i ritiri + il saldo della scalata. Senza cassa: partenza fissa 0,20. */
 // partenza = cassa / 250 (con 250 € -> 1 €, con 500 € -> 2 €), mai sotto 1 € (minimo dei siti); tetto = 5 volte la partenza (2% della cassa)
-const baseFor = c => Math.max(1, Math.floor(c / 250 * 10 + 1e-9) / 10);
-const stakeAt = (base, k) => Math.round(base * (1 + STEP * (k - 1)) * 100) / 100;
+const baseFor = c => Math.max(1, Math.floor(c / 250 + 1e-9));   // 26/11: euro interi (250 € -> 1, 500 € -> 2)
+const stakeAt = (base, k) => Math.max(1, Math.round(base * PAROLI[Math.min(Math.max(1, k), PAROLI.length) - 1]));
 function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, lastLevel = 0, keepAll = false } = {}) {
   // 22/11: D'Alembert con tetto. k = numero di gradini (1..stop); stake = gradino x k
   const adaptive = Number(cassa) > 0, bankAt = p => Number(cassa) - Number(withdrawn || 0) + p;
@@ -174,12 +179,13 @@ function ladder(rows, { base = BASE, stop = STOP, cassa = null, withdrawn = 0, l
     const stake = stakeAt(base, k), odd = Number(r.played_odd) > 1 ? Number(r.played_odd) : Number(r.odd), res = r.result;   // 22/11: la quota giocata davvero
     if (res !== 'won' && res !== 'lost') { steps.push({ ...r, step: k, stake, open: true }); waiting = true; continue; }
     staked += stake;
-    if (res === 'won') { const win = stake * (odd - 1); pnl += win; lost = Math.max(0, lost - win); steps.push({ ...r, step: k, stake, pnl: win });
-      k = Math.max(1, k - 1); if (k === 1) { steps[steps.length - 1].cycleEnd = 'vinta'; cycles++; lost = 0; if (adaptive) base = baseFor(bankAt(pnl)); } }
-    else { pnl -= stake; lost += stake; steps.push({ ...r, step: k, stake, pnl: -stake }); if (k >= stop) { steps[steps.length - 1].cycleEnd = 'tetto'; stops++; } k = Math.min(stop, k + 1); maxK = Math.max(maxK, k); }
+    // 26/11 Paroli: vinta -> gradino dopo (1 -> 2 -> 4, poi resta a 4 finche' vinci); persa -> si torna a 1
+    if (res === 'won') { const win = stake * (odd - 1); pnl += win; steps.push({ ...r, step: k, stake, pnl: win });
+      if (k >= stop) { steps[steps.length - 1].cycleEnd = 'tetto'; stops++; } k = Math.min(stop, k + 1); maxK = Math.max(maxK, k); }
+    else { pnl -= stake; steps.push({ ...r, step: k, stake, pnl: -stake }); if (k > 1) { steps[steps.length - 1].cycleEnd = 'persa'; cycles++; } k = 1; if (adaptive) base = baseFor(bankAt(pnl)); }
   }
   const cassaNow = adaptive ? bankAt(pnl) : null;
-  return { method: 'dalembert', base, stop, maxStake: stakeAt(base, stop), maxLoss: Array.from({ length: stop }, (_, i) => stakeAt(base, i + 1)).reduce((a, b) => a + b, 0), step: k, nextStake: stakeAt(base, k), lostInCycle: lost, pnl, staked, cycles, stops, maxStep: maxK, waiting,
+  return { method: 'paroli', base, stop, maxStake: stakeAt(base, stop), maxLoss: stakeAt(base, stop), step: k, nextStake: stakeAt(base, k), lostInCycle: lost, pnl, staked, cycles, stops, maxStep: maxK, waiting,
     cassa: adaptive ? Number(cassa) : null, withdrawn: Number(withdrawn || 0), cassaNow,
     // ritiro del capitale: appena la cassa della scalata raddoppia, si ritira la cassa iniziale (una volta)
     // 21/11 sera: dopo il primo ritiro, ogni volta che la cassa raddoppia ancora (rispetto a dopo l'ultimo ritiro) si ritira meta' del guadagno
@@ -236,4 +242,4 @@ async function setKellyCassa(pool, value) {
   await require('./calib').ensureCalib(pool); await require('./calib').saveState(pool, 'kelly_cassa', { value: v, at: new Date().toISOString() }); return v;
 }
 
-module.exports = { autoSkip, setPlayed, kellyNowOf, getKelly, withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STEP, STOP, SINCE, stakeAt };
+module.exports = { autoSkip, setPlayed, kellyNowOf, getKelly, withdrawScalata, baseFor, getScalataCassa, setScalataCassa, BOOK_MIN, minOf, ladderScore, pickScalata, reasonsOf, record, settle, setResult, ladder, getScalata, getKellyCassa, setKellyCassa, BASE, STEP, STOP, SINCE, stakeAt, PAROLI };
