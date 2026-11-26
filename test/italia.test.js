@@ -203,6 +203,11 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   const b = it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 2, pnlEur: 2.4 }, { at: '2026-10-24T09:00:00Z', stake: 2, pnlEur: -2 }, { at: '2026-10-23T09:00:00Z', stake: 2, pnlEur: null }] }, c4, now);
   assert.ok(Math.abs(b.balance - 100.4) < 1e-9 && b.open === 2 && b.playedToday === 2 && !b.stopped);
   assert.ok(it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 26, pnlEur: -26 }] }, c4, now).stopped);
+  // 26/11: budget sui soldi veri (versato -> sui siti), stop 60 €
+  const rb = it.realBudget({ start: 100, stop: 60, balance: 130.2, pnl: 30.2, stopped: false, stopWhy: null }, { deposited: 80, realPnl: 1.66 }, {});
+  assert.deepStrictEqual([rb.real, rb.start, rb.balance, rb.pnl, rb.stop, rb.stopped], [true, 80, 81.66, 1.66, 60, false]);
+  assert.ok(it.realBudget(rb, { deposited: 80, realPnl: -20 }, {}).stopped);
+  assert.strictEqual(it.realBudget({ start: 100 }, { deposited: null, realPnl: null }, {}).start, 100);
   assert.strictEqual(it.budgetCfg({ BUDGET_START: '200', BUDGET_STOP: '150', BEST_MAX_PER_DAY: '3' }).stop, 150);
 }
 // --- F2+ consigliate: F2+ senza i favoriti nei mercati sottili (margine Pinnacle dal 6%), solo dopo il 25/10 14:30Z

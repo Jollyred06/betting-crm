@@ -1232,7 +1232,7 @@
       el.innerHTML = `
         ${lv === 'ok' ? '' : `<section class="ostate ${lv}">${sdot(lv)}<b>${esc(head)}</b></section>`}
         <section class="obank card3">
-          <div class="olabel">Il tuo budget</div>
+          <div class="olabel">Il tuo budget${b.real ? ' · soldi veri sui siti' : ''}</div>
           <div class="omoney num">${money(b.balance)}</div>
           <div class="odelta ${cls(b.pnl)}">${signedMoney(b.pnl)} da ${money(b.start)}${b.open ? ` · <span class="muted">${money(b.open)} in gioco</span>` : ''}</div>
           <div class="ostop"><div class="ostopbar"><i style="width:${pos}%"></i></div><span>stop a ${money(b.stop)}</span></div>

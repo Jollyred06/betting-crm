@@ -1248,6 +1248,15 @@ function budgetOf(played, c, nowMs = Date.now()) {
     stopWhy: balance <= c.stop ? 'stop del budget' : weekStop ? `settimana a ${weekPnl.toFixed(2)} €: pausa fino a lunedì` : dayStop ? `oggi hai perso ${(-dayPnl).toFixed(2).replace('.', ',')} € (limite ${STOPS.dayLossEur} €): basta per oggi` : null };
 }
 
+/** Parte pura (testata): il budget sui soldi veri. bc = getBookCash (versato, saldi). Stop: BUDGET_REAL_STOP (predefinito 60 €). */
+function realBudget(budget, bc, env = process.env) {
+  if (!bc || !(Number(bc.deposited) > 0) || bc.realPnl == null) return budget;
+  const stop = Number(env.BUDGET_REAL_STOP) > 0 ? Number(env.BUDGET_REAL_STOP) : 60, r2 = x => Math.round(x * 100) / 100;
+  const start = r2(Number(bc.deposited)), pnl = r2(Number(bc.realPnl)), balance = r2(start + pnl), low = balance <= stop;
+  return { ...budget, real: true, start, stop, pnl, balance, stopped: !!(low || budget.dayStop || budget.weekStop),
+    stopWhy: low ? 'stop del budget' : budget.stopWhy === 'stop del budget' ? null : budget.stopWhy };
+}
+
 // ------------------------------------------------------------------------------------------- riepilogo per l'app
 
 /** Come stats, piu' le vinte attese su 10 secondo Pinnacle (probabilita' giusta media). */
@@ -1484,7 +1493,9 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
       const sg = ids.length ? new Map((await pool.query(`SELECT id, strategy, selection, odd, edge_pct, league, pin_h, pin_d, pin_a FROM italia_signals WHERE id = ANY($1::int[])`, [ids])).rows.map(r => [Number(r.id), r])) : new Map();
       for (const x of its) { const r = sg.get(Number(x.signalId)); x.svago = !!(r && T(x.at) >= T(SVAGO.since) && isSvago({ ...r, play: { odd: Number(x.odd) } })); }
     } catch (e) { /* senza classificazione: tutto come prima */ }
-    const budget = budgetOf(playedSum, budgetCfg(env));
+    let budget = budgetOf(playedSum, budgetCfg(env));
+    // 26/11/2026 (Christian): il budget in alto sono i soldi veri, come il termometro (versati -> sui siti), non 100 € + le giocate di prova
+    try { budget = realBudget(budget, await require('./bookcash').getBookCash(pool), env); } catch (e) { /* senza saldi: come prima */ }
     const sc = svagoCfg(env), sb = svagoBudget((playedSum && playedSum.items) || [], sc);
     out.svagoBudget = sb;
     try { const remS = await pre.rem; const pl = remS !== null ? await planOf(pool, c, remS) : null; out.scanHours = pl && pl.hours ? pl.hours : c.scanHours; } catch (e) { out.scanHours = c.scanHours; }
@@ -1570,4 +1581,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { isNoise, agreesWithFav, choosePlan, PLUS_MIN_LEFT, SVAGO, svagoCfg, isSvago, svagoBudget, budgetOf, closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { realBudget, isNoise, agreesWithFav, choosePlan, PLUS_MIN_LEFT, SVAGO, svagoCfg, isSvago, svagoBudget, budgetOf, closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
