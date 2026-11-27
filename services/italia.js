@@ -1307,7 +1307,14 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
   if (!GS.hasPreds()) { try { await Promise.race([GS.getGuessCached(pool), new Promise(r => setTimeout(r, 25000))]); } catch (e) { /* facoltativo */ } }
   else { try { GS.peekGuess(pool); } catch (e) { /* facoltativo */ } }
   const firstPin = new Map(); for (const r of [...all].sort((x, y) => T(x.created_at) - T(y.created_at))) if (!firstPin.has(r.event_id) && r.pin_h) firstPin.set(r.event_id, r);
-  const guessFor = r => { const f = firstPin.get(r.event_id), g = f ? GS.guessOf(f.pin_h, f.pin_d, f.pin_a) : null, a = GS.aiPickOf(r.event_id);
+  // 27/11: partite senza risultato ancora (in corso / da leggere): il pronostico IA come nella pagina Oggi (prima e ultima quota Pinnacle)
+  const lastPin = new Map(); for (const r of all) if (r.pin_h && (!lastPin.has(r.event_id) || T(r.created_at) > T(lastPin.get(r.event_id).created_at))) lastPin.set(r.event_id, r);
+  let calAi = null, wAi = null, eloAi = null;
+  try { calAi = await require('./calib').getCalRaw(pool, { wait: false }); } catch (e) { /* facoltativo */ }
+  try { const ga = GS.peekGuess(pool).ai; wAi = { weights: ga.weights, byContext: ga.byContext, own: ga.own }; } catch (e) { /* facoltativo */ }
+  try { const E = require('./elo').peekElo(pool); eloAi = E ? E.of : null; } catch (e) { /* facoltativo */ }
+  const liveAi = (f, r) => { try { return GS.aiGuess(f, lastPin.get(r.event_id) || f, calAi, require('./calib').adjust, wAi, eloAi ? eloAi(r.home, r.away) : null); } catch (e) { return null; } };
+  const guessFor = r => { const f = firstPin.get(r.event_id), g = f ? GS.guessOf(f.pin_h, f.pin_d, f.pin_a) : null, a = GS.aiPickOf(r.event_id) || (f ? liveAi(f, r) : null);
     return g ? { pin: g.pick, ai: a ? a.pick : null, aiProb: a ? a.prob : null } : null; };
   const out = dayList.map(day => {
     const items = past.filter(r => romeDay(T(r.commence_time)) === day).map(r => {
