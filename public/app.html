@@ -151,8 +151,9 @@
   .budget { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 12px; padding:10px 14px; margin:0 0 10px; border:1px solid var(--line); border-radius:12px; background:var(--surface); font-size:14.5px; }
   .budget.stop { border-color:var(--bad); } .chip.now { background:var(--ok); color:#fff; border-color:var(--ok); }
   .resbtn { margin-top:4px; align-self:flex-start; font-size:13px; } .arow .resform, .move .resform { margin:6px 0 0; } .arow .resform input, .move .resform input { width:40px; height:36px; font-size:17px; } .arow .resform button, .move .resform button { height:36px; }
-  .pf { display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:8px; margin-top:8px; } .pf label { display:flex; flex-direction:column; font-size:12.5px; color:var(--muted); gap:3px; min-width:0; }
-  .pf select, .pf input { width:100%; padding:8px; border:1.5px solid var(--line); border-radius:10px; background:var(--surface); color:var(--text); font-size:15px; } .pfb { grid-column:1/-1; display:flex; gap:12px; align-items:center; }
+  /* 27/11 (Christian: "non si vede benissimo"): un campo per riga, grandi, leggibili sul telefono */
+  .pf { display:grid; grid-template-columns:1fr; gap:10px; margin-top:10px; } .pf label { display:flex; flex-direction:column; font-size:15px; color:var(--muted); gap:4px; min-width:0; }
+  .pf select, .pf input { width:100%; padding:12px; border:1.5px solid var(--line); border-radius:12px; background:var(--surface); color:var(--text); font-size:20px; font-weight:600; } .pfb { grid-column:1/-1; display:flex; gap:12px; align-items:center; }
   .tcash { border:1.5px solid var(--line); border-radius:16px; padding:12px 14px; margin-top:10px; } .tcash.best { border-color:var(--ok); }
   .tcash .th { display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; } .tcash .th small { flex-basis:100%; }
   .tnums { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:10px 0 4px; } .tnums > div { display:flex; flex-direction:column; gap:2px; min-width:0; }
@@ -1676,7 +1677,7 @@
     const PLAY_BOOKS = [...new Set([...playBooks(), r.book].filter(Boolean))], book = ok ? ok[0] : (PLAY_BOOKS.includes(r.book) ? r.book : PLAY_BOOKS[0]), odd = ok ? ok[1] : r.odd;
     box.innerHTML = `<div class="pf"><label>Sito<select class="f-book">${PLAY_BOOKS.map(b => `<option${b === book ? ' selected' : ''}>${b}</option>`).join('')}</select></label>
       <label>Quota presa<input class="f-odd" type="number" inputmode="decimal" step="0.01" value="${odd}"></label>
-      <label>Puntata €<input class="f-stake" type="number" inputmode="decimal" step="0.1" value="1"></label>
+      <label>Puntata (€)<input class="f-stake" type="number" inputmode="decimal" step="0.1" value="1"></label>
       <div class="pfb"><button class="primary" onclick="savePlay(${id}, this)">Salva</button><button class="linkbtn" onclick="this.closest('.playform').innerHTML=''">Annulla</button></div><div class="muted f-msg"></div></div>`;
   }
   async function savePlay(id, btn) {
