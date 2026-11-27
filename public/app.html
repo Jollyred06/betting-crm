@@ -1205,7 +1205,7 @@
       <div class="ot"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.coppe ? 'coppe' : r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.svago && !r.oceani && !r.prova && !r.coppe ? '🎈 Svago' : r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}</span>${voteChip(r)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>${r.svagoWarn ? `<div class="omin" style="color:var(--warn)"><b>⚠️ Non giocarla:</b> ${esc(r.svagoWarn)}</div>` : ''}
-        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${r.played || r.skipped || r.svago ? '' : stakeLine(r)}${probLine(r)}
+        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${r.played || r.skipped ? '' : r.svago && !r.best ? `<div class="stakebox">💶 Punta <b>1 €</b><small class="muted tnum">🎈 svago: sempre 1 €, solo per divertimento</small></div>` : stakeLine(r)}${probLine(r)}
         ${drawLine(r)}${guessLine(r)}${!r.svago ? starTags(r) : ''}
         <div class="ochips">${isoChip(r)}</div>
         ${r.played || r.skipped ? '' : bookLink(r)}
