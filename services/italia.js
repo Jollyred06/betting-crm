@@ -1302,7 +1302,10 @@ async function getArchive(pool, { before = null, days = 7, nowMs = Date.now() } 
   const dayList = [...new Set(past.map(r => romeDay(T(r.commence_time))))].slice(0, Math.max(1, Math.min(31, days)));
   const R = require('./results');
   // 24/11 (Christian: "qui non esce Pinnacle e il pronostico"): pronostico di Pinnacle (prima lettura) e dell'IA anche nell'archivio
-  const GS = require('./guess'); try { GS.peekGuess(pool); } catch (e) { /* facoltativo */ }
+  const GS = require('./guess');
+  // 27/11: dopo un riavvio i pronostici IA non sono ancora calcolati ("IA diceva —"): si aspetta il primo calcolo (massimo 25 s)
+  if (!GS.hasPreds()) { try { await Promise.race([GS.getGuessCached(pool), new Promise(r => setTimeout(r, 25000))]); } catch (e) { /* facoltativo */ } }
+  else { try { GS.peekGuess(pool); } catch (e) { /* facoltativo */ } }
   const firstPin = new Map(); for (const r of [...all].sort((x, y) => T(x.created_at) - T(y.created_at))) if (!firstPin.has(r.event_id) && r.pin_h) firstPin.set(r.event_id, r);
   const guessFor = r => { const f = firstPin.get(r.event_id), g = f ? GS.guessOf(f.pin_h, f.pin_d, f.pin_a) : null, a = GS.aiPickOf(r.event_id);
     return g ? { pin: g.pick, ai: a ? a.pick : null, aiProb: a ? a.prob : null } : null; };

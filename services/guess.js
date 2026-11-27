@@ -161,7 +161,7 @@ function guessStats(rows, { liveSince = LIVE_SINCE, cal = null, adjust = null, e
 
 let cacheG = null, lastPreds = new Map();
 /** 24/11: pronostico IA (imparato senza vedere il risultato) di una partita passata, dall'ultimo calcolo; null se non c'e'. */
-const aiPickOf = ev => lastPreds.get(ev) || null;
+const aiPickOf = ev => lastPreds.get(ev) || null, hasPreds = () => lastPreds.size > 0;
 /** Statistiche e pesi attuali (in memoria 10 minuti): servono anche ai pronostici delle partite aperte. */
 async function getGuessCached(pool, { nowMs = Date.now() } = {}) {
   if (cacheG && nowMs - cacheG.at < (cacheG.full ? 10 : 1) * 60000) return cacheG.val;
@@ -191,4 +191,4 @@ async function getGuess(pool) {
   return guessStats(rows, { cal, adjust: C.adjust, eloOf, ownRows, extraRows: ownRows });
 }
 
-module.exports = { aiPickOf, peekGuess, weeklyOf, weekOf, ownBuild, ownShift, ownGroup, contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };
+module.exports = { aiPickOf, hasPreds, peekGuess, weeklyOf, weekOf, ownBuild, ownShift, ownGroup, contextOf, CONTEXTS, getGuessCached, learn, weightsOf, EXPERTS, aiGuess, LIVE_SINCE, guessOf, outcomeOf, guessStats, getGuess };
