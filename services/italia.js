@@ -1110,6 +1110,25 @@ function pickBest(items, { nowMs = Date.now(), playedToday = 0, maxPerDay = 5, s
     .sort((a, b) => ((tm.oceani && b.oceani ? 1 : 0) - (tm.oceani && a.oceani ? 1 : 0)) || ((b.score ? b.score.vote : -1) - (a.score ? a.score.vote : -1)) || (liq(b) - liq(a)) || (solidOf(b) - solidOf(a)) || (value(b) - value(a))).filter(r => { const k = r.event_id || r.id; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, room).map(r => r.id);   // 4 novembre: prima il 🧮 voto piu' alto
 }
 
+/** 27/11: il canone delle ⭐ (favorita di Pinnacle alla prima lettura, non pareggio, quota fino a 3). Puro, testato. */
+const CANON = { maxOdd: 3, planB: { minEdge: 3, maxEdge: 5, minOdd: 1.6, perDay: 2 } };
+function isCanon(r) {
+  const odd = r.play ? Number(r.play.odd) : Number(r.odd);
+  return !!(r.guess && r.guess.pick && r.guess.pick === r.pick && r.pick !== 'X' && odd <= CANON.maxOdd);
+}
+/** 🅱️ Piano B: per ogni giorno (ora italiana) senza ⭐ del canone (gia' giocate comprese), fino a 2 favorite con vantaggio 3-5%. */
+function pickPlanB(items, { best = [], nowMs = Date.now() } = {}) {
+  const B = CANON.planB, day = r => ROME_DAY.format(new Date(T(r.commence_time))), bestS = new Set(best);
+  const canonDays = new Set(items.filter(r => isCanon(r) && Number(r.edge_pct) >= OCEANI.minEdge && (bestS.has(r.id) || r.played)).map(day));
+  const usedB = new Map(); for (const r of items) if (r.played && isCanon(r) && Number(r.edge_pct) >= B.minEdge && Number(r.edge_pct) < B.maxEdge) usedB.set(day(r), (usedB.get(day(r)) || 0) + 1);
+  const seen = new Set(), out = [];
+  const cand = items.filter(r => isCanon(r) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs && !(r.market && r.market.dir === 'contro')
+    && Number(r.edge_pct) >= B.minEdge && Number(r.edge_pct) < B.maxEdge && Number(r.play.odd) >= B.minOdd && !canonDays.has(day(r)))
+    .sort((a, b) => T(a.commence_time) - T(b.commence_time) || Number(b.edge_pct) - Number(a.edge_pct));
+  for (const r of cand) { const d = day(r), k = r.event_id || r.id; if (seen.has(k)) continue; if ((usedB.get(d) || 0) >= B.perDay) continue; seen.add(k); usedB.set(d, (usedB.get(d) || 0) + 1); out.push(r.id); }
+  return out;
+}
+
 /** 📈 MERCATO (8 novembre 2026, scelto da Christian): quanto si e' spostato Pinnacle sulla nostra scelta dalla prima lettura
  *  del segnale a quella piu' recente, in punti di probabilita'. Nei dati (308 partite con chiusura): mercato fermo +53,82 euro,
  *  mercato contro di 1 punto o piu' 25 vinte su 31,5 attese, -22,66 euro. Se va contro di 1 punto o piu': non si gioca.
@@ -1173,7 +1192,10 @@ function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now
   const n2 = v => Number(v).toFixed(2).replace('.', ',');
   const mine = Object.entries(r.alt || {}).map(([b, v]) => `${b} ${n2(v)}`).join(', ');
   if (r.market && r.market.dir === 'contro') return { play: 'no', text: `Il mercato si è girato contro: Pinnacle ha abbassato le possibilità di ${n2(Math.abs(r.market.mv))} punti dal segnale` };
-  if (best.has(r.id) && r.play) return { play: 'yes', text: `Giocala su ${r.play.book} a ${n2(r.play.odd)} o più (minimo ${n2(r.min_odd)})` };
+  if (best.has(r.id) && r.play) return { play: 'yes', text: `${r.planB ? '🅱️ Piano B (oggi niente ⭐ del canone), 1 €: ' : ''}Giocala su ${r.play.book} a ${n2(r.play.odd)} o più (minimo ${n2(r.min_odd)})` };
+  // 27/11: fuori canone (pareggio, non favorita, quota sopra 3): niente soldi, si misura sulla carta
+  if (r.guess && r.guess.pick && (r.pick === 'X' || r.guess.pick !== r.pick)) return { play: 'no', text: r.pick === 'X' ? 'Pareggio: fuori canone, si segue solo sulla carta' : `Non è la favorita (Pinnacle dice ${r.guess.pick}): fuori canone, si segue solo sulla carta` };
+  if ((r.play ? r.play.odd : Number(r.odd)) > CANON.maxOdd) return { play: 'no', text: `Quota sopra ${n2(CANON.maxOdd)}: fuori canone` };
   if (budget.stopped) return { play: 'no', text: budget.stopWhy ? `Freno: ${budget.stopWhy}` : 'Stop del budget raggiunto: niente giocate' };
   // 2 novembre 2026: prima i motivi che non cambiano col tempo (coppa, quota alta, campionato minore), poi l'attesa
   const liqOk = r.liquid || (r.pin_margin !== null && r.pin_margin !== undefined && Number(r.pin_margin) < LIQUID.maxMarginPct && Number(r.edge_pct) >= LIQUID.minEdge);
@@ -1518,9 +1540,16 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
     // 22/11: una partita gia' scelta dalla scalata (non ancora finita) non va anche nelle ⭐: ogni partita in un solo metodo
     let scalEv = new Set(); try { scalEv = new Set((await pool.query(`SELECT event_id FROM scalata_picks WHERE result IS NULL OR result NOT IN ('won', 'lost', 'skip')`)).rows.map(r => r.event_id)); } catch (e) { /* facoltativo */ }
     for (const r of out.recent) if (scalEv.has(r.event_id)) r.inScalata = true;
-    out.best = pickBest(out.recent.filter(r => !scalEv.has(r.event_id) || r.played), { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd, noAwayThin: bc.noAwayThin, team });
+    // 27/11 (Christian): CANONE = favorita di Pinnacle, non pareggio, quota fino a 3 (archivio: +22% su 118, stabile nei due periodi).
+    // Pareggi e non favorite fuori dai soldi (-12% su 100): restano nei segnali e nell'archivio, misurati sulla carta.
+    out.best = pickBest(out.recent.filter(r => (!scalEv.has(r.event_id) || r.played) && isCanon(r)), { playedToday: budget.playedToday, maxPerDay: budget.maxPerDay, stopped: budget.stopped, rule: bc.rule, maxOdd: bc.maxOdd, noAwayThin: bc.noAwayThin, team });
     out.bestMaxOdd = bc.maxOdd; out.bestNoAwayThin = bc.noAwayThin;
     // 1° novembre 2026: su ogni scheda un verdetto chiaro, GIOCALA o NON GIOCARE con il motivo (solo partite non ancora iniziate)
+    // 🅱️ PIANO B (27/11): solo nei giorni (ora italiana) senza ⭐ del canone, al massimo 2 al giorno, sempre 1 €:
+    // favorita non pareggio, vantaggio 3-5%, quota 1,60-3 (archivio: -5% su 127, valore alla chiusura +2,2%).
+    out.planB = budget.stopped ? [] : pickPlanB(out.recent.filter(r => !scalEv.has(r.event_id)), { best: out.best });
+    for (const r of out.recent) if (out.planB.includes(r.id)) r.planB = true;
+    out.best = [...out.best, ...out.planB];
     const bestSet = new Set(out.best), nowV = Date.now();
     for (const r of out.recent) r.verdict = verdictOf(r, { best: bestSet, budget, bc, nowMs: nowV, toHour: c.toHour });
     for (const r of out.recent) if (r.inScalata && !r.played) r.verdict = { play: 'no', text: '🪜 È già la partita della scalata: giocala lì, non anche con Kelly (ogni partita in un solo metodo).' };
@@ -1591,4 +1620,4 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   return out;
 }
 
-module.exports = { realBudget, isNoise, agreesWithFav, choosePlan, PLUS_MIN_LEFT, SVAGO, svagoCfg, isSvago, svagoBudget, budgetOf, closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };
+module.exports = { realBudget, isCanon, pickPlanB, CANON, isNoise, agreesWithFav, choosePlan, PLUS_MIN_LEFT, SVAGO, svagoCfg, isSvago, svagoBudget, budgetOf, closeTier, closeBatches, closingStats, closePlanToday, CLOSE_MAX_EVENTS, COPPE, isCoppe, lastRemaining, resetProbe, captureClosing, STOPS, OCEANI, PROVA, isProva, markProva, PAPER, isPaperGroup, markPaperGroup, TOP, isTop, MARKET, marketOf, selProb, QUICK, quickRise, markQuick, pinHistory, isOceani, markOceani, markLiquidEarly, DRAW, markDraw, SCORE, scoreOf, LIQUID, markLiquid, verdictOf, AWAY_THIN, isAwayThin, planScans, planOf, CONSENSUS, consensusOf, trio, fetchOdds, FINAL8, FINAL9, markFinal8, markFinal9, winCheck, odssPace, closingQuotes, flagsOf, stampFlags, isCup, withCountry, getArchive, SIX_MIN_PROB, isSix, NEAR_HOURS, phaseOf, primaryRows, latestRows, expectedEur, FINAL, markFinal, FINAL2, markFinal2, FINAL3, markFinal3, FINAL4, markFinal4, FINAL5, markFinal5, DEFAULT_T_BOOKS, BOOK_FAMILY, FINAL6, markFinal6, pinMarginPct, thinFav, solidity, pickBest, budgetOf, budgetCfg, cfgFor, STRATEGIES, DEFAULT_B_BOOKS, inBand, BAND, oddsStats, minOdd, cfg, mainRecords, mergeWithPinnacle, sameTeam, findSignals, closingPin, romeHour, signalText, ensureTables, scan, captureClosing, tick, getItalia, stats, DEFAULT_BOOKS, BOOK_NAMES };

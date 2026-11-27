@@ -1163,6 +1163,7 @@
       // ma utile reale -1,4%; le favorite +13,5%). Restano misurate: se rendono, tornano alla puntata di Kelly.
       // 27/11 (Christian): pareggi e non favorite a 1 € anche se 🧠 (archivio: favorite +22 € su 137, non favorite -9,9 € su 80, pareggi -8,7 € su 35)
       const draw = r.selection === 'draw' || r.pick === 'X';
+      if (r.planB) return `<div class="stakebox warnbox">💶 Punta <b>${num(mn || 1, 0)} €</b><small class="muted tnum">🅱️ piano B: sempre 1 € (massimo 2 al giorno, solo se non ci sono ⭐ del canone)</small></div>`;
       if (r.best && (!isFav(r) || draw)) return `<div class="stakebox">💶 Punta <b>${num(mn || 1, 0)} €</b><small class="muted tnum">${draw ? 'pareggio' : 'non favorita'}: puntata minima (Kelly direbbe ${num(s, 2)} €)</small></div>`;
       return `<div class="stakebox">💶 Punta <b>${num(st, st % 1 ? 2 : 0)} €</b><small class="muted tnum">¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${Math.abs(st - s) > 0.004 ? ` (Kelly dice ${num(s, 2)} €, ${whole ? 'su 888 solo euro interi' : 'arrotondato ai 5 centesimi'})` : ''}${mn && s < mn ? ` · Kelly dice ${num(s, 2)} €, su ${esc(bk)} il minimo è ${num(mn, mn < 1 ? 2 : 0)} €` : ''}</small>${cashWarn(bk, st)}</div>`; }
     return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(Math.max(1, Math.round(s)), 0)} €</b> · ${BANK && BANK >= 300 ? '¼ Kelly sulla cassa di ' + num(BANK, 0) + ' €, massimo 2%' : '2 € fissi finché la cassa è sotto i 300 €' + (BANK ? ' (ora ' + num(BANK, 0) + ' €)' : '')}</small>`;
@@ -1414,9 +1415,10 @@
   // con il valore attuale e il tuo ritmo di gioco; se il valore alla chiusura e' buono, stai perdendo per sfortuna.
   // 25/11: in cima le ⭐ scelte dall'IA che impara, poi le favorite
   const isFav = r => !!(r.guess && r.guess.pick === r.pick), isLearn = r => !!(r.learn && r.learn.pick);
-  const favFirst = L => L.sort((a, b) => (2 * isLearn(b) + isFav(b)) - (2 * isLearn(a) + isFav(a)));
+  const favFirst = L => L.sort((a, b) => (!!a.planB - !!b.planB) || ((2 * isLearn(b) + isFav(b)) - (2 * isLearn(a) + isFav(a))));
   function starTags(r) {
     const t = [];
+    if (r.planB) t.push(`🅱️ <b>piano B</b> · oggi niente ⭐ del canone: vantaggio più basso (3–5%), sempre 1 €`);
     if (isLearn(r)) t.push(`🧠 <b>scelta dall'IA</b> (tra le ⭐ quelle che rendono di più)`);
     if (isFav(r)) t.push(`🎯 <b>favorita</b> · ${r.guess.ai && r.guess.ai.pick === r.pick ? 'Pinnacle e IA d\'accordo' : 'per Pinnacle'}`);
     return t.length ? `<div class="favtag">${t.join('<br>')}</div>` : '';

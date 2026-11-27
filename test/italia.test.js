@@ -203,6 +203,13 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   const b = it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 2, pnlEur: 2.4 }, { at: '2026-10-24T09:00:00Z', stake: 2, pnlEur: -2 }, { at: '2026-10-23T09:00:00Z', stake: 2, pnlEur: null }] }, c4, now);
   assert.ok(Math.abs(b.balance - 100.4) < 1e-9 && b.open === 2 && b.playedToday === 2 && !b.stopped);
   assert.ok(it.budgetOf({ items: [{ at: '2026-10-24T08:00:00Z', stake: 26, pnlEur: -26 }] }, c4, now).stopped);
+  // 27/11: canone (favorita, non pareggio, quota <= 3) e piano B (giorni senza canone, max 2, vantaggio 3-5%)
+  const mk = (id, o) => ({ id, event_id: 'e' + id, commence_time: '2030-01-02T15:00:00Z', pick: '1', guess: { pick: '1' }, play: { odd: 2.2, book: 'Goldbet' }, odd: 2.2, edge_pct: 4, ...o });
+  assert.ok(it.isCanon(mk(1)) && !it.isCanon(mk(2, { pick: 'X', guess: { pick: 'X' } })) && !it.isCanon(mk(3, { guess: { pick: '2' } })) && !it.isCanon(mk(4, { play: { odd: 3.2 } })));
+  const now0 = Date.parse('2030-01-02T08:00:00Z');
+  assert.deepStrictEqual(it.pickPlanB([mk(1), mk(2), mk(3), mk(4, { edge_pct: 6 }), mk(5, { edge_pct: 2 })], { best: [], nowMs: now0 }), [1, 2], 'massimo 2, solo vantaggio 3-5%');
+  assert.deepStrictEqual(it.pickPlanB([mk(1), mk(2), mk(9, { edge_pct: 6 })], { best: [9], nowMs: now0 }), [], 'giorno con canone: niente piano B');
+  assert.deepStrictEqual(it.pickPlanB([mk(1), mk(2), mk(7, { played: true })], { best: [], nowMs: now0 }), [1], 'una B già giocata: ne resta 1');
   // 26/11: budget sui soldi veri (versato -> sui siti), stop 60 €
   const rb = it.realBudget({ start: 100, stop: 60, balance: 130.2, pnl: 30.2, stopped: false, stopWhy: null }, { deposited: 80, realPnl: 1.66 }, {});
   assert.deepStrictEqual([rb.real, rb.start, rb.balance, rb.pnl, rb.stop, rb.stopped], [true, 80, 81.66, 1.66, 60, false]);
