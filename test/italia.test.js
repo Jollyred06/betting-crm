@@ -214,6 +214,7 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   const rb = it.realBudget({ start: 100, stop: 60, balance: 130.2, pnl: 30.2, stopped: false, stopWhy: null }, { deposited: 80, realPnl: 1.66 }, {});
   assert.deepStrictEqual([rb.real, rb.start, rb.balance, rb.pnl, rb.stop, rb.stopped], [true, 80, 81.66, 1.66, 60, false]);
   assert.ok(it.realBudget(rb, { deposited: 80, realPnl: -20 }, {}).stopped);
+  assert.deepStrictEqual([rb.dayCap, rb.dayCapLeft], [8, 8]); assert.strictEqual(it.realBudget({ stakedToday: 6 }, { deposited: 80, realPnl: 1.66 }, {}).dayCapLeft, 2);
   assert.strictEqual(it.realBudget({ start: 100 }, { deposited: null, realPnl: null }, {}).start, 100);
   assert.strictEqual(it.budgetCfg({ BUDGET_START: '200', BUDGET_STOP: '150', BEST_MAX_PER_DAY: '3' }).stop, 150);
 }

@@ -1152,7 +1152,21 @@
     const k = (odd * p - 1) / (odd - 1); if (!(k > 0)) return 2;
     return Math.max(2, Math.min(bank * k / 4, bank * 0.02));
   }
-  function stakeLine(r) {
+  // 27/11 (Christian): la puntata tiene conto dei soldi sul sito e del tetto del giorno (10% della cassa vera)
+  function stakeLine(r) { const h = stakeLine0(r), m = /Punta <b>([\d.,]+) €/.exec(h); return m ? h + cashCheck(r, Number(m[1].replace(/\./g, '').replace(',', '.'))) : h; }
+  function cashCheck(r, st) {
+    const out = [], BC = window.__BC, bud = window.__BUD, key = b => String(b || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^888sportit$/, '888sport');
+    if (BC && Array.isArray(BC.books) && r.play) {
+      const cash = new Map(BC.books.map(x => [key(x.key || x.name), Number(x.saldo) || 0])), here = cash.get(key(r.play.book));
+      if (here != null && here < st) {
+        const alt = Object.entries(r.alt || {}).filter(([b, o]) => key(b) !== key(r.play.book) && (cash.get(key(b)) || 0) >= st && Number(o) >= Number(r.min_odd || 0)).sort((a, b) => b[1] - a[1])[0];
+        out.push(alt ? `💳 Su ${esc(r.play.book)} hai solo ${money(here)}: giocala su <b>${esc(alt[0])} a ${num(alt[1], 2)}</b> (lì hai ${money(cash.get(key(alt[0])))})` : `💳 Su ${esc(r.play.book)} hai solo ${money(here)}: ricarica, gli altri tuoi siti non la pagano sopra ${num(r.min_odd, 2)}`);
+      }
+    }
+    if (bud && bud.dayCap && !r.played && st > (Number(bud.dayCapLeft) || 0) + 1e-9) out.push(`🧱 Tetto di oggi: in gioco al massimo ${money(bud.dayCap)} (10% della cassa), restano ${money(bud.dayCapLeft || 0)}: ${bud.dayCapLeft >= 1 ? 'punta al massimo quello' : 'per oggi basta'}`);
+    return out.length ? `<div class="stakebox warnbox" style="font-size:14px">${out.join('<br>')}</div>` : '';
+  }
+  function stakeLine0(r) {
     // 22/11: la probabilita' e' quella di adesso (la stessa di "Vince il X%"), non quella del momento del segnale: con la quota scesa
     // Kelly dava 0 e la scheda diceva "punta 0,01 €"
     const odd = r.play ? r.play.odd : r.odd, pNow = Number(r.win_prob) > 0 && Number(r.win_prob) < 1 ? Number(r.win_prob) : r.fair_prob, s = stakeOf(odd, pNow);
@@ -1206,7 +1220,7 @@
       <div class="ot"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
       <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.coppe ? 'coppe' : r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.svago && !r.oceani && !r.prova && !r.coppe ? '🎈 Svago' : r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}</span>${voteChip(r)}</div>
         <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>${r.svagoWarn ? `<div class="omin" style="color:var(--warn)"><b>⚠️ Non giocarla:</b> ${esc(r.svagoWarn)}</div>` : ''}
-        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${r.played || r.skipped ? '' : r.svago && !r.best ? `<div class="stakebox">💶 Punta <b>1 €</b><small class="muted tnum">🎈 svago: sempre 1 €, solo per divertimento</small></div>` : stakeLine(r)}${probLine(r)}
+        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${r.played || r.skipped ? '' : r.svago && !r.best ? `<div class="stakebox">💶 Punta <b>1 €</b><small class="muted tnum">🎈 svago: sempre 1 €, solo per divertimento</small></div>` + cashCheck(r, 1) : stakeLine(r)}${probLine(r)}
         ${drawLine(r)}${guessLine(r)}${!r.svago ? starTags(r) : ''}
         <div class="ochips">${isoChip(r)}</div>
         ${r.played || r.skipped ? '' : bookLink(r)}
@@ -1220,7 +1234,7 @@
       (d.recent || []).forEach(adopt);
       if (Array.isArray(d.scanHours) && d.scanHours.length) SCAN_HOURS = d.scanHours;
       if (Array.isArray(d.myBooks) && d.myBooks.length) myBookNames = d.myBooks;
-      const b = d.budget || { start: 100, balance: 100, pnl: 0, stop: 60, playedToday: 0, maxPerDay: 5 }, ck = d.bestCheck;
+      const b = d.budget || { start: 100, balance: 100, pnl: 0, stop: 60, playedToday: 0, maxPerDay: 5 }, ck = d.bestCheck; window.__BUD = b;
       if (d.budget && Number.isFinite(Number(d.budget.balance))) BANK = Number(d.budget.balance);
       const best = (d.best || []).map(id => (d.recent || []).find(r => r.id === id)).filter(Boolean);
       favFirst(best);   // 25/11: le ⭐ sull'esito favorito (Pinnacle) in cima
@@ -1245,7 +1259,7 @@
           <div class="omoney num">${money(b.balance)}</div>
           <div class="odelta ${cls(b.pnl)}">${signedMoney(b.pnl)} da ${money(b.start)}${b.open ? ` · <span class="muted">${money(b.open)} in gioco</span>` : ''}</div>
           <div class="ostop"><div class="ostopbar"><i style="width:${pos}%"></i></div><span>stop a ${money(b.stop)}</span></div>
-          <div class="ometa">${b.real && b.balance >= 150 ? `<span>🎉 <b>Sui siti hai ${money(b.balance)}</b>: è il momento di passare la scalata alla puntata fissa da 3 €. Dimmelo e la cambio.</span>` : ''}<span>Oggi: <b>${b.playedToday} su ${b.maxPerDay}</b> giocate</span>${ck && ck.n ? `<span>${sdot(ck.level === 'allarme' ? 'bad' : ck.level === 'attenzione' ? 'warn' : ck.level === 'ok' ? 'ok' : 'info')}Lista: ${ck.won} vinte su ${ck.n} (attese ${num(ck.expected, 1)})</span>` : ''}</div>
+          <div class="ometa">${b.real && b.balance >= 150 ? `<span>🎉 <b>Sui siti hai ${money(b.balance)}</b>: è il momento di passare la scalata alla puntata fissa da 3 €. Dimmelo e la cambio.</span>` : ''}<span>Oggi: <b>${b.playedToday} su ${b.maxPerDay}</b> giocate${b.dayCap ? ` · in gioco <b>${money(b.stakedToday || 0)}</b> su ${money(b.dayCap)} (10% della cassa)` : ''}</span>${ck && ck.n ? `<span>${sdot(ck.level === 'allarme' ? 'bad' : ck.level === 'attenzione' ? 'warn' : ck.level === 'ok' ? 'ok' : 'info')}Lista: ${ck.won} vinte su ${ck.n} (attese ${num(ck.expected, 1)})</span>` : ''}</div>
         </section>
         <div id="thermoBox">${(window.__P = P, thermoHtml())}</div>
         <section class="block">
@@ -1357,7 +1371,10 @@
       const [S, d, BC] = await Promise.all([getJson('/api/tracker/scalata'), getJson('/api/tracker/italia').catch(() => null), getJson('/api/tracker/casse-siti').catch(() => null)]);
       if (BC) { window.__BC = BC; const tb = $('thermoBox'); if (tb) tb.innerHTML = thermoHtml(); }
       BOOKCASH = BC;
-      const kWas = KELLY; KELLY = (S.kelly && S.kelly.now > 0 ? S.kelly.now : S.kellyCassa) || null;
+      const kWas = KELLY;
+      // 27/11 (Christian): Kelly sulla cassa VERA (saldi dei siti + giocate aperte), non sulla cassa dichiarata di 250 €
+      const realCash = BC && Number(BC.total) > 0 ? Math.round((Number(BC.total) + (BC.books || []).reduce((a, x) => a + (Number(x.open) || 0), 0)) * 100) / 100 : 0;
+      KELLY = realCash || (S.kelly && S.kelly.now > 0 ? S.kelly.now : S.kellyCassa) || null;
       // 24/11: Oggi a volte si disegnava prima di sapere la cassa Kelly ("2 € l'una" invece della puntata Kelly): appena arriva, si ridisegna
       if (KELLY !== kWas) setTimeout(() => { try { loadOggi(); } catch (e) { /* facoltativo */ } }, 0);
       const hhmm = x => new Date(x).toLocaleString('it-IT', { weekday: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });

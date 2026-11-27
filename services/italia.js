@@ -1257,6 +1257,7 @@ function budgetOf(played, c, nowMs = Date.now()) {
   const open = items.filter(x => x.pnlEur === null && x.result !== 'void').reduce((a, x) => a + (x.stake || 0), 0);
   const today = ROME_DAY.format(new Date(nowMs));
   const playedToday = items.filter(x => !x.svago && ROME_DAY.format(new Date(x.at)) === today).length;
+  const stakedToday = Math.round(items.filter(x => ROME_DAY.format(new Date(x.at)) === today && x.result !== 'void').reduce((a, x) => a + (Number(x.stake) || 0), 0) * 100) / 100;
   const balance = c.start + pnl;
   // 5 novembre 2026: freni sulle perdite. Giorno: 3 perse oggi = basta per oggi. Settimana (da lunedi', ora italiana): -15 euro = pausa fino a lunedi'
   const lostToday = items.filter(x => !x.svago && ROME_DAY.format(new Date(x.at)) === today && x.result === 'lost').length;
@@ -1265,7 +1266,7 @@ function budgetOf(played, c, nowMs = Date.now()) {
   const weekPnl = items.filter(x => wkDays.has(ROME_DAY.format(new Date(x.at)))).reduce((a, x) => a + (x.pnlEur || 0), 0);
   const dayPnl = items.filter(x => ROME_DAY.format(new Date(x.at)) === today).reduce((a, x) => a + (x.pnlEur || 0), 0);
   const dayStop = dayPnl <= -STOPS.dayLossEur, weekStop = weekPnl <= -STOPS.weekLossEur;
-  return { start: c.start, stop: c.stop, maxPerDay: c.maxPerDay, balance, pnl, open, count: items.length, playedToday, lostToday, dayPnl, weekPnl,
+  return { start: c.start, stop: c.stop, maxPerDay: c.maxPerDay, balance, pnl, open, count: items.length, playedToday, stakedToday, lostToday, dayPnl, weekPnl,
     dayStop, weekStop, stopRule: STOPS, stopped: balance <= c.stop || dayStop || weekStop,
     stopWhy: balance <= c.stop ? 'stop del budget' : weekStop ? `settimana a ${weekPnl.toFixed(2)} €: pausa fino a lunedì` : dayStop ? `oggi hai perso ${(-dayPnl).toFixed(2).replace('.', ',')} € (limite ${STOPS.dayLossEur} €): basta per oggi` : null };
 }
@@ -1275,7 +1276,9 @@ function realBudget(budget, bc, env = process.env) {
   if (!bc || !(Number(bc.deposited) > 0) || bc.realPnl == null) return budget;
   const stop = Number(env.BUDGET_REAL_STOP) > 0 ? Number(env.BUDGET_REAL_STOP) : 60, r2 = x => Math.round(x * 100) / 100;
   const start = r2(Number(bc.deposited)), pnl = r2(Number(bc.realPnl)), balance = r2(start + pnl), low = balance <= stop;
-  return { ...budget, real: true, start, stop, pnl, balance, stopped: !!(low || budget.dayStop || budget.weekStop),
+  // 27/11 (Christian): tetto del giorno = 10% della cassa vera (minimo 5 €)
+  const dayCap = Math.max(5, Math.round(balance * 0.10)), staked = Number(budget.stakedToday) || 0;
+  return { ...budget, real: true, start, stop, pnl, balance, dayCap, dayCapLeft: r2(Math.max(0, dayCap - staked)), stopped: !!(low || budget.dayStop || budget.weekStop),
     stopWhy: low ? 'stop del budget' : budget.stopWhy === 'stop del budget' ? null : budget.stopWhy };
 }
 
