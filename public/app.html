@@ -1161,7 +1161,9 @@
       const whole = /888/.test(bk), st = Math.max(mn || 1, whole ? Math.round(s) : Math.round(s * 20) / 20);
       // 25/11 (Christian, via di mezzo): le ⭐ non favorite e non scelte dall'IA si giocano col minimo (sui dati: +4,1% alla chiusura
       // ma utile reale -1,4%; le favorite +13,5%). Restano misurate: se rendono, tornano alla puntata di Kelly.
-      if (r.best && !isFav(r) && !isLearn(r)) return `<div class="stakebox">💶 Punta <b>${num(mn || 1, 0)} €</b><small class="muted tnum">non favorita: puntata minima (Kelly direbbe ${num(s, 2)} €)</small></div>`;
+      // 27/11 (Christian): pareggi e non favorite a 1 € anche se 🧠 (archivio: favorite +22 € su 137, non favorite -9,9 € su 80, pareggi -8,7 € su 35)
+      const draw = r.selection === 'draw' || r.pick === 'X';
+      if (r.best && (!isFav(r) || draw)) return `<div class="stakebox">💶 Punta <b>${num(mn || 1, 0)} €</b><small class="muted tnum">${draw ? 'pareggio' : 'non favorita'}: puntata minima (Kelly direbbe ${num(s, 2)} €)</small></div>`;
       return `<div class="stakebox">💶 Punta <b>${num(st, st % 1 ? 2 : 0)} €</b><small class="muted tnum">¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${Math.abs(st - s) > 0.004 ? ` (Kelly dice ${num(s, 2)} €, ${whole ? 'su 888 solo euro interi' : 'arrotondato ai 5 centesimi'})` : ''}${mn && s < mn ? ` · Kelly dice ${num(s, 2)} €, su ${esc(bk)} il minimo è ${num(mn, mn < 1 ? 2 : 0)} €` : ''}</small>${cashWarn(bk, st)}</div>`; }
     return `<small class="muted tnum" style="display:block;margin-top:2px">💶 Punta <b>${num(Math.max(1, Math.round(s)), 0)} €</b> · ${BANK && BANK >= 300 ? '¼ Kelly sulla cassa di ' + num(BANK, 0) + ' €, massimo 2%' : '2 € fissi finché la cassa è sotto i 300 €' + (BANK ? ' (ora ' + num(BANK, 0) + ' €)' : '')}</small>`;
   }
