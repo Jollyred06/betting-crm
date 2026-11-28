@@ -193,6 +193,11 @@
   h3 small { font:500 13px var(--body); }
   .orow { display:flex; gap:12px; align-items:flex-start; background:var(--surface); border:1px solid var(--line); border-radius:18px; padding:14px; margin-bottom:10px; box-shadow:0 1px 2px rgba(10,40,25,.05); }
   .orow.now { border-color:var(--ok); box-shadow:0 0 0 1.5px var(--ok) inset; }
+  /* 28/11 scheda minimal */
+  .vline { margin-top:6px; font-size:16px; font-weight:800; letter-spacing:.2px; } .vline span { font-weight:500; }
+  .vline.go { color:var(--ok); } .vline.b { color:var(--warn); } .vline.sv { color:#8fb3ff; } .vline.no { color:var(--bad, #e5675b); }
+  .ostake { margin-top:6px; font-size:15.5px; line-height:1.45; } .ostake b { font-size:17px; }
+  .orow.off { opacity:.75; } .why { margin-top:8px; } .why > summary { cursor:pointer; color:var(--muted); font-size:14px; list-style:none; } .why > summary::before { content:'▸ '; } .why[open] > summary::before { content:'▾ '; }
   .ot { width:50px; flex:none; text-align:center; } .ot b { display:block; font:800 22px/1 var(--display); color:var(--ink); } .ot span { font-size:12px; color:var(--muted); }
   .om { flex:1; min-width:0; } .oteams { font-weight:700; line-height:1.25; } .opick { margin-top:4px; font-size:15px; } .omin { font-size:13px; color:var(--muted); margin-top:3px; }
   .oq { font:800 26px/1 var(--display); color:var(--ink); background:var(--tint); padding:6px 9px; border-radius:10px; }
@@ -1221,17 +1226,30 @@
   }
   let SCAN_HOURS = [9, 11, 13, 15, 17, 19, 21];
   const scanTxt = () => { const h = SCAN_HOURS.slice(); return h.length > 1 ? 'alle ' + h.slice(0, -1).join(', ') + ' e ' + h[h.length - 1] : h.length ? 'alle ' + h[0] : 'più volte al giorno'; };
+  // 28/11 (Christian: "troppe informazioni"): scheda MINIMAL. Un solo verdetto (gioca / piano B / svago / non giocare), poi dove,
+  // quanto, quota minima e orario; tutto il resto (probabilità, IA, Pinnacle, mercato, Loki, etichette) dentro "perché", chiuso.
+  function oggiNoGo(r) {
+    if (r.played || r.skipped) return null;
+    if (r.svagoWarn) return r.svagoWarn;
+    if (r.market && r.market.dir === 'contro') return 'il mercato si è girato contro';
+    const cur = r.play ? r.play.odd : r.odd; if (r.min_odd && cur < r.min_odd) return `la quota è scesa sotto ${num(r.min_odd, 2)}`;
+    if (!r.svago || r.best) { const h = stakeLine0(r); if (/niente valore adesso/.test(h)) return 'adesso non ha più valore'; }
+    return null;
+  }
   function oggiRow(r) {
-    const t = Date.parse(r.commence_time), until = new Date(t - 30 * 60000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-    return `<article class="orow${isNow(r) ? ' now' : ''}">
+    const t = Date.parse(r.commence_time), hm = x => new Date(x).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const until = hm(t - 30 * 60000), from = hm(t - 3 * 3600000), sv = r.svago && !r.best, no = oggiNoGo(r);
+    const kind = no ? ['no', '⛔ NON GIOCARE'] : r.planB ? ['b', '🅱️ PIANO B'] : sv ? ['sv', '🎈 SVAGO'] : ['go', '✅ GIOCA'];
+    const full = r.played || r.skipped ? '' : sv ? `<div class="stakebox">💶 Punta <b>1 €</b><small class="muted tnum">🎈 svago: sempre 1 €, solo per divertimento</small></div>` : stakeLine0(r);
+    const m = /Punta <b>([\d.,]+) €/.exec(full), stake = m ? m[1] : null, warn = no || r.played || r.skipped ? '' : cashCheck(r, stake ? Number(stake.replace(/\./g, '').replace(',', '.')) : 1);
+    const book = r.play ? r.play.book : r.book;
+    const head = `<div class="vline ${kind[0]}">${kind[1]}${no ? ` <span>· ${esc(no)}</span>` : ` <span>· <b>${esc(pickLong(r))}</b></span>`}</div>`;
+    const play = no || r.played || r.skipped ? '' : `<div class="ostake">💶 <b>${stake || '1'} €</b> su <b>${esc(book)}</b> · quota minima <b>${num(r.min_odd || (r.play ? r.play.odd : r.odd), 2)}</b><br><span class="muted">${isNow(r) ? `⏱️ entro le ${until}` : `tra le ${from} e le ${until}`}</span></div>${warn}`;
+    const why = `<details class="why"><summary>perché</summary><div class="ohero">${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.coppe ? 'coppe' : r.liquid ? 'oceano' : 'fascia', 20)}<span>${sv ? '🎈 Svago' : r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}</span>${voteChip(r)}</div>${full}${probLine(r)}${drawLine(r)}${guessLine(r)}${!r.svago ? starTags(r) : ''}<div class="ochips">${isoChip(r)}</div></details>`;
+    const acts = no && !r.played && !r.skipped ? '' : `${r.played || r.skipped ? '' : bookLink(r)}${playActions(r)}`;
+    return `<article class="orow${isNow(r) && !no ? ' now' : ''}${no ? ' off' : ''}">
       <div class="ot"><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { weekday: 'short', day: 'numeric' })}</span></div>
-      <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div><div class="ohero">${heroImg(r.oceani ? 'oceani' : r.prova ? 'prova' : r.coppe ? 'coppe' : r.liquid ? 'oceano' : 'fascia', 20)}<span>${r.svago && !r.oceani && !r.prova && !r.coppe ? '🎈 Svago' : r.oceani ? 'Justice League' : r.prova ? '🧪 Prova (simulata)' : r.liquid ? 'Aquaman' : 'Capitan America'}</span>${voteChip(r)}</div>
-        <div class="opick">Punta <b>${esc(pickLong(r))}</b> su <b>${esc(r.play ? r.play.book : r.book)}</b></div>${r.svagoWarn ? `<div class="omin" style="color:var(--warn)"><b>⚠️ Non giocarla:</b> ${esc(r.svagoWarn)}</div>` : ''}
-        <div class="omin">${isNow(r) ? `⏱️ Giocala ora, entro le ${until}` : `Da giocare tra le ${new Date(t - 3 * 3600000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })} e le ${until}`}</div>${minLine(r)}${r.played || r.skipped ? '' : r.svago && !r.best ? `<div class="stakebox">💶 Punta <b>1 €</b><small class="muted tnum">🎈 svago: sempre 1 €, solo per divertimento</small></div>` + cashCheck(r, 1) : stakeLine(r)}${probLine(r)}
-        ${drawLine(r)}${guessLine(r)}${!r.svago ? starTags(r) : ''}
-        <div class="ochips">${isoChip(r)}</div>
-        ${r.played || r.skipped ? '' : bookLink(r)}
-        ${playActions(r)}</div>
+      <div class="om"><div class="oteams">${esc(r.home)} – ${esc(r.away)}</div>${head}${play}${acts}${why}</div>
       <div class="oq">${num(r.play ? r.play.odd : r.odd, 2)}</div></article>`;
   }
   async function loadOggi() {
