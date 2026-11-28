@@ -1116,14 +1116,16 @@ function isCanon(r) {
   const odd = r.play ? Number(r.play.odd) : Number(r.odd);
   return !!(r.guess && r.guess.pick && r.guess.pick === r.pick && r.pick !== 'X' && odd <= CANON.maxOdd);
 }
-/** 🅱️ Piano B: per ogni giorno (ora italiana) senza ⭐ del canone (gia' giocate comprese), fino a 2 favorite con vantaggio 3-5%. */
+/** 🅱️ Piano B: fino a 2 al giorno (ora italiana), favorite con vantaggio 3-5%, se entro 3 ore non c'è una ⭐ del canone (giocate comprese). */
 function pickPlanB(items, { best = [], nowMs = Date.now() } = {}) {
   const B = CANON.planB, day = r => ROME_DAY.format(new Date(T(r.commence_time))), bestS = new Set(best);
-  const canonDays = new Set(items.filter(r => isCanon(r) && Number(r.edge_pct) >= OCEANI.minEdge && (bestS.has(r.id) || r.played)).map(day));
+  // 28/11 sera (Christian): il piano B non si spegne più per tutto il giorno; si spegne solo se c'è una ⭐ del canone entro 3 ore dalla partita
+  const canonTimes = items.filter(r => isCanon(r) && Number(r.edge_pct) >= OCEANI.minEdge && (bestS.has(r.id) || r.played)).map(r => T(r.commence_time));
+  const nearCanon = r => canonTimes.some(t => Math.abs(t - T(r.commence_time)) <= 3 * 3600000);
   const usedB = new Map(); for (const r of items) if (r.played && isCanon(r) && Number(r.edge_pct) >= B.minEdge && Number(r.edge_pct) < B.maxEdge) usedB.set(day(r), (usedB.get(day(r)) || 0) + 1);
   const seen = new Set(), out = [];
   const cand = items.filter(r => isCanon(r) && r.play && !r.played && !r.skipped && T(r.commence_time) > nowMs && !(r.market && r.market.dir === 'contro')
-    && Number(r.edge_pct) >= B.minEdge && Number(r.edge_pct) < B.maxEdge && Number(r.play.odd) >= B.minOdd && !canonDays.has(day(r)))
+    && Number(r.edge_pct) >= B.minEdge && Number(r.edge_pct) < B.maxEdge && Number(r.play.odd) >= B.minOdd && !nearCanon(r))
     .sort((a, b) => T(a.commence_time) - T(b.commence_time) || Number(b.edge_pct) - Number(a.edge_pct));
   for (const r of cand) { const d = day(r), k = r.event_id || r.id; if (seen.has(k)) continue; if ((usedB.get(d) || 0) >= B.perDay) continue; seen.add(k); usedB.set(d, (usedB.get(d) || 0) + 1); out.push(r.id); }
   return out;

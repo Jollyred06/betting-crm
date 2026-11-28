@@ -208,7 +208,8 @@ assert.ok(Math.abs(it.expectedEur([{ clv_pct: '3' }, { clv_pct: '-1' }, { clv_pc
   assert.ok(it.isCanon(mk(1)) && !it.isCanon(mk(2, { pick: 'X', guess: { pick: 'X' } })) && !it.isCanon(mk(3, { guess: { pick: '2' } })) && !it.isCanon(mk(4, { play: { odd: 3.2 } })));
   const now0 = Date.parse('2030-01-02T08:00:00Z');
   assert.deepStrictEqual(it.pickPlanB([mk(1), mk(2), mk(3), mk(4, { edge_pct: 6 }), mk(5, { edge_pct: 2 })], { best: [], nowMs: now0 }), [1, 2], 'massimo 2, solo vantaggio 3-5%');
-  assert.deepStrictEqual(it.pickPlanB([mk(1), mk(2), mk(9, { edge_pct: 6 })], { best: [9], nowMs: now0 }), [], 'giorno con canone: niente piano B');
+  assert.deepStrictEqual(it.pickPlanB([mk(1), mk(2), mk(9, { edge_pct: 6 })], { best: [9], nowMs: now0 }), [], 'canone alla stessa ora: niente piano B');
+  assert.deepStrictEqual(it.pickPlanB([mk(1, { commence_time: '2030-01-02T19:00:00Z' }), mk(9, { edge_pct: 6, commence_time: '2030-01-02T10:00:00Z', played: true })], { best: [], nowMs: now0 }), [1], 'canone la mattina, piano B la sera');
   assert.deepStrictEqual(it.pickPlanB([mk(1), mk(2), mk(7, { played: true })], { best: [], nowMs: now0 }), [1], 'una B già giocata: ne resta 1');
   // 26/11: budget sui soldi veri (versato -> sui siti), stop 60 €
   const rb = it.realBudget({ start: 100, stop: 60, balance: 130.2, pnl: 30.2, stopped: false, stopWhy: null }, { deposited: 80, realPnl: 1.66 }, {});
