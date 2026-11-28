@@ -1194,7 +1194,7 @@ function verdictOf(r, { best = new Set(), budget = {}, bc = {}, nowMs = Date.now
   const n2 = v => Number(v).toFixed(2).replace('.', ',');
   const mine = Object.entries(r.alt || {}).map(([b, v]) => `${b} ${n2(v)}`).join(', ');
   if (r.market && r.market.dir === 'contro') return { play: 'no', text: `Il mercato si è girato contro: Pinnacle ha abbassato le possibilità di ${n2(Math.abs(r.market.mv))} punti dal segnale` };
-  if (best.has(r.id) && r.play) return { play: 'yes', text: `${r.planB ? '🅱️ Piano B (oggi niente ⭐ del canone), 1 €: ' : ''}Giocala su ${r.play.book} a ${n2(r.play.odd)} o più (minimo ${n2(r.min_odd)})` };
+  if (best.has(r.id) && r.play) return { play: 'yes', text: `${r.planB ? '🅱️ Piano B (nessuna ⭐ nelle stesse ore), 1 €: ' : ''}Giocala su ${r.play.book} a ${n2(r.play.odd)} o più (minimo ${n2(r.min_odd)})` };
   // 27/11: fuori canone (pareggio, non favorita, quota sopra 3): niente soldi, si misura sulla carta
   if (r.guess && r.guess.pick && (r.pick === 'X' || r.guess.pick !== r.pick)) return { play: 'no', text: r.pick === 'X' ? 'Pareggio: fuori canone, si segue solo sulla carta' : `Non è la favorita (Pinnacle dice ${r.guess.pick}): fuori canone, si segue solo sulla carta` };
   if ((r.play ? r.play.odd : Number(r.odd)) > CANON.maxOdd) return { play: 'no', text: `Quota sopra ${n2(CANON.maxOdd)}: fuori canone` };
