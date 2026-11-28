@@ -16,7 +16,7 @@ let gen = 0;
 // 25/11/2026 (Christian: "Analisi ci mette un po' a caricare"): dopo ogni scansione si buttava tutto, e le pagine di Analisi
 // (statistiche su centinaia di partite, che una scansione cambia appena) si ricalcolavano da zero alla prima apertura.
 // Ora restano come copia VECCHIA: si vedono subito e il server le rifa' in sottofondo (l'app riceve X-Stale e si aggiorna da sola).
-const KEEP_STALE = /^\/api\/tracker\/(brain|team|training|books|learning|strategies|calibration|guess|opinion|advice|auto-played|credits|bivio|concordi|backtest|forma-test)\b|^\/api\/tracker\/italia\?s=B\b/;
+const KEEP_STALE = /^\/api\/tracker\/(brain|team|training|books|learning|strategies|calibration|guess|opinion|advice|auto-played|credits|bivio|concordi|aidb|backtest|forma-test)\b|^\/api\/tracker\/italia\?s=B\b/;
 const clear = () => { gen++; for (const [k, v] of [...store.entries()]) { if (KEEP_STALE.test(k)) v.at = Math.min(v.at, Date.now() - 10 * 60000); else store.delete(k); } };
 /** Butta solo le pagine toccate da un salvataggio (es. una giocata cambia segnali e giocate, non le strategie). */
 const clearMatching = re => { gen++; for (const k of [...store.keys()]) if (re.test(k)) store.delete(k); };

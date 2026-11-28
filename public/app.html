@@ -330,6 +330,9 @@
     <section class="block migliori" id="miglioriBox" hidden></section>
     <section class="block sicure" id="sicureBox" hidden></section>
     </details>
+    <details class="fold" id="aidbFold" ontoggle="if (this.open) loadAidb()"><summary><span>🧬 Banca dati IA</span><small>come sono fatte le partite buone e ottime</small></summary>
+    <section class="block" id="aidbBox"><p class="muted">Carico…</p></section>
+    </details>
     <details class="fold quiet"><summary><span>Idee scartate</span><small>quelle che non battevano il mercato</small></summary>
     <div hidden><details class="fold"><summary><span>Strategia A · in archivio dal 1° novembre</span><small>verdetto, numeri, tappe, bankroll di carta</small></summary>
     <section class="block"><div id="bankMini"></div></section>
@@ -1153,6 +1156,8 @@
     return Math.max(2, Math.min(bank * k / 4, bank * 0.02));
   }
   // 27/11 (Christian): la puntata tiene conto dei soldi sul sito e del tetto del giorno (10% della cassa vera)
+  // 28/11 (Christian, Roan United: IA 2, Pinnacle X, diceva "d'accordo"): l'accordo vale solo se IA E Pinnacle dicono la giocata
+  const agreeTag = (ai, pin, pick) => ai === pick && pin === pick ? ' · <b class="agree">🤝 IA e Pinnacle d\'accordo con la giocata</b>' : ai === pick ? ' · <span class="muted">solo l\'IA d\'accordo, Pinnacle no</span>' : pin === pick ? ' · <span class="muted">solo Pinnacle d\'accordo, l\'IA no</span>' : '';
   function stakeLine(r) { const h = stakeLine0(r), m = /Punta <b>([\d.,]+) €/.exec(h); return m ? h + cashCheck(r, Number(m[1].replace(/\./g, '').replace(',', '.'))) : h; }
   function cashCheck(r, st) {
     const out = [], BC = window.__BC, bud = window.__BUD, key = b => String(b || '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^888sportit$/, '888sport');
@@ -1474,6 +1479,22 @@
       box.hidden = false;
     } catch (e) { box.hidden = true; }
   }
+  // 🧬 BANCA DATI IA (28/11, Christian): una scheda per partita, poi risultato e valore alla chiusura. Buone = valore > 0, ottime = buone e vinte.
+  async function loadAidb() {
+    const box = $('aidbBox'); if (!box) return;
+    try {
+      const A = await getJson('/api/tracker/aidb');
+      const p1 = x => x == null ? '–' : num(x, 1), pc = x => x == null ? '–' : num(x, 0) + '%';
+      const rowsH = (A.profile || []).map(g => `<tr><td>${esc(g.label)}</td><td class="tnum">${g.n}</td><td class="tnum">${g.settled ? `${g.won}/${num(g.expected, 0)}` : '–'}</td><td class="tnum ${g.roiPct == null ? '' : cls(g.roiPct)}">${g.roiPct == null ? '–' : (g.roiPct > 0 ? '+' : '') + num(g.roiPct, 0) + '%'}</td><td class="tnum ${g.avgClvPct == null ? '' : cls(g.avgClvPct)}">${g.avgClvPct == null ? '–' : (g.avgClvPct > 0 ? '+' : '') + p1(g.avgClvPct) + '%'}</td><td class="tnum">${pc(g.topPct)}</td></tr>`).join('');
+      const idH = (A.identikit || []).map(x => `<div class="prow"><span class="sdot ${x.top > x.all + (x.num ? 0.1 : 5) ? 'ok' : x.top < x.all - (x.num ? 0.1 : 5) ? 'bad' : 'info'}"></span><div>${esc(x.label)}: <b>${x.num ? p1(x.top) : pc(x.top)}</b> nelle ottime <span class="muted">(su tutte ${x.num ? p1(x.all) : pc(x.all)})</span></div></div>`).join('');
+      box.innerHTML = `<h3>🧬 Banca dati IA <small class="muted">· ${A.n} partite, ${A.settled} chiuse, ${A.ottime} ottime</small></h3>
+        <p class="muted" style="font-size:14px;margin:4px 0 8px;">Per ogni partita che il CRM vede salva la fotografia al momento del segnale (quota, vantaggio, Pinnacle, IA, mercato, ore prima…), poi il risultato e il valore alla chiusura. <b>Buona</b> = il valore alla chiusura è positivo (la quota era giusta); <b>ottima</b> = buona e anche vinta. Le partite prima del 28/11 sono ricostruite dai segnali, senza il pronostico IA (${A.live} schede complete dal 28/11). Non cambia le puntate: serve a capire e a scegliere le prossime regole, con almeno 100 partite.</p>
+        ${idH ? `<h4 style="margin:10px 0 4px">Identikit delle ottime</h4>${idH}` : ''}
+        <h4 style="margin:12px 0 4px">Per caratteristica</h4>
+        <div style="overflow-x:auto"><table class="tnum" style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="text-align:left"><th>Gruppo</th><th>Partite</th><th>Vinte/attese</th><th>Resa</th><th>Valore</th><th>Ottime</th></tr></thead><tbody>${rowsH}</tbody></table></div>
+        <p class="muted" style="font-size:12.5px;margin-top:6px">Resa = guadagno con 1 € a partita sulle chiuse · Valore = media contro la chiusura di Pinnacle · Ottime = % delle chiuse che erano buone e vinte.</p>`;
+    } catch (e) { box.innerHTML = '<p class="muted">Banca dati non disponibile adesso: riprova tra poco.</p>'; }
+  }
   // 🧭 IL BIVIO (22/11): per ogni partita il CRM dice cosa giocare (1, X o 2), scegliendo tra probabilita' e quota quella che fa crescere di piu' la cassa
   async function loadBivio() {
     const box = $('bivioBox'); if (!box) return;
@@ -1579,7 +1600,7 @@
   function guessLine(r) {
     if (!r.guess) return '';
     const ai = r.guess.ai ? r.guess.ai.pick : r.guess.pick, ap = r.guess.ai ? r.guess.ai.prob : r.guess.prob;
-    return `<small class="guess" style="display:block;margin-top:4px">🤖 Pronostico IA: <b>${ai}</b> (${num(100 * ap, 0)}%) · Pinnacle: ${r.guess.pick}${ai === r.pick ? ' · <b class="agree">🤝 d\'accordo con la giocata</b>' : ''}</small>`;
+    return `<small class="guess" style="display:block;margin-top:4px">🤖 Pronostico IA: <b>${ai}</b> (${num(100 * ap, 0)}%) · Pinnacle: ${r.guess.pick}${agreeTag(ai, r.guess.pick, r.pick)}</small>`;
   }
   function ticket(r, chip) {
     // 24/11 (Christian: "metti chiaro quelle che vanno giocate e quelle no"): si gioca SOLO cio' che e' nella lista ⭐ (vantaggio dal 5%).
@@ -1588,7 +1609,7 @@
     const it = chip.includes('chip it'), live = Date.parse(r.commence_time) > Date.now();
     const guessHtml = `
             ${r.guess ? (() => { const m = String(r.result_score || '').match(/(\d+)\s*-\s*(\d+)/), out = m ? (+m[1] > +m[2] ? '1' : +m[1] === +m[2] ? 'X' : '2') : null, mark = p => out ? (p === out ? ' ✅' : ' ❌') : '';
-              return `<small class="guess">🤖 Pronostico IA: <b>${r.guess.ai ? r.guess.ai.pick : r.guess.pick}</b> (${num(100 * (r.guess.ai ? r.guess.ai.prob : r.guess.prob), 0)}%)${mark(r.guess.ai ? r.guess.ai.pick : r.guess.pick)} · Pinnacle: ${r.guess.pick}${mark(r.guess.pick)}${(r.guess.ai ? r.guess.ai.pick : r.guess.pick) === r.pick ? ' · <b class="agree">🤝 d\'accordo con la giocata</b>' : ''}</small>`; })() : ''}`;
+              return `<small class="guess">🤖 Pronostico IA: <b>${r.guess.ai ? r.guess.ai.pick : r.guess.pick}</b> (${num(100 * (r.guess.ai ? r.guess.ai.prob : r.guess.prob), 0)}%)${mark(r.guess.ai ? r.guess.ai.pick : r.guess.pick)} · Pinnacle: ${r.guess.pick}${mark(r.guess.pick)}${r.guess.ai ? agreeTag(r.guess.ai.pick, r.guess.pick, r.pick) : ''}</small>`; })() : ''}`;
     // 25/11 (analisi backup): tra le ⭐ quelle sull'esito favorito da Pinnacle rendono di piu' (+6,4% contro +4,1%, stabile nei due periodi);
     // l'IA dice quasi sempre lo stesso esito di Pinnacle, quindi e' un solo segno, non due. Resta la riga IA/Pinnacle di sempre.
     const favHtml = r.best ? starTags(r) : '';

@@ -1619,6 +1619,8 @@ async function getItalia(pool, env = process.env, strategy = 'I') {
   // 🧠 25/11: il giudizio dell'IA che impara (sceglie le ⭐ che rendono di piu': prova a ritroso +6,8% contro +3,6% delle altre ⭐)
   if (strategy === 'I' && out.recent) { const LR = require('./learner'); for (const r of out.recent) { try { const q = LR.quickPick(r); if (q) r.learn = q; } catch (e) { /* facoltativo */ } } }
   if (strategy === 'I' && out.recent) require('./concordi').record(pool, out.recent).catch(e => console.warn('concordi:', e.message));
+  // 28/11: 🧬 banca dati IA (una scheda per partita ed esito, prima del calcio d'inizio)
+  if (strategy === 'I' && out.recent) require('./aidb').record(pool, out.recent, { best: out.best || [], cupOf: r => { try { return isCoppe(r); } catch (e) { return false; } } }).catch(e => console.warn('aidb:', e.message));
   TM.totale = Date.now() - T0; out.timing = TM;
   return out;
 }
