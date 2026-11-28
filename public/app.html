@@ -1183,6 +1183,8 @@
       // ma utile reale -1,4%; le favorite +13,5%). Restano misurate: se rendono, tornano alla puntata di Kelly.
       // 27/11 (Christian): pareggi e non favorite a 1 € anche se 🧠 (archivio: favorite +22 € su 137, non favorite -9,9 € su 80, pareggi -8,7 € su 35)
       const draw = r.selection === 'draw' || r.pick === 'X';
+      // 28/11 (Christian): vantaggio sopra il 12% = spesso quota sbagliata o notizia non vista (archivio: -31% su 30, ma valore alla chiusura +11,5%): 1 € fisso finché non si sa
+      if (r.best && Number(r.edge_pct) > 12) return `<div class="stakebox warnbox">💶 Punta <b>${num(mn || 1, 0)} €</b><small class="muted tnum">vantaggio ${num(r.edge_pct, 1)}%: sopra il 12% spesso è una quota sbagliata, quindi 1 € fisso (Kelly direbbe ${num(s, 2)} €)</small></div>`;
       if (r.planB) return `<div class="stakebox warnbox">💶 Punta <b>${num(mn || 1, 0)} €</b><small class="muted tnum">🅱️ piano B: sempre 1 € (massimo 2 al giorno, solo se non ci sono ⭐ del canone)</small></div>`;
       if (r.best && (!isFav(r) || draw)) return `<div class="stakebox">💶 Punta <b>${num(mn || 1, 0)} €</b><small class="muted tnum">${draw ? 'pareggio' : 'non favorita'}: puntata minima (Kelly direbbe ${num(s, 2)} €)</small></div>`;
       return `<div class="stakebox">💶 Punta <b>${num(st, st % 1 ? 2 : 0)} €</b><small class="muted tnum">¼ Kelly sulla cassa di ${num(KELLY, 0)} €, massimo 2%${Math.abs(st - s) > 0.004 ? ` (Kelly dice ${num(s, 2)} €, ${whole ? 'su 888 solo euro interi' : 'arrotondato ai 5 centesimi'})` : ''}${mn && s < mn ? ` · Kelly dice ${num(s, 2)} €, su ${esc(bk)} il minimo è ${num(mn, mn < 1 ? 2 : 0)} €` : ''}</small>${cashWarn(bk, st)}</div>`; }
