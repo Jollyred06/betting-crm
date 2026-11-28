@@ -1639,7 +1639,7 @@
         <article class="ticket${r.best ? ' bestt' : ''}">
           <div class="stub"><span>${dt(r.commence_time, { weekday: 'short' })}</span><b>${dt(r.commence_time, { hour: '2-digit', minute: '2-digit' })}</b><span>${dt(r.commence_time, { day: 'numeric', month: 'short' })}</span></div>
           <div class="tmain">
-            ${it && Date.parse(r.commence_time) > Date.now() && !r.played && !r.skipped ? (r.best ? '<div class="vbadge go">✅ DA GIOCARE</div>' : '<div class="vbadge no">⛔ NON GIOCARE</div>') : ''}
+            ${it && Date.parse(r.commence_time) > Date.now() && !r.played && !r.skipped ? (r.best ? '<div class="vbadge go">✅ DA GIOCARE</div>' : r.verdict && r.verdict.play === 'svago' ? '<div class="vbadge" style="border-color:#5b8def;color:#8fb3ff">🎈 SVAGO · 1 € se vuoi</div>' : '<div class="vbadge no">⛔ NON GIOCARE</div>') : ''}
             <div class="teams"><span class="dot" data-ko="${Date.parse(r.commence_time) || ''}" data-done="${r.result ? 1 : 0}" role="img"></span>${esc(r.home)} – ${esc(r.away)}</div>
             <div class="pick"><span>${it && r.play ? `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(pickLong(r))}</b> su <b>${esc(r.play.book)}</b>` : `${r.verdict && r.verdict.play !== 'yes' ? '' : 'Punta '}<b>${esc(r.pick === '1' ? '1 (' + r.home + ')' : r.pick === '2' ? '2 (' + r.away + ')' : 'X (pareggio)')}</b> su <b>${esc(r.book)}</b>`}</span><span class="odd num">${num(it && r.play ? r.play.odd : r.odd, 2)}</span></div>
             ${guessHtml}${favHtml}
